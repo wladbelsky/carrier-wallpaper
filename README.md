@@ -100,6 +100,9 @@ It changes:
 During combat, combat calls go first (contacts, kills, vampires, damage). Routine deck calls switch to their
 combat versions ("hot deck, launch, launch!") or are dropped if they get stale.
 
+Urgent calls (unknown contacts, combat start, vampires, hits) cut in over a less important line, and
+lines are shortened when others are waiting, so the radio keeps up with what happens on screen.
+
 ## Notification safeguard
 
 Sound has to play continuously for 5 seconds before the fleet opens fire, so short notification sounds

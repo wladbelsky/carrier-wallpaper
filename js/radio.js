@@ -42,7 +42,12 @@ const RADIO = {
     }
     if (this.cur) {
       this.t += dt;
-      if (this.t > this.cur.dur) { box.classList.remove('on'); this.cur = null; this.gap = 0.35; }
+      // urgent calls (prio >= 3: contacts, combat start, vampires, hits) cut a less important line;
+      // with a backlog waiting, the current line is shortened
+      let waiting = false, urgent = false;
+      for (const m of this.q) if (m.at <= T) { waiting = true; if (m.prio >= 3 && this.eff(m) > this.eff(this.cur)) urgent = true; }
+      const end = urgent ? 0.4 : waiting ? Math.max(1.4, this.cur.dur * 0.7) : this.cur.dur;
+      if (this.t > end) { box.classList.remove('on'); this.cur = null; this.gap = urgent ? 0.05 : 0.2; }
       return;
     }
     if (this.gap > 0) { this.gap -= dt; return; }
@@ -52,7 +57,7 @@ const RADIO = {
     this.q.forEach((m, k) => { if (m.at <= T) { const e = this.eff(m); if (e > best) { best = e; i = k; } } });
     if (i < 0) return;
     const m = this.q.splice(i, 1)[0];
-    m.dur = 1.8 + m.text.length * 0.055; this.cur = m; this.t = 0;
+    m.dur = clamp(1.0 + m.text.length * 0.042, 1.6, 4.6); this.cur = m; this.t = 0;
     box.querySelector('.who').textContent = m.who;
     box.querySelector('.who').style.color = ROLE_COLOR[m.role] || ROLE_COLOR.pilot;
     box.querySelector('.txt').textContent = m.text;
