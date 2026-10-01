@@ -44,6 +44,8 @@ helicopter departures and landings, and combat chatter while music is playing.
   - **AWACS:** SkyEye, Thunderhead, Eagle Eye, Long Caster, Bandog, Sky Keeper, Dealer.
   - **Carrier:** KESTREL.
 - Jets are grouped 4 per callsign, helicopters 2.
+- As in Ace Combat, the speaker's callsign is shown on its own line above the line, colored by role
+  (pilots, AWACS, ships, helicopters, aces).
 
 ## Missions
 
