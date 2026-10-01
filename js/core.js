@@ -29,7 +29,7 @@ const CFG = {
   auto: true,         // automatic flight ops
   counts: { fa18: 4, f14: 2, e2d: 1, mh60: 1, ch53: 1, ah1: 1 },  // air wing composition
   ddHelis: true,      // one transport helicopter on each destroyer
-  numbers: { carrier: '07', dd1: '54', dd2: '61' },  // hull numbers
+  numbers: { carrier: '07' },  // carrier hull number
   enemies: true,      // enemy aircraft & anti-ship missiles during combat
   shake: true,        // subtle camera shake on heavy hits
   missions: 5,        // how often flights leave on missions (0 = never)

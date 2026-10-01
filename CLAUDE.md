@@ -32,7 +32,7 @@ User-facing docs: `README.md` (keep it in sync when behaviour or properties chan
   `index.html` (WE's CEF caches aggressively). Current: `v=14`.
 - **New WE property**: add it to `project.json`, read it in `applyUserProperties` (`main.js`) into `CFG`,
   then run `python tools/gen_properties.py`. Property `order` decides the browser-drawer group
-  (0–9 camera/time, 10–19 audio/combat, 20–29 sea, 30–39 panel, 40–49 air wing, 50–59 hull numbers).
+  (0–9 camera/time, 10–19 audio/combat, 20–29 sea, 30–39 panel, 40–49 air wing, 50–59 hull number).
   `<key>count` sliders are picked up automatically for every key in `AIRCRAFT_TYPES`.
 - **New aircraft type**: builder in `airframes.js`, subclass with static `spec` + `buildModel()` in
   `aircraft.js`, register in `AIRCRAFT_TYPES` and `FIXED_ORDER`/`HELI_ORDER`, callsign pool in `radio.js`,

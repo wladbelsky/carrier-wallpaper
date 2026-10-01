@@ -192,18 +192,6 @@ const WE_PROPERTIES = {
   "type": "textinput",
   "value": "07"
  },
- "destroyer1number": {
-  "order": 51,
-  "text": "Destroyer (port) hull number",
-  "type": "textinput",
-  "value": "54"
- },
- "destroyer2number": {
-  "order": 52,
-  "text": "Destroyer (starboard) hull number",
-  "type": "textinput",
-  "value": "61"
- },
  "waveheight": {
   "order": 20,
   "text": "Wave height, %",

@@ -121,9 +121,9 @@ There are seven jet parking spots:
 After landing, a jet takes a free deck spot. It is struck below by elevator only when the deck is full, or
 now and then for "maintenance".
 
-## Hull numbers
+## Hull number
 
-Carrier and destroyer hull numbers are text properties (deck, island and bow numbers).
+The carrier hull number is a text property (deck, island and bow numbers, and the panel title).
 
 ## Adding a new aircraft type (for developers)
 

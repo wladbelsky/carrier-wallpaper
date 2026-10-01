@@ -39,8 +39,6 @@ window.wallpaperPropertyListener = {
     if (has('camerashake')) CFG.shake = p.camerashake.value;
     if (has('enemies')) CFG.enemies = p.enemies.value;
     if (has('carriernumber')) CFG.numbers.carrier = p.carriernumber.value;
-    if (has('destroyer1number')) CFG.numbers.dd1 = p.destroyer1number.value;
-    if (has('destroyer2number')) CFG.numbers.dd2 = p.destroyer2number.value;
     for (const k of Object.keys(AIRCRAFT_TYPES)) if (has(k + 'count')) { const v = Math.round(p[k + 'count'].value); if (CFG.counts[k] !== v) { CFG.counts[k] = v; airWingDirty = true; } }
     if (has('ddhelis') && CFG.ddHelis !== p.ddhelis.value) { CFG.ddHelis = p.ddhelis.value; airWingDirty = true; }
     applySettings();

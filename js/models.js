@@ -102,7 +102,7 @@ function dashed(p, x1, z1, x2, z2, w, color, y, dash, gap) {
   for (let s = 0; s < L; s += dash + gap) { const e = Math.min(L, s + dash); deckLine(p, x1 + ux * s, z1 + uz * s, x1 + ux * e, z1 + uz * e, w, color, y); }
 }
 /* Hull numbers — redrawn when the WE property changes */
-const NUMBER_DECALS = { carrier: [], dd1: [], dd2: [] };
+const NUMBER_DECALS = { carrier: [] };
 function numberDecal(key, w, h, style) {
   const c = document.createElement('canvas'); c.width = 256; c.height = 128;
   const tex = new THREE.CanvasTexture(c);
@@ -362,8 +362,6 @@ function buildDestroyer(side) { // side: -1 = port of the carrier, +1 = starboar
   prism(g, [[-7.45, 1.1], [2.3, 1.26], [7.85, 0.05], [7.85, -0.05], [2.3, -1.26], [-7.45, -1.1]], 0.85, 0.25, HULL);
   prism(g, [[-7.4, 1.06], [2.3, 1.22], [7.75, 0.05], [7.75, -0.05], [2.3, -1.22], [-7.4, -1.06]], 1.1, 0.03, DECK);
   prism(g, [[-7.45, 0.97], [2, 1.12], [7.65, 0.04], [7.65, -0.04], [2, -1.12], [-7.45, -0.97]], -0.05, 0.12, 0x2a2d31);
-  const nk = side < 0 ? 'dd1' : 'dd2';
-  hullNumber(g, nk, 4.3, 0.72, 0.9, 1.0, 0.214); hullNumber(g, nk, 4.3, 0.72, -0.9, 1.0, Math.PI - 0.214);
   // bow bulwark & breakwater
   const bw = box(g, 0.08, 0.2, 1.6, TRIM, 4.35, 1.23, 0); bw.rotation.y = 0;
   // forward superstructure (bridge block) — sloped stealth walls
