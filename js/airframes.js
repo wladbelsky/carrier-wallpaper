@@ -221,6 +221,20 @@ function buildSu57() {
   mergeStatic(g, []); return g;
 }
 
+/* ---------- enemy fast attack craft (~12 m): pointed planing hull, cabin, bow MG, outboards ---------- */
+function buildBoat() {
+  const g = new THREE.Group(), C = M(0x5d6266), C2 = M(0x4a4f53), D = M(0x26292c), CAN = CANOPY();
+  prism(g, [[0.55, 0], [0.32, 0.13], [-0.45, 0.14], [-0.45, -0.14], [0.32, -0.13]], -0.06, 0.12, C);   // hull
+  prism(g, [[0.5, 0], [0.3, 0.11], [-0.43, 0.12], [-0.43, -0.12], [0.3, -0.11]], 0.06, 0.012, C2);     // deck
+  taper(g, 0.3, 0.12, 0.17, C2, -0.02, 0.13, 0, 0.75, 0.85, -0.03);                                       // cabin
+  taper(g, 0.06, 0.07, 0.15, CAN, 0.13, 0.16, 0, 0.5, 0.9, -0.015);                                       // windscreen
+  box(g, 0.012, 0.16, 0.012, D, -0.1, 0.27, 0); box(g, 0.03, 0.012, 0.1, D, -0.1, 0.33, 0);              // mast, radar bar
+  cyl(g, 0.035, 0.04, 0.035, 8, D, 0.33, 0.085, 0);                                                       // bow gun ring
+  for (const z of [-0.012, 0.012]) { const b = cyl(g, 0.007, 0.007, 0.14, 4, D, 0.4, 0.115, z); b.rotation.z = Math.PI / 2 - 0.25; }
+  for (const z of [-0.06, 0.06]) box(g, 0.06, 0.1, 0.045, D, -0.47, 0.06, z);                           // outboard motors
+  mergeStatic(g, []); return g;
+}
+
 /* ---------- E-2D Hawkeye (AWACS) — Sto-Wing fold ---------- */
 function buildE2D(color) {
   const g = new THREE.Group(), C = M(color || 0xc2c6ca), C2 = M(0xa9aeb3), D = M(0x33383d), CAN = CANOPY();

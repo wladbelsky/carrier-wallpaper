@@ -27,8 +27,8 @@ function buildVampire() {
 /* Enemy models are built once; every enemy is a clone sharing geometry and materials, so spawning
    allocates no GPU buffers and removed enemies leave nothing behind. */
 const ENEMY_MODELS = {};
-function enemyMesh(key) {     // 'vampire' or an ENEMY_TYPES key
-  const tpl = ENEMY_MODELS[key] || (ENEMY_MODELS[key] = key === 'vampire' ? buildVampire() : ENEMY_TYPES[key].build());
+function enemyMesh(key) {     // 'vampire', 'boat' or an ENEMY_TYPES key
+  const tpl = ENEMY_MODELS[key] || (ENEMY_MODELS[key] = key === 'vampire' ? buildVampire() : key === 'boat' ? buildBoat() : ENEMY_TYPES[key].build());
   return tpl.clone();
 }
 
@@ -41,8 +41,9 @@ function bearingWords(h) {
 function compassWord(h) { return ['east', 'south-east', 'south', 'south-west', 'west', 'north-west', 'north', 'north-east'][Math.round(((h / DEG) % 360 + 360) % 360 / 45) % 8]; }
 function hq() { const aw = AIRCRAFT.find(a => a.isAwacs && a.airborne); return aw ? [aw.callsign, 'awacs'] : [RADIO_NAMES.carrier, 'ship']; }
 
+const pickEnemyType = () => wpick(Object.keys(ENEMY_TYPES).map(k => ({ k, w: Math.max(0.05, ENEMY_TYPES[k].w(STRESS.level)) }))).k;
 function spawnBandits(n) {
-  const st = STRESS.level, type = wpick(Object.keys(ENEMY_TYPES).map(k => ({ k, w: Math.max(0.05, ENEMY_TYPES[k].w(st)) }))).k, ty = ENEMY_TYPES[type];
+  const type = pickEnemyType(), ty = ENEMY_TYPES[type];
   const h = rand(0, TAU), perp = new V3(-Math.sin(h), 0, Math.cos(h));
   const pass = new V3(rand(-22, 22), 0, rand(-22, 22)), alt = rand(ty.alt[0], ty.alt[1]), speed = rand(ty.speed[0], ty.speed[1]);
   for (let i = 0; i < n; i++) {
@@ -55,6 +56,21 @@ function spawnBandits(n) {
   }
   const [who, role] = hq();
   RADIO.say(who, pick(COMBAT.newBandits).replace('{B}', bearingWords(h)).replace('{D}', compassWord(h)).replace('{T}', ty.name).replace('{N}', n === 1 ? 'a single bandit' : n === 2 ? 'two bandits' : n === 3 ? 'three bandits' : 'multiple bandits'), { role, cat: 'combat', prio: 2 });
+}
+/* dogfight bandit: flies a screen pass (js/airwar.js) ahead of or behind our fighters; never fires at the ships */
+function spawnDuelBandit(type, path, ps, speed) {
+  const mesh = enemyMesh(type); mesh.scale.setScalar(1.25); scene.add(mesh);
+  const s = path.sample(ps);
+  const e = { kind: 'bandit', duel: true, type, mesh, p: s.pos, v: s.dir.clone().multiplyScalar(speed), hp: ENEMY_TYPES[type].hp, age: 0, fired: true, smokeT: 0, path, ps, speed, smp: { pos: new V3(), dir: new V3(), turn: 0, R: 1 } };
+  mesh.position.copy(e.p); orientFrom(mesh, s.dir, 0);   // placed now: it spawns after this step's updateCombat
+  ENEMIES.push(e); return e;
+}
+/* fast attack craft: runs across the water; attack helicopters hunt them */
+function spawnBoat(p, dir, speed) {
+  const mesh = enemyMesh('boat'); mesh.scale.setScalar(1.25); scene.add(mesh);
+  const e = { kind: 'boat', mesh, p: p.clone(), dir: dir.clone().setY(0).normalize(), speed, v: new V3(), hp: 2, age: 0, smokeT: 0, wakeT: 0 };
+  mesh.position.copy(e.p); orientFrom(mesh, e.dir, 0);
+  ENEMIES.push(e); return e;
 }
 function vampireTarget() {
   const s = pick(SHIPS), half = s.len * 0.35;
@@ -76,7 +92,8 @@ function spawnVampireSalvo(n) {
 const enemyAlive = e => e && !e.dead && !e.falling;
 function nearestEnemy(pos, kinds, maxDist) {
   let best = null, bd = maxDist;
-  for (const e of ENEMIES) if (enemyAlive(e) && kinds.includes(e.kind)) { const d = e.p.distanceTo(pos); if (d < bd) { bd = d; best = e; } }
+  // dogfight bandits are left to the fighters
+  for (const e of ENEMIES) if (enemyAlive(e) && !e.duel && kinds.includes(e.kind)) { const d = e.p.distanceTo(pos); if (d < bd) { bd = d; best = e; } }
   return best;
 }
 const _al = new V3();
@@ -130,6 +147,9 @@ function damageEnemy(e, dmg, src) {
     explosion(e.p, 1.3); e.falling = true; e.spin = rand(3, 6) * (Math.random() < 0.5 ? -1 : 1);
     sayKill(src, STRESS.pick(COMBAT.splash));
     if (CFG.shake) camShake = Math.min(1, camShake + 0.25);
+  } else if (e.kind === 'boat') {
+    explosion(e.p, 0.9); e.falling = true; e.sinkT = 0;
+    sayKill(src, pick(AIRWAR_LINES.boatKill));
   } else {
     explosion(e.p, 0.8); e.dead = true; scene.remove(e.mesh);
     if (Math.random() < 0.6) sayKill(src, pick(COMBAT.vampireDown));
@@ -149,7 +169,7 @@ function updateCombat(dt) {
   const armed = AUD.armed && CFG.enemies && CFG.fire > 0;
   const st = STRESS.level;
   if (armed) {
-    const alive = ENEMIES.filter(e => e.kind === 'bandit' && enemyAlive(e)).length;
+    const alive = ENEMIES.filter(e => e.kind === 'bandit' && !e.duel && enemyAlive(e)).length;   // dogfight bandits don't count
     banditTimer -= dt;
     if (banditTimer <= 0) {
       banditTimer = rand(9, 16) * (1 - 0.55 * st);
@@ -161,6 +181,7 @@ function updateCombat(dt) {
     banditTimer = rand(1.5, 3); vampTimer = rand(10, 16);
     // when the music stops, inbound missiles are intercepted / self-destruct
     for (const e of ENEMIES) if (e.kind === 'vampire' && !e.dead) { explosion(e.p, 0.6); e.dead = true; scene.remove(e.mesh); }
+    for (const e of ENEMIES) if (e.kind === 'boat' && !e.retreat) { e.retreat = true; e.dir.set(e.p.x, 0, e.p.z).normalize(); e.speed = 9; }   // boats turn and run
   }
   if (armed) for (const m of ALL_CIWS) {
     if (m.burst > 0 || (m.cd || 0) > 0 || !m.track || m.track.kind !== 'vampire' || !enemyAlive(m.track)) continue;
@@ -177,13 +198,33 @@ function updateCombat(dt) {
         if (e.p.y < waveH(e.p.x, e.p.z)) { FX.splash.spawn(e.p, 1.8); explosion(e.p, 0.8); e.dead = true; scene.remove(e.mesh); }
         continue;
       }
-      e.p.addScaledVector(e.v, dt);
-      e.mesh.position.copy(e.p); orientFrom(e.mesh, _al.copy(e.v).normalize(), 0.15 * Math.sin(e.age));
+      if (e.path) {                            // dogfight bandit: follows its pass, leaves the scene at the end
+        e.ps += e.speed * dt; const s = e.path.sample(e.ps, e.smp);
+        e.p.copy(s.pos); e.v.copy(s.dir).multiplyScalar(e.speed);
+        if (e.ps >= e.path.length) { e.dead = e.escaped = true; scene.remove(e.mesh); continue; }
+      } else e.p.addScaledVector(e.v, dt);
+      e.mesh.position.copy(e.p); orientFrom(e.mesh, _al.copy(e.v).normalize(), e.path ? -e.smp.turn * 0.7 : 0.15 * Math.sin(e.age));
       if (e.smoking) { e.smokeT += dt; while (e.smokeT > 0.06) { e.smokeT -= 0.06; FX.smoke.spawn(e.p.clone(), { s0: 0.5, s1: 2, life: 1.8, a0: 0.5, color: 0x333333, v: new V3(-WAVE.flow, 0.3, 0) }); } }
       // bandits loose anti-ship missiles on their run in
       const dc = Math.hypot(e.p.x, e.p.z);
       if (armed && !e.fired && dc < 85 && dc > 50) { e.fired = true; if (Math.random() < ENEMY_TYPES[e.type].vamp + st * 0.25) { spawnVampire(e.p.clone()); sayOnce('vamp', 6, () => { const sh = pick(SHIPS.slice(1)); RADIO.say(sh.radio, pick(['Vampire launch! Bandit fired on us!', 'Missile off the rail, inbound!']), { role: 'ship', cat: 'combat', prio: 3 }); }); } }
       if (dc > 175 && e.age > 3) { e.dead = true; scene.remove(e.mesh); }
+    } else if (e.kind === 'boat') {
+      if (e.falling) {                         // burning, then down by the stern
+        e.sinkT += dt; e.p.y -= dt * 0.12 * (1 + e.sinkT); e.mesh.position.copy(e.p); e.mesh.rotateZ(dt * 0.12);
+        if (Math.random() < dt * 12) FX.smoke.spawn(e.p.clone(), { s0: 0.6, s1: 2.6, life: 2.2, a0: 0.6, color: 0x1e1e1e, v: new V3(-WAVE.flow, 0.6, 0) });
+        if (e.sinkT > 4) { FX.splash.spawn(e.p, 0.8); e.dead = true; scene.remove(e.mesh); }
+        continue;
+      }
+      // keep clear of the ships: inside a ship's circle the course turns away from it
+      for (const s of SHIPS) { const dx = e.p.x - s.base.x, dz = e.p.z - s.base.z, r = s.len * 0.55 + 4; if (dx * dx + dz * dz < r * r) e.dir.lerp(_al.set(dx, 0, dz).normalize(), Math.min(1, dt * 1.5)).normalize(); }
+      // speed through the water + the current (the sea flows past the fleet at WAVE.flow)
+      e.v.copy(e.dir).multiplyScalar(e.speed); e.v.x -= WAVE.flow; e.p.addScaledVector(e.v, dt);
+      e.p.y = waveH(e.p.x, e.p.z) - 0.05;
+      e.mesh.position.copy(e.p); orientFrom(e.mesh, e.dir, 0.06 * Math.sin(e.age * 1.7));
+      e.wakeT += dt; while (e.wakeT > 1 / 40) { e.wakeT -= 1 / 40; FX.foam.emit(e.p.x - e.dir.x * 0.8 + rand(-0.15, 0.15), e.p.z - e.dir.z * 0.8 + rand(-0.15, 0.15), rand(-0.4, 0.4) - e.dir.x * 0.5, rand(-0.4, 0.4) - e.dir.z * 0.5, rand(1.2, 2.2)); }
+      if (e.smoking) { e.smokeT += dt; while (e.smokeT > 0.08) { e.smokeT -= 0.08; FX.smoke.spawn(e.p.clone(), { s0: 0.4, s1: 1.8, life: 1.6, a0: 0.5, color: 0x333333, v: new V3(-WAVE.flow, 0.4, 0) }); } }
+      if (Math.hypot(e.p.x, e.p.z) > 160 && e.age > 3) { e.dead = true; scene.remove(e.mesh); }
     } else {                                   // vampire: descend to sea-skimming height and run at a ship
       const tw = e.tgt.ship.group.localToWorld(e.tgt.local.clone());
       const to = tw.sub(e.p), d = to.length();

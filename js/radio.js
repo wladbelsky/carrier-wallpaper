@@ -226,11 +226,6 @@ const COMBAT = {
     panic: ['They just keep coming! Every gun, open fire!', 'Massive enemy wave! Defend the carrier at all costs!']
   },
   end: ['Airspace is clear. Good work, everyone.', 'No more contacts on radar. Stand down.', 'Enemy has withdrawn. Nice work out there.'],
-  fighter: {
-    calm: ['Fox 2!', 'Fox 3!', 'Engaging.', 'Tally ho!', 'Covering you, lead.', 'Watch your six!', 'Two bandits low, rolling in.', 'Good hit! Good hit!'],
-    tense: ['Bandits everywhere!', 'Two on my tail, need help!', 'Break right, break right!', "Missile! Missile! Defending!", "I'm taking fire!", 'Stay with me, wingman!'],
-    panic: ["I can't shake him!", 'Mayday, mayday!', "There's too many of them!", 'Someone get this guy off me!', "I'm hit! I'm hit!", 'Hold the line, damn it!']
-  },
   awacs: {
     calm: ['Enemy fighters inbound, bearing two-seven-zero.', 'Good kill. Next group is closing fast.', 'Keep the enemy away from the fleet!', 'Enemy formation breaking up. Keep the pressure on.'],
     tense: ['Multiple enemy flights inbound, all units weapons free!', 'Enemy strength increasing! Hold your ground!', 'Vampires launched, ships, stand by!'],
@@ -241,11 +236,6 @@ const COMBAT = {
     tense: ['Vampires inbound, brace!', 'CIWS reloading, cover us!', 'Taking fire, returning fire!'],
     panic: ['We are taking heavy fire!', 'Damage control parties to the flight deck!', 'Fires on deck three!', "We can't take much more of this!"]
   },
-  heli: {
-    calm: ['Rockets away!', 'Engaging surface targets.', 'Staying low, covering the fleet.'],
-    tense: ['Flak everywhere, staying low!', 'Hellfire away!'],
-    panic: ["We're getting shot to pieces out here!", 'Taking hits, still in the fight!']
-  },
   splash: {
     calm: ['Splash one!', 'Target destroyed.', 'Good kill!', 'Bandit down.', 'Splash, splash!'],
     tense: ["Splash! Who's next?", "Got him! That's another one!", 'Bandit down! More inbound!'],
@@ -255,6 +245,41 @@ const COMBAT = {
   shipHit: ["We've been hit! Damage control!", 'Missile impact! Fires on deck!', 'Hit, starboard side! Still fighting!'],
   newBandits: ['New contacts, bearing {B}, {N}! Identified as {T}.', 'Bogeys inbound from the {D}, {N}! Type: {T}.', '{T}, bearing {B}, closing fast!', '{T}s inbound from the {D}, {N}!'],
   vampires: ['Vampire, vampire! Bearing {B}!', 'Inbound anti-ship missiles, bearing {B}!', 'Missile launch detected! Vampires inbound!']
+};
+
+/* ---- air combat passes (js/airwar.js): each line matches what is on screen at that moment ----
+   {T} enemy type, {C} callsign, {B} bearing, {D} compass direction */
+const AIRWAR_LINES = {
+  engage: ['Breaking off to intercept!', 'Flight, follow me in. Weapons free!', "Leaving the orbit. Let's go hunting.", 'Engaging! Stay on my wing.', 'Pushing out to intercept, buster!'],
+  rtb: ['Bandits cleared. Rejoining the orbit.', "Fight's over. Heading back to station.", 'Returning to the orbit. Good hunting, everyone.', 'Winchester on missiles. Coming back to station.'],
+  chaseIntro: {
+    calm: ["{T} at my twelve, I'm on him!", 'Tally one {T}, engaging!', 'Got him in my sights!', "On his six. He's not getting away."],
+    tense: ['{T} dead ahead, going for the kill!', "I'm on his tail! Stay with me!", "He's trying to shake me. No chance!"],
+    panic: ["I'm on him, I'm on him!", 'Got one in front of me! Going for it!']
+  },
+  chaseEscape: ["He's bugging out. Let him go.", "Missed him! He's out of range.", 'He slipped away. Damn it!', 'Lost him. He ran for it.'],
+  chasedIntro: {
+    calm: ['{T} on my six! Shaking him off.', 'Bandit on my tail, defending.', "He's behind me, breaking left!"],
+    tense: ["Bandit on my six! Can't shake him!", 'Break right, break right!', "He's all over me!", "I'm taking fire!"],
+    panic: ["I can't shake him!", 'Someone get this guy off me!', "He's right behind me! Help!"]
+  },
+  saveIntro: ["Hang on, {C}, I'm on him!", 'Moving in, {C}! Keep him busy!', "I've got him, {C}! Break left!", '{C}, hold on, coming in hot!'],
+  sixWarning: ['{C}, bandit on your six!', '{C}, check six! Check six!', "{C}, you've got one on your tail!"],
+  thanks: ['Thanks, I owe you one!', "He's off me. Thanks!", "Good shooting! I'm clear.", 'Close one. Thanks for the save.'],
+  sweep: ['Sweeping through. Eyes open.', 'Passing over the fleet, no tally.', 'Low and fast over the ships, looking for leakers.'],
+  fox: ['Fox 2!', 'Fox 3!', 'Fox 2, Fox 2!', 'Missile away!'],
+  guns: ['Guns, guns, guns!', 'Guns!', 'Hosing him down!'],
+  flares: ['Flares! Flares!', 'Defending, popping flares!', 'Missile lock! Countermeasures!'],
+  heliOut: ['Moving out to hunt surface contacts, bearing {B}.', "Going low. We'll take the boats.", 'Heading out, hunting small boats to the {D}.', "Rolling out to cover the fleet's flank."],
+  heliAway: ['Engaging small boats to the {D}, rockets away!', 'Two boats burning to the {D}. Looking for more.', 'Hellfire hit, target destroyed. {D} sector clear.',
+    'Taking fire from the boats to the {D}, still in the fight!', 'Gun run on a patrol craft, {D} of the fleet.'],
+  boatContact: ["Surface contacts, fast attack craft bearing {B}. Gunships, they're yours.", 'Small boats closing from the {D}! Gunships, engage!', 'Patrol boats inbound, bearing {B}.'],
+  boatsIntro: ['Small boats below, rolling in!', 'Fast attack craft, I see them! Rockets!', "Boats at twelve o'clock, going hot.", 'Tally the boats. Engaging.'],
+  boatFire: ['Taking fire from the boats!', "Tracers! They're shooting at us!", "Boat's got a gun on us, jinking!"],
+  boatKill: ['Boat destroyed!', 'Scratch one boat!', 'Target burning!', "Good hit, boat's going down!"],
+  cover: ['Covering the fleet, eyes open.', 'Low pass over the ships, hunting leakers.', 'Watching for vampires over the fleet.'],
+  sidewinder: ['Fox 2! Sidewinder away!', 'Sidewinder away!', 'Taking the shot, Fox 2!'],
+  vampGun: ['Gun on the vampire!', 'Shooting at the missile!', 'Firing on the vampire!']
 };
 
 /* ---- the 5-second check before combat ---- */

@@ -114,7 +114,7 @@ function init() {
 /* ---- air wing from the per-type counts ---- */
 function buildAirWing() {
   airWingDirty = false;
-  AIRCRAFT.forEach(a => a.dispose()); AIRCRAFT = [];
+  AIRCRAFT.forEach(a => a.dispose()); AIRCRAFT = []; AIRWAR.passes.length = 0;
   HELI_LIGHTS.n = 0;
   resetDeck();
   const fixedSpots = DECK.fixedSpots.slice(0, DECK.INITIAL_DECK), heliSpots = DECK.heliSpots.slice();
@@ -341,7 +341,7 @@ function launchVLS() {
   const cell = pick(s.vls), p = cell.clone(); s.group.localToWorld(p);
   const out = s.side;   // always away from the carrier
   const ang = rand(0, TAU), dir = new V3(Math.cos(ang), rand(0.15, 0.45), Math.sin(ang) * 0.6 + out * 0.8).normalize();
-  const bandits = CFG.enemies ? ENEMIES.filter(e => e.kind === 'bandit' && enemyAlive(e)) : [];
+  const bandits = CFG.enemies ? ENEMIES.filter(e => e.kind === 'bandit' && !e.duel && enemyAlive(e)) : [];
   spawnGuidedMissile(p, new V3(0, 16, 0), 0.7, dir, 45, 6, true, bandits.length ? pick(bandits) : null, 0.82, s);
   for (let i = 0; i < 6; i++) FX.smoke.spawn(p.clone().add(new V3(rand(-0.5, 0.5), rand(0, 0.6), rand(-0.5, 0.5))), { s0: 1.2, s1: 4.5, life: 2.6, a0: 0.7, smoke: true, v: new V3(rand(-1, 1) - WAVE.flow, rand(0.5, 1.5), rand(-1, 1)), drag: 0.8 });
   FX.flash.spawn(p, { s0: 3, s1: 4, life: 0.25, a0: 1 }); FX.lights.flash(p, 4, 0.4);
@@ -385,24 +385,13 @@ function onBeat(band, strength) {
       if ((strength > 1.8 && Math.random() < 0.5) || f > 1.5) fireGun(ALL_GUNS[gunTurn++ % ALL_GUNS.length], strength);
     }
     for (const fb of FLYBYS) if (Math.random() < 0.45) fb.fireMissile();
-    // airborne fighters launch missiles on the kick
-    const jets = AIRCRAFT.filter(a => a.state === 'orbit' && a.spec.armed && a instanceof FixedWing);
-    if (jets.length && Math.random() < 0.55 * f) {
-      const a = pick(jets); a.fireMissile(CFG.enemies ? nearestEnemy(a.mesh.position, ['bandit'], 140) : null);
-      if (Math.random() < 0.35) a.say(pick(['Fox 2!', 'Fox 3!', 'Fox 2, Fox 2!', 'Missile away!']), { cat: 'combat', prio: 0 });
-    }
   } else if (band === 'mid') {
-    // attack helicopters ripple rockets on the snare
-    const gunships = AIRCRAFT.filter(a => a.state === 'orbit' && a.spec.armed && a instanceof Helicopter);
-    if (gunships.length && Math.random() < 0.4 * f) {
-      const a = pick(gunships); a.fireRockets();
-      if (Math.random() < 0.3) a.say(pick(['Rockets away!', 'Hellfire away!', 'Firing!']), { cat: 'combat', prio: 0 });
-    }
     startCIWS(rand(0.12, 0.28) * Math.max(0.5, f));
     for (const fb of FLYBYS) fb.fireGuns(0.28);
   } else if (band === 'high') {
     if (Math.random() < 0.35 * f) startCIWS(0.1);
   }
+  AIRWAR.onBeat(band, f);               // fighters and attack helicopters on their passes (js/airwar.js)
 }
 function updateMounts(dt) {
   const hunting = CFG.enemies && ENEMIES.length;
@@ -449,13 +438,13 @@ const csNum = a => +((/\s(\d+)$/.exec(a.callsign) || [0, 0])[1]);
 /* flights = aircraft sharing a callsign (WARDOG 1…4), in callsign order */
 function flightGroups() {
   const g = new Map();
-  for (const a of AIRCRAFT) { const base = a.callsign.replace(/\s+\d+$/, ''); if (!g.has(base)) g.set(base, []); g.get(base).push(a); }
+  for (const a of AIRCRAFT) { const base = flightOf(a); if (!g.has(base)) g.set(base, []); g.get(base).push(a); }
   for (const list of g.values()) list.sort((a, b) => csNum(a) - csNum(b));
   return g;
 }
 const isDown = a => a.state === 'parked' || a.state === 'hangar';
 // not launching or landing right now (an aircraft holding in orbit for its turn to land is landing)
-const settled = a => isDown(a) || ((a.state === 'orbit' || a.onMission) && !a.landReq);
+const settled = a => isDown(a) || ((a.state === 'orbit' || a.onMission || a.inCombat) && !a.landReq);
 function wpick(cands) { let r = Math.random() * cands.reduce((s, c) => s + c.w, 0); for (const c of cands) if ((r -= c.w) <= 0) return c; return cands[cands.length - 1]; }
 const flightSize = n => n >= 4 && Math.random() < 0.5 ? 2 : n;   // a four-ship flight goes as a pair or as all four
 function autoLaunch(joinOnly) {
@@ -489,6 +478,11 @@ function autoFlight(dt) {
   if (!CFG.auto) return;
   autoTimer -= dt; if (autoTimer > 0) return;
   autoTimer = rand(10, 20);
+  // now and then a flight on station moves to a new orbit distance (the lead picks, the wingmen follow)
+  if (!combatOn() && Math.random() < 0.2) {
+    const onStation = [...flightGroups().values()].filter(l => l.every(a => a.state === 'orbit' && !a.landReq));
+    if (onStation.length) pick(onStation).forEach((a, i) => a.pickOrbit(false, i === 0));
+  }
   // a pair already up is usually joined by the rest of its flight, even past the air wing cap
   if (Math.random() < 0.7 && autoLaunch(true)) return;
   const busy = AIRCRAFT.filter(a => !isDown(a)).length;
@@ -644,12 +638,8 @@ function updateChatter(dt) {
   chatterTimer -= dt; if (chatterTimer > 0) return;
   chatterTimer = rand(3.5, 7) * (1 - 0.45 * STRESS.level);       // more radio traffic as stress builds
   if (RADIO.q.filter(m => m.cat === 'combat').length > 1) return;
-  const fighters = AIRCRAFT.filter(a => a.airborne && a instanceof FixedWing && !a.isAwacs);
-  const attack = AIRCRAFT.filter(a => a.airborne && a instanceof Helicopter && a.spec.armed);
-  const r = Math.random();
-  if (fighters.length && r < 0.5) pick(fighters).say(STRESS.pick(COMBAT.fighter), C);
-  else if (awacs && r < 0.65) awacs.say(STRESS.pick(COMBAT.awacs), C);
-  else if (attack.length && r < 0.75) pick(attack).say(STRESS.pick(COMBAT.heli), C);
+  // fighters and helicopters talk about their own passes (js/airwar.js); here only the AWACS and the ships
+  if (awacs && Math.random() < 0.45) awacs.say(STRESS.pick(COMBAT.awacs), C);
   else RADIO.say(pick(RADIO_NAMES.escorts), STRESS.pick(COMBAT.ship), { role: 'ship', cat: 'combat', prio: 0 });
 }
 
@@ -800,6 +790,7 @@ function step(dt) {
   FX.lights.update(dt, 0.6 + ENV.night * 0.8);
   STRESS.update(dt);
   updateCombat(dt);
+  AIRWAR.update(dt);
   updateChatter(dt);
   updateMissions(dt);
   RADIO.update(dt);

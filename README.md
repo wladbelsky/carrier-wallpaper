@@ -34,6 +34,8 @@ Each destroyer can also carry one MH-60 (optional).
   all four or as its lead pair (chosen at random), the second pair usually follows soon to join it,
   and flights are recovered together. About half of the air wing is airborne on average.
 - Jets fly turn-radius-limited paths (Dubins curves), so launches, orbits and approaches use wide, realistic turns.
+- Each flight picks its own random orbit distance (wingmen share the lead's); the far orbits run partly off-screen.
+  Now and then a flight on station moves to a new distance, easing in and out smoothly.
 - Landing gear retracts in flight.
 - The CMV-22B takes off and lands vertically like a helicopter, then tilts its nacelles forward and raises
   its gear to cruise in airplane mode; it converts back as it slows down for landing.
@@ -87,6 +89,24 @@ A "heaviness" meter (auto-gained loudness density) drives extra effects:
 - **Missiles:** on big hits, the destroyers launch SM-2s vertically from their VLS cells and the carrier fires RAM salvos.
 - **Camera shake** on heavy kicks — subtle, controlled by the **Camera shake on heavy hits** property.
 
+## Air combat
+
+When combat starts, the fighters (F/A-18, F-14, F-35C) and AH-1Z gunships leave their orbits and fly off-screen.
+From there they keep coming back on **passes** across the screen, edge to edge, straight or curved:
+
+- **Chase:** a bandit crosses the screen with our fighters on its tail; they fire missiles and guns on the beat.
+- **Chased:** a bandit is on a fighter's six, shooting at it; the fighter pops flares (the bandit's missile goes
+  for them), and its wingman comes in behind the bandit — or the AWACS calls the warning.
+- **Sweep:** fighters pass over the fleet in formation.
+- **Gunships** cross low: enemy fast attack boats run in to meet them and get Hellfires and rocket ripples (and
+  shoot back); on cover passes they fire Sidewinders at passing bandits and the chin gun at vampires. While
+  off-screen they report their attacks out there.
+- The radio follows what is on screen: each pass is announced when it comes into view ("Su-33 at my twelve,
+  I'm on him!", "Hang on, WARDOG 1, I'm on him!"), shots, flares, kills, escapes and thanks for the save.
+- Our aircraft are never shot down. Dogfight bandits are left to the fighters (the ships don't fire at them).
+- Unarmed aircraft (E-2D, MH-60, CH-53, CMV-22B) move out to a wide orbit, away from the fight.
+- When the music stops, the fighters and gunships return to their orbits and the remaining boats turn and run.
+
 ## Enemies & hits
 
 During combat, enemy fighters (bandits) make passes over the fleet, and anti-ship missiles (vampires)
@@ -106,7 +126,8 @@ skim in toward the ships.
 - **Targeting:**
   - Guns track bandits (AA mode).
   - CIWS lock on vampires first.
-  - Fighters, VLS and RAM fire homing missiles.
+  - Fighters, gunships, VLS and RAM fire homing missiles.
+- **Boats:** fast attack craft come in across the water during gunship passes.
 - **Hits:** a projectile that reaches its target scores on the **next beat** of the music. The target explodes, and shot-down bandits trail smoke and fall into the sea.
 - **Ship damage:** missiles that leak through hit the ships, causing an explosion and a fire with smoke for a while.
 - The **Enemy aircraft & missiles in combat** property turns all of this off.
