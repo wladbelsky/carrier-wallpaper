@@ -28,6 +28,9 @@ Aircraft counts are set in the wallpaper properties.
 Each destroyer can also carry one MH-60 (optional).
 
 - Three jets and one helicopter park on deck. Everything else lives in the hangar and uses the deck-edge elevators.
+- Automatic flight ops work by flights (aircraft sharing a callsign): a whole flight or its lead section
+  (half, starting with №1) launches together, the rest of a split flight follows later to join it,
+  and flights are recovered together. About half of the air wing is airborne on average.
 - Jets fly turn-radius-limited paths (Dubins curves), so launches, orbits and approaches use wide, realistic turns.
 - Landing gear retracts in flight.
 

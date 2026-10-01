@@ -140,8 +140,8 @@ function buildAirWing() {
     }
   }
   buildList();
-  // part of the air wing goes up right away
-  if (CFG.auto) AIRCRAFT.filter(a => a.home === 'deck' || Math.random() < 0.3).slice(0, 3).forEach(a => a.requestLaunch());
+  // part of the air wing goes up right away: two flights (or lead sections)
+  if (CFG.auto) { autoLaunch(); autoLaunch(); autoTimer = rand(8, 14); }
 }
 
 /* Faceted water. The facet normal is computed in the vertex shader from the three
@@ -445,17 +445,52 @@ function updateMounts(dt) {
   }
 }
 
-/* ---- auto flight ops & fly-bys ---- */
+/* ---- auto flight ops: whole flights or their lead section, never random singles ---- */
 let autoTimer = 6, flybyTimer = rand(8, 14);
+const csNum = a => +((/\s(\d+)$/.exec(a.callsign) || [0, 0])[1]);
+/* flights = aircraft sharing a callsign (WARDOG 1…4), in callsign order */
+function flightGroups() {
+  const g = new Map();
+  for (const a of AIRCRAFT) { const base = a.callsign.replace(/\s+\d+$/, ''); if (!g.has(base)) g.set(base, []); g.get(base).push(a); }
+  for (const list of g.values()) list.sort((a, b) => csNum(a) - csNum(b));
+  return g;
+}
+const isDown = a => a.state === 'parked' || a.state === 'hangar';
+const settled = a => isDown(a) || a.state === 'orbit' || a.onMission;   // not launching or landing right now
+function wpick(cands) { let r = Math.random() * cands.reduce((s, c) => s + c.w, 0); for (const c of cands) if ((r -= c.w) <= 0) return c; return cands[cands.length - 1]; }
+function autoLaunch() {
+  const cands = [];
+  for (const all of flightGroups().values()) {
+    if (!all.every(settled)) continue;
+    const down = all.filter(isDown); if (!down.length) continue;
+    const split = down.length < all.length;     // part of the flight is already up: send the rest to join it
+    const n = split || down.length <= 2 || Math.random() < 0.5 ? down.length : Math.ceil(down.length / 2);
+    cands.push({ list: down.slice(0, n), w: (split ? 4 : 1) + down.filter(a => a.state === 'parked').length * 0.5 });
+  }
+  if (!cands.length) return false;
+  for (const a of wpick(cands).list) a.requestLaunch();
+  return true;
+}
+function autoRecover() {
+  const cands = [];
+  for (const all of flightGroups().values()) {
+    if (!all.every(settled) || all.some(a => a.onMission)) continue;
+    const air = all.filter(a => a.state === 'orbit' && !a.landReq);
+    if (!air.length || air.some(a => a.airT < 25)) continue;
+    cands.push({ list: air, w: 1 + Math.min(...air.map(a => a.airT)) / 60 });   // longest on station first
+  }
+  if (!cands.length) return false;
+  for (const a of wpick(cands).list) a.requestLand();
+  return true;
+}
 function autoFlight(dt) {
   if (!CFG.auto) return;
   autoTimer -= dt; if (autoTimer > 0) return;
-  autoTimer = rand(7, 15);
-  const deck = AIRCRAFT.filter(a => a.canLaunch());
-  const air = AIRCRAFT.filter(a => a.state === 'orbit' && a.airT > 25 && !a.landReq);
-  const busy = AIRCRAFT.filter(a => a.state !== 'parked' && a.state !== 'hangar').length;
-  if (deck.length && (busy < Math.max(3, AIRCRAFT.length * 0.45) || Math.random() < 0.35)) pick(deck).requestLaunch();
-  else if (air.length) pick(air).requestLand();
+  autoTimer = rand(10, 20);
+  const busy = AIRCRAFT.filter(a => !isDown(a)).length;
+  const N = AIRCRAFT.length;
+  if ((busy < Math.max(3, N * 0.5) || (busy < N * 0.65 && Math.random() < 0.25)) && autoLaunch()) return;
+  autoRecover();
 }
 function updateFlybys(dt) {
   if (CFG.flyby > 0) {
@@ -545,11 +580,8 @@ function updateMissions(dt) {
   for (let n = 0; n < 2; n++) if (!dispatchFlight()) break;              // up to two flights per call
 }
 function dispatchFlight() {
-  const groups = {};
-  for (const a of AIRCRAFT) { const base = a.callsign.replace(/\s+\d+$/, ''); (groups[base] = groups[base] || []).push(a); }
   const cands = [];
-  for (const base in groups) {
-    const all = groups[base];
+  for (const [base, all] of flightGroups()) {
     if (all.some(a => LAUNCHING.has(a.state))) continue;   // wait until the whole flight is up
     const ready = all.filter(a => a.state === 'orbit' && !a.landReq && a.airT > 15);
     if (ready.length) cands.push({ base, ready, full: ready.length === all.length, n: ready.length });
