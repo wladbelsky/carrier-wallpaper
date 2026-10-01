@@ -61,7 +61,7 @@ const RADIO = {
     m.dur = clamp(1.0 + m.text.length * 0.042, 1.6, 4.6); this.cur = m; this.t = 0;
     box.querySelector('.who').textContent = m.who;
     box.querySelector('.who').style.color = ROLE_COLOR[m.role] || ROLE_COLOR.pilot;
-    box.querySelector('.txt').textContent = m.text;
+    box.querySelector('.txt').textContent = `« ${m.text} »`;
     box.classList.add('on');
   }
 };
