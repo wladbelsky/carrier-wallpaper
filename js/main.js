@@ -710,7 +710,8 @@ function updateUI() {
   document.getElementById('daystate').textContent = (e > 6 ? 'DAY' : e > -6 ? 'TWILIGHT' : 'NIGHT');
   const as = document.getElementById('audiostate');
   const arming = AUD.active && !AUD.armed && AUD.soundStart >= 0;
-  as.textContent = (AUD.armed ? '● COMBAT' : arming ? `◌ SOUND… ${Math.max(0, ARM_DELAY - (RT() - AUD.soundStart)).toFixed(0)}s` : '○ SILENCE') + (FILE_AUDIO.playing ? ' (FILE)' : AUD.demo && DEMO.on ? ' (DEMO)' : '');
+  // fleet status: patrol in silence, unknown contacts while the sound arms, combat once armed
+  as.textContent = (AUD.armed ? '● COMBAT' : arming ? `◌ UNKNOWN CONTACTS · ${Math.max(0, ARM_DELAY - (RT() - AUD.soundStart)).toFixed(0)}s` : '○ ON PATROL') + (FILE_AUDIO.playing ? ' (FILE)' : AUD.demo && DEMO.on ? ' (DEMO)' : '');
   as.className = AUD.armed ? 'on' : '';
   const th = document.getElementById('threat');
   if (th) { const n = Math.round(STRESS.level * 10); th.textContent = '▮'.repeat(n) + '▯'.repeat(10 - n) + '  ' + STRESS.label; th.className = 'lv' + Math.min(3, Math.floor(STRESS.level * 4)); }

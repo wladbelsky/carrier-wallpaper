@@ -121,7 +121,8 @@ lines are shortened when others are waiting, so the radio keeps up with what hap
 ## Notification safeguard
 
 Sound has to play continuously for 5 seconds before the fleet opens fire, so short notification sounds
-never trigger it. The panel shows `SOUND… Ns` while arming.
+never trigger it. The panel's STATUS line shows `ON PATROL` in silence, `UNKNOWN CONTACTS · Ns` while
+arming and `COMBAT` once the fleet engages.
 
 During those 5 seconds the radio reports unidentified radar contacts. If the sound stops early,
 a "false alarm, stand down" call follows; otherwise combat begins.
