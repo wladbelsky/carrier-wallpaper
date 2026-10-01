@@ -734,7 +734,7 @@ function step(dt) {
   updateFlybys(dt);
   FX.tracers.update(dt);
   FX.flash.update(dt);
-  FX.smoke.update(dt, ENV.smokeTint);
+  FX.smoke.update(dt, ENV.smokeTint, camera);
   FX.splash.update(dt, WAVE.flow, ENV.splashTint);
   FX.foam.update(dt, WAVE.flow);
   FX.lights.update(dt, 0.6 + ENV.night * 0.8);

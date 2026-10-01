@@ -44,37 +44,82 @@ class Tracers {
   }
 }
 
+/* Camera-facing particles (flashes / smoke): the whole pool is one instanced draw call instead of a
+   THREE.Sprite per particle. Same look as SpriteMaterial (quad of `scale` world units rotated in screen
+   space, color × texture, alpha = opacity, scene fog). Normal-blended pools are sorted back to front
+   on the CPU, exactly like three.js sorted the individual sprites.                                   */
+const SPRITE_VS = `attribute vec3 iPos; attribute vec4 iCol; attribute vec2 iSR;
+  varying vec2 vUv; varying vec4 vCol;
+  #include <fog_pars_vertex>
+  void main() {
+    vUv = uv; vCol = iCol;
+    vec4 mvPosition = modelViewMatrix * vec4(iPos, 1.0);
+    vec2 q = position.xy * iSR.x; float c = cos(iSR.y), s = sin(iSR.y);
+    mvPosition.xy += vec2(c * q.x - s * q.y, s * q.x + c * q.y);
+    gl_Position = projectionMatrix * mvPosition;
+    #include <fog_vertex>
+  }`;
+const SPRITE_FS = `uniform sampler2D map; varying vec2 vUv; varying vec4 vCol;
+  #include <fog_pars_fragment>
+  void main() {
+    gl_FragColor = vCol * texture2D(map, vUv);
+    #include <fog_fragment>
+  }`;
+const _sfxFwd = new V3(), farFirst = (a, b) => b.depth - a.depth;
 class SpriteFX {
   constructor(scene, tex, blending, n, fog) {
-    this.items = [];
-    for (let i = 0; i < n; i++) {
-      const m = new THREE.SpriteMaterial({ map: tex, blending, transparent: true, depthWrite: false, fog: !!fog, opacity: 0 });
-      const s = new THREE.Sprite(m); s.visible = false; s.renderOrder = blending === THREE.AdditiveBlending ? 7 : 3; scene.add(s);
-      this.items.push({ s, on: false, life: 0, max: 1, s0: 1, s1: 1, a0: 1, v: new V3(), drag: 0, tint: null });
-    }
-    this.next = 0;
+    this.n = n; this.sorted = blending !== THREE.AdditiveBlending;   // additive blending is order independent
+    this.items = []; this.live = [];
+    for (let i = 0; i < n; i++) this.items.push({ on: false, p: new V3(), v: new V3(), col: new THREE.Color(), rot: 0, life: 0, max: 1, s0: 1, s1: 1, a0: 1, drag: 0, rise: 0, sc: 1, a: 0, depth: 0 });
+    const quad = new THREE.PlaneGeometry(1, 1), geo = new THREE.InstancedBufferGeometry();
+    geo.index = quad.index; geo.setAttribute('position', quad.attributes.position); geo.setAttribute('uv', quad.attributes.uv);
+    const attr = (k, size) => { const a = new THREE.InstancedBufferAttribute(new Float32Array(n * size), size).setUsage(THREE.DynamicDrawUsage); geo.setAttribute(k, a); return a; };
+    this.aPos = attr('iPos', 3); this.aCol = attr('iCol', 4); this.aSR = attr('iSR', 2); this.attrs = [this.aPos, this.aCol, this.aSR];
+    geo.instanceCount = 0;
+    const uniforms = THREE.UniformsUtils.merge([THREE.UniformsLib.fog]); uniforms.map = { value: tex };
+    const mat = new THREE.ShaderMaterial({ uniforms, vertexShader: SPRITE_VS, fragmentShader: SPRITE_FS, blending, transparent: true, depthWrite: false, fog: !!fog });
+    this.mesh = new THREE.Mesh(geo, mat); this.mesh.frustumCulled = false; this.mesh.visible = false;
+    this.mesh.renderOrder = blending === THREE.AdditiveBlending ? 7 : 3; scene.add(this.mesh);
+    this.geo = geo; this.next = 0;
   }
   spawn(p, o) {
-    const it = this.items[this.next]; this.next = (this.next + 1) % this.items.length;
-    it.on = true; it.s.visible = true; it.s.position.copy(p);
+    const it = this.items[this.next]; this.next = (this.next + 1) % this.n;
+    it.on = true; it.p.copy(p);
     it.life = it.max = o.life || 1; it.s0 = o.s0 || 1; it.s1 = o.s1 || it.s0; it.a0 = o.a0 != null ? o.a0 : 1;
-    it.v.copy(o.v || new V3()); it.drag = o.drag || 0; it.rise = o.rise || 0;
-    it.s.material.color.set(o.color != null ? o.color : 0xffffff); it.s.material.rotation = Math.random() * 6.28;
+    if (o.v) it.v.copy(o.v); else it.v.set(0, 0, 0);
+    it.drag = o.drag || 0; it.rise = o.rise || 0;
+    it.col.set(o.color != null ? o.color : 0xffffff); it.rot = Math.random() * 6.28;
     it.tintWithSmoke = !!o.smoke;
     return it;
   }
-  update(dt, smokeTint) {
+  update(dt, smokeTint, cam) {
+    const live = this.live; live.length = 0;
     for (const it of this.items) {
       if (!it.on) continue;
       it.life -= dt;
-      if (it.life <= 0) { it.on = false; it.s.visible = false; continue; }
+      if (it.life <= 0) { it.on = false; continue; }
       const t = 1 - it.life / it.max;
       it.v.multiplyScalar(Math.max(0, 1 - it.drag * dt)); it.v.y += it.rise * dt;
-      it.s.position.addScaledVector(it.v, dt);
-      const sc = lerp(it.s0, it.s1, Math.sqrt(t)); it.s.scale.set(sc, sc, 1);
-      it.s.material.opacity = it.a0 * (1 - t) * (t < 0.08 ? t / 0.08 : 1);
-      if (it.tintWithSmoke && smokeTint) it.s.material.color.copy(smokeTint);
+      it.p.addScaledVector(it.v, dt);
+      it.sc = lerp(it.s0, it.s1, Math.sqrt(t));
+      it.a = it.a0 * (1 - t) * (t < 0.08 ? t / 0.08 : 1);
+      if (it.tintWithSmoke && smokeTint) it.col.copy(smokeTint);
+      live.push(it);
     }
+    if (this.sorted && cam && live.length > 1) {
+      cam.getWorldDirection(_sfxFwd);
+      for (const it of live) it.depth = it.p.dot(_sfxFwd);
+      live.sort(farFirst);
+    }
+    const P = this.aPos.array, C = this.aCol.array, S = this.aSR.array;
+    for (let i = 0; i < live.length; i++) {
+      const it = live[i];
+      P[i * 3] = it.p.x; P[i * 3 + 1] = it.p.y; P[i * 3 + 2] = it.p.z;
+      C[i * 4] = it.col.r; C[i * 4 + 1] = it.col.g; C[i * 4 + 2] = it.col.b; C[i * 4 + 3] = it.a;
+      S[i * 2] = it.sc; S[i * 2 + 1] = it.rot;
+    }
+    if (live.length) for (const a of this.attrs) { a.needsUpdate = true; a.updateRange.count = live.length * a.itemSize; }   // upload only the live part
+    this.geo.instanceCount = live.length; this.mesh.visible = live.length > 0;
   }
 }
 
