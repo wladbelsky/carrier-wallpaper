@@ -9,6 +9,8 @@ const CALLSIGNS = {
   mh60: ['SEA GOBLIN', 'OSPREY', 'HALO'],
   ch53: ['ATLAS', 'HERCULES', 'TITAN'],
   ah1: ['VIPER', 'COBRA', 'SWEEPER'],
+  uh1: ['STINGER', 'GUNFIGHTER', 'RED DOG'],
+  cmv22: ['SUNHAWK', 'GREYHOUND', 'PELICAN'],
   flyby: ['YELLOW', 'SOL', 'GRABACR', 'OFNIR', 'SCHNEE', 'GELB'],
   ddheli: ['SEAHORSE', 'PETREL']      // one per destroyer, each with its own callsign
 };
@@ -98,6 +100,14 @@ const MISSIONS = {
     ['escort the transports to the landing zone.', 'Transports delivered safely. Coming home.'],
     ['sweep the coastline, grid {G}.', 'Coastline is clear. RTB.'],
     ['a patrol boat is shadowing the fleet, bearing {B}. Shoo it away.', 'Patrol boat turned back. Returning.']
+  ],
+  cod: [
+    ['COD run to the shore base: mail, parts and passengers.', 'Inbound with fresh mail and spare parts.'],
+    ['pick up the replacement F135 engine module at the airfield, grid {G}.', 'Engine module aboard. Heading home.'],
+    ['fly the inspection team over to the supply ship, bearing {B}.', 'Team delivered. Returning to Mother.'],
+    ['medevac run to the hospital ship, bearing {B}.', 'Patient handed over. RTB.'],
+    ['bring the spare radar module out from the shore base.', 'Got the parts. On our way back.'],
+    ['pick up the VIP party at the island airstrip, grid {G}.', 'VIPs aboard. Coming home, smooth ride guaranteed.']
   ]
 };
 /* replies to a mission order: common lines plus a few per kind; never the same line twice in a row */
@@ -108,6 +118,7 @@ LINES.missionCopy = {
   fighter: ['Copy, going to burner. On our way.', 'Roger, climbing to angels two-five.', 'Copy. Weapons check complete, heading out.',
     "Flight, on me. Let's go.", 'Copy, fence in. Vectoring now.', 'Roger. Tanker on the way back, right?'],
   awacs: ['Copy, repositioning now.', 'Roger, moving the orbit. Picture stays live.', 'Understood, relocating. Keep the chatter down.'],
+  cod: ['Copy, converting to airplane mode. En route.', 'Roger, nacelles forward, on our way.', 'Copy. Loadmaster, secure the ramp.', 'Understood. Mail call in about an hour.'],
   heli: ['Copy, nose down, en route.', 'Roger, heading out low and fast.', "Understood, we're on our way. Crew, strap in.", 'Copy. ETA about ten minutes.']
 };
 let lastMissionCopy = '';

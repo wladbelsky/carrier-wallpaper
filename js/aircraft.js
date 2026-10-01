@@ -388,7 +388,7 @@ class Helicopter extends Aircraft {
     // own scratch vectors: orbitStep() passes the shared _v in as `dir`
     const hz = _hz.set(dir.x, 0, dir.z); if (hz.lengthSq() < 1e-6) hz.copy(this.fwd); hz.normalize();
     this.fwd.copy(hz);
-    const p = 0.1 * clamp(this.v / this.spec.speed, 0, 1.2) - dir.y * 0.3;
+    const p = (this.spec.noseDown ?? 0.1) * clamp(this.v / this.spec.speed, 0, 1.2) - dir.y * 0.3;
     orientFrom(this.mesh, _hf.set(hz.x * Math.cos(p), -Math.sin(p), hz.z * Math.cos(p)), this.bank);
   }
   updateState(dt) {
@@ -435,7 +435,7 @@ class Helicopter extends Aircraft {
         break;
       case 'spindown':
         this.rotor = Math.max(0, 1 - this.t / 3.5); this.deckPose(s.x, s.z, s.yaw, 0);
-        if (this.t > 3.5) { const n = TAU / 4; this.rotorAng = Math.round(this.rotorAng / n) * n; this.state = 'fold'; }
+        if (this.t > 3.5) { const n = TAU / (S.blades || 4); this.rotorAng = Math.round(this.rotorAng / n) * n; this.state = 'fold'; }
         break;
       case 'fold': this.deckPose(s.x, s.z, s.yaw, 0); if (this.fold > 0.99) this.state = this.home === 'hangar' ? 'wait_lift' : 'parked'; break;
       case 'wait_lift':
@@ -485,15 +485,26 @@ class MH60 extends Helicopter {
   buildModel() { return buildMH60(); }
 }
 class CH53 extends Helicopter {
-  static spec = Object.assign({}, Helicopter.spec, { key: 'ch53', tag: 'CH-53', speed: 6.5, orbitR: [24, 30], alt: [10, 12.5], transport: true });
+  static spec = Object.assign({}, Helicopter.spec, { key: 'ch53', tag: 'CH-53', blades: 7, speed: 6.5, orbitR: [24, 30], alt: [10, 12.5], transport: true });
   buildModel() { return buildCH53(); }
 }
 class AH1 extends Helicopter {
   static spec = Object.assign({}, Helicopter.spec, { key: 'ah1', tag: 'AH-1Z', speed: 8.5, orbitR: [15, 21], alt: [7, 9], armed: true });
   buildModel() { return buildAH1(); }
 }
-const AIRCRAFT_TYPES = { fa18: FA18, f14: F14, f35: F35, e2d: E2D, mh60: MH60, ch53: CH53, ah1: AH1 };
-const FIXED_ORDER = ['fa18', 'f14', 'f35', 'e2d'], HELI_ORDER = ['mh60', 'ch53', 'ah1'];
+class UH1 extends Helicopter {
+  static spec = Object.assign({}, Helicopter.spec, { key: 'uh1', tag: 'UH-1Y', speed: 8, orbitR: [16, 22], alt: [7.5, 9.5], armed: true, missions: ['heli_attack', 'heli_transport'] });
+  buildModel() { return buildUH1(); }
+}
+/* Tiltrotor: takes off and lands like a helicopter, converts to airplane mode (nacelles forward, gear up) in cruise */
+class CMV22 extends Helicopter {
+  static spec = Object.assign({}, Helicopter.spec, { key: 'cmv22', tag: 'CMV-22B', speed: 11, turnR: 12, orbitR: [30, 38], alt: [11, 14], bankMax: 0.55, foldRate: 0.12, blades: 3, noseDown: 0.02, missions: ['cod'] });
+  get conv() { return this.state === 'orbit' || this.onMission ? 1 : this.state === 'depart' || this.state === 'ret' ? smoothstep(0.3, 0.85, this.v / this.spec.speed) : 0; }
+  get gearDown() { return this.conv < 0.5; }
+  buildModel() { return buildCMV22(); }
+}
+const AIRCRAFT_TYPES = { fa18: FA18, f14: F14, f35: F35, e2d: E2D, mh60: MH60, ch53: CH53, ah1: AH1, uh1: UH1, cmv22: CMV22 };
+const FIXED_ORDER = ['fa18', 'f14', 'f35', 'e2d'], HELI_ORDER = ['mh60', 'ch53', 'ah1', 'uh1', 'cmv22'];
 
 /* ---- callsign allocation: groups of 4 jets / 2 helicopters per type ---- */
 function callsignsFor(key, n, offset) {

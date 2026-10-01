@@ -450,3 +450,129 @@ function buildAH1(color) {
   navLights(g, [[0.03, 0.31, 0, 0xff3030]], { period: 0.9, duty: 0.18, phase: Math.random() }, 1.0);
   return heliModel(g, R, T, new V3(0.6, 0.06, 0));
 }
+
+/* ---------- UH-1Y Venom (utility) — 12.7 m fuselage, 14.9 m rotor, skids; shares engines and rotor with the AH-1Z ---------- */
+function buildUH1(color) {
+  const g = new THREE.Group(), C = M(color || 0x5f6656), C2 = M(0x535a4b), D = M(0x33383d), CAN = CANOPY();
+  // boxy cabin, cockpit with a big sloped windscreen, lengthened avionics nose with the FLIR turret
+  taper(g, 0.46, 0.24, 0.23, C, 0.07, 0.18, 0, 1.0, 0.85);                            // cabin
+  taper(g, 0.18, 0.24, 0.23, C, 0.39, 0.18, 0, 0.45, 0.8, -0.05);                     // cockpit
+  taper(g, 0.14, 0.12, 0.17, C, 0.55, 0.12, 0, 0.6, 0.75, -0.03);                     // nose
+  taper(g, 0.13, 0.11, 0.235, CAN, 0.44, 0.255, 0, 0.35, 0.8, -0.04);                 // windscreen
+  const fl = shade(new THREE.Mesh(new THREE.SphereGeometry(0.03, 8, 6), D)); fl.position.set(0.6, 0.06, 0); g.add(fl);
+  for (const s of [-1, 1]) {
+    box(g, 0.13, 0.08, 0.006, CAN, 0.39, 0.23, s * 0.112);                            // cockpit side windows
+    box(g, 0.24, 0.16, 0.006, D, 0.1, 0.17, s * 0.117);                               // open sliding cabin door
+    // GAU-17 door gun on a swing arm at the forward door frame
+    box(g, 0.02, 0.05, 0.03, D, 0.21, 0.17, s * 0.13);
+    const mg = cyl(g, 0.009, 0.009, 0.12, 5, 0x222, 0.26, 0.19, s * 0.15); mg.rotation.z = Math.PI / 2;
+    // outrigger pylon with a 7-tube rocket pod
+    box(g, 0.08, 0.015, 0.07, C, -0.06, 0.14, s * 0.15);
+    const rp = cyl(g, 0.028, 0.028, 0.16, 8, D, -0.05, 0.11, s * 0.18); rp.rotation.z = Math.PI / 2;
+  }
+  // "doghouse": transmission fairing, engines side by side behind the mast, exhausts turned up and out
+  taper(g, 0.36, 0.07, 0.15, C, 0.02, 0.33, 0, 0.85, 0.75);
+  for (const s of [-1, 1]) {
+    const e = cyl(g, 0.038, 0.038, 0.22, 8, C2, -0.12, 0.33, s * 0.06); e.rotation.z = Math.PI / 2;
+    const i = cyl(g, 0.032, 0.032, 0.02, 8, D, -0.005, 0.33, s * 0.06); i.rotation.z = Math.PI / 2;
+    const x = box(g, 0.07, 0.035, 0.045, D, -0.25, 0.35, s * 0.075); x.rotation.z = 0.5; x.rotation.y = s * 0.3;
+  }
+  cyl(g, 0.02, 0.03, 0.06, 6, D, 0.08, 0.39, 0);
+  // slim tail boom from the top of the cabin, synchronised elevator, swept fin with the tail rotor to port
+  const tb = taper(g, 0.12, 0.5, 0.09, C, -0.39, 0.24, 0, 0.4, 0.45, 0.04); tb.rotation.z = Math.PI / 2;
+  const elev = [[-0.38, 0.0], [-0.4, 0.13], [-0.47, 0.13], [-0.47, 0.0]];
+  prism(g, elev, 0.245, 0.012, C); prism(g, mirrorZ(elev), 0.245, 0.012, C);
+  taper(g, 0.12, 0.22, 0.025, C, -0.66, 0.37, 0, 0.55, 0.8, -0.05);
+  box(g, 0.012, 0.08, 0.012, D, -0.66, 0.22, 0);                                       // tail skid
+  // skids with two cross tubes
+  for (const s of [-1, 1]) {
+    const sk = cyl(g, 0.01, 0.01, 0.66, 5, D, 0.08, 0.012, s * 0.13); sk.rotation.z = Math.PI / 2;
+    const toe = cyl(g, 0.01, 0.01, 0.06, 5, D, 0.425, 0.03, s * 0.13); toe.rotation.z = Math.PI / 2 + 0.7;
+    for (const x of [-0.08, 0.27]) { const leg = box(g, 0.012, 0.06, 0.012, D, x, 0.04, s * 0.11); leg.rotation.x = s * 0.6; }
+  }
+  for (const x of [-0.08, 0.27]) box(g, 0.012, 0.012, 0.18, D, x, 0.065, 0);
+  const R = heliRotor(g, 0.08, 0.43, 4, 0.69, 0.05, 0x2d3237);
+  const th = new THREE.Group(); th.position.set(-0.69, 0.4, -0.03); g.add(th);
+  const T = tailRotor(th, 0, 0, 0, 0.14, 0x2d3237);
+  navLights(g, [[0.12, 0.31, -0.12, 0xff2a1a], [0.12, 0.31, 0.12, 0x22ff66], [-0.72, 0.32, 0, 0xffffff]], null, 0.8);
+  navLights(g, [[0.0, 0.05, 0, 0xff2020], [-0.1, 0.38, 0, 0xff3030]], { period: 0.95, duty: 0.18, phase: Math.random() }, 1.0);
+  return heliModel(g, R, T, new V3(0.58, 0.07, 0));
+}
+
+/* ---------- CMV-22B Osprey (COD tiltrotor) — 17.5 m fuselage, 14 m wing, two 11.6 m 3-blade proprotors ----------
+   Nacelles tilt from 90° (VTOL) to 0° (airplane mode) with st.conv. Stow (fold 0 → 1): the blades swing inboard,
+   the nacelles go to 0° (blades then lie along the leading edge) and the wing turns 90° clockwise over the fuselage. */
+function buildCMV22(color) {
+  const g = new THREE.Group(), C = M(color || 0x7a8288), C2 = M(0x6b7379), D = M(0x33383d), CAN = CANOPY();
+  // fuselage: long boxy cabin, cockpit, rounded nose; rear fuselage sweeps up into the loading ramp
+  taper(g, 1.0, 0.25, 0.26, C, 0.05, 0.19, 0, 1.0, 0.9);                              // cabin
+  taper(g, 0.22, 0.25, 0.26, C, 0.66, 0.19, 0, 0.5, 0.85, -0.05);                     // cockpit
+  taper(g, 0.14, 0.15, 0.2, C, 0.83, 0.14, 0, 0.55, 0.8, -0.03);                      // nose
+  taper(g, 0.13, 0.1, 0.262, CAN, 0.7, 0.29, 0, 0.4, 0.8, -0.04);                     // windscreen
+  const rf = taper(g, 0.25, 0.42, 0.26, C, -0.66, 0.19, 0, 0.45, 0.55, 0.07); rf.rotation.z = Math.PI / 2;
+  const probe = cyl(g, 0.01, 0.01, 0.3, 5, D, 0.92, 0.2, 0.1); probe.rotation.z = Math.PI / 2 - 0.05;   // refuelling probe
+  for (const s of [-1, 1]) {
+    box(g, 0.14, 0.07, 0.006, CAN, 0.66, 0.255, s * 0.12);                            // cockpit side windows
+    for (const x of [0.4, 0.2, -0.15]) box(g, 0.035, 0.035, 0.006, CAN, x, 0.25, s * 0.132);   // cabin portholes
+    taper(g, 0.48, 0.12, 0.09, C, -0.04, 0.11, s * 0.16, 0.85, 0.6);                  // sponson (extended-range tanks)
+  }
+  box(g, 0.08, 0.16, 0.006, D, 0.52, 0.16, 0.132);                                     // crew door (starboard)
+  taper(g, 0.36, 0.1, 0.18, C, 0.03, 0.36, 0, 0.8, 0.8);                              // wing pylon fairing
+  cyl(g, 0.11, 0.11, 0.02, 12, C2, 0.03, 0.41, 0);                                     // wing stow ring
+  // H-tail: horizontal stabiliser with a fin at each tip
+  const hs = [[-0.78, 0], [-0.8, 0.29], [-0.9, 0.29], [-0.89, 0]];
+  prism(g, hs, 0.3, 0.02, C); prism(g, mirrorZ(hs), 0.3, 0.02, C);
+  for (const s of [-1, 1]) taper(g, 0.13, 0.27, 0.02, C, -0.86, 0.42, s * 0.29, 0.7, 1, -0.03);
+  const gr = gear(g, [[0.68, 0], [0.0, 0.17], [0.0, -0.17]], 0.07);
+  // wing on the stow ring; nacelles pivot at the tips
+  const wing = new THREE.Group(); wing.position.set(0.03, 0.42, 0); g.add(wing);
+  prism(wing, [[0.14, -0.66], [0.12, 0], [0.14, 0.66], [-0.1, 0.66], [-0.12, 0], [-0.1, -0.66]], -0.02, 0.035, C);
+  box(wing, 0.04, 0.012, 1.1, D, -0.11, 0.0, 0);                                       // flaperons
+  navLights(wing, [[0.0, 0.1, -0.71, 0xff2a1a], [0.0, 0.1, 0.71, 0x22ff66]], null, 0.8);
+  const sides = [], dyn = [wing, gr];
+  for (const s of [-1, 1]) {
+    const nac = new THREE.Group(); nac.position.set(0.0, 0.0, s * 0.71); wing.add(nac);   // local +Y = proprotor axis
+    cyl(nac, 0.07, 0.065, 0.42, 8, C, 0, 0, 0);                                          // engine nacelle
+    cyl(nac, 0.055, 0.07, 0.06, 8, C2, 0, 0.24, 0);                                      // proprotor gearbox
+    cyl(nac, 0.055, 0.055, 0.03, 8, D, 0, 0.12, s * 0.02);                               // intake
+    cyl(nac, 0.04, 0.05, 0.03, 8, D, 0, -0.22, 0);                                       // exhaust
+    const rotor = new THREE.Group(); rotor.position.set(0, 0.27, 0); nac.add(rotor);
+    const sp = shade(new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.1, 8), D)); sp.position.y = 0.05; rotor.add(sp);
+    const blades = [];
+    for (let i = 0; i < 3; i++) {
+      const base = i * TAU / 3, h = new THREE.Group(); h.rotation.y = base; rotor.add(h);
+      const bl = taper(h, 0.012, 0.5, 0.06, D, 0.3, 0, 0, 1, 0.6); bl.rotation.z = -Math.PI / 2;   // blade along +X, narrowing to the tip
+      bl.castShadow = false;
+      // folded: every blade swings inboard (along the leading edge once the nacelle is down), in a tight fan
+      blades.push({ h, base, fold: base + angleWrap(s * Math.PI / 2 +(i - 1) * 0.06 - base) });
+    }
+    const disc = new THREE.Mesh(new THREE.CircleGeometry(0.56, 24), new THREE.MeshBasicMaterial({ color: 0x2a2f34, transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide }));
+    disc.rotation.x = -Math.PI / 2; rotor.add(disc);
+    sides.push({ s, nac, rotor, blades, disc });
+    dyn.push(nac, rotor, ...blades.map(b => b.h));
+  }
+  navLights(g, [[-0.92, 0.32, 0, 0xffffff]], null, 0.8);
+  navLights(g, [[0.2, 0.05, 0, 0xff2020], [-0.3, 0.33, 0, 0xff3030]], { period: 1.05, duty: 0.18, phase: Math.random() }, 1.1);
+  mergeStatic(g, dyn);
+  let fold = 1, conv = 0;
+  return {
+    group: g, searchPos: new V3(0.82, 0.08, 0),
+    setFold(f) {
+      fold = f;
+      wing.rotation.y = -Math.PI / 2 * smoothstep(0.6, 1, f);
+      const kb = smoothstep(0, 0.35, f);
+      for (const S of sides) for (const b of S.blades) b.h.rotation.y = lerp(b.base, b.fold, kb);
+    },
+    tick(dt, st) {
+      conv += ((st.conv || 0) - conv) * Math.min(1, dt * 0.7);
+      const tilt = Math.max(conv, smoothstep(0.35, 0.6, fold)) * Math.PI / 2, spin = st.rotor || 0;
+      gr.visible = st.gearDown !== false;
+      for (const S of sides) {
+        S.nac.rotation.z = -tilt;
+        S.rotor.rotation.y = fold > 0.001 ? 0 : S.s * (st.rotorAng || 0);   // counter-rotating
+        if (fold <= 0.001) for (const b of S.blades) { b.h.rotation.y = b.base; b.h.visible = spin < 0.85 || Math.random() < 0.5; }
+        S.disc.material.opacity = 0.28 * smoothstep(0.4, 1, spin);
+      }
+    }
+  };
+}

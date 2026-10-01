@@ -600,7 +600,7 @@ function dispatchFlight() {
   // a four-ship flight goes as all four or as one of its pairs (lead or second section)
   if (g.ready.length > 2 && flightSize(g.ready.length) === 2) { const sec = Math.random() < 0.5 ? 2 : 0; g.ready = g.ready.slice(sec, sec + 2); }
   const lead = g.ready[0], isHeli = lead instanceof Helicopter;
-  const kind = lead.isAwacs ? 'awacs' : isHeli ? (lead.spec.armed ? 'heli_attack' : 'heli_transport') : 'fighter';
+  const kind = lead.isAwacs ? 'awacs' : lead.spec.missions ? pick(lead.spec.missions) : isHeli ? (lead.spec.armed ? 'heli_attack' : 'heli_transport') : 'fighter';
   const task = makeMission(kind);
   const h = rand(0, TAU), dist = isHeli ? 120 : 175, perp = new V3(-Math.sin(h), 0, Math.cos(h)), away = rand(50, 110);
   g.ready.forEach((a, i) => {
