@@ -492,10 +492,6 @@ class AH1 extends Helicopter {
   static spec = Object.assign({}, Helicopter.spec, { key: 'ah1', tag: 'AH-1Z', speed: 8.5, orbitR: [15, 21], alt: [7, 9], armed: true });
   buildModel() { return buildAH1(); }
 }
-class UH1 extends Helicopter {
-  static spec = Object.assign({}, Helicopter.spec, { key: 'uh1', tag: 'UH-1Y', speed: 8, orbitR: [16, 22], alt: [7.5, 9.5], armed: true, missions: ['heli_attack', 'heli_transport'] });
-  buildModel() { return buildUH1(); }
-}
 /* Tiltrotor: takes off and lands like a helicopter, converts to airplane mode (nacelles forward, gear up) in cruise */
 class CMV22 extends Helicopter {
   static spec = Object.assign({}, Helicopter.spec, { key: 'cmv22', tag: 'CMV-22B', speed: 11, turnR: 12, orbitR: [30, 38], alt: [11, 14], bankMax: 0.55, foldRate: 0.12, blades: 3, noseDown: 0.02, missions: ['cod'] });
@@ -503,8 +499,8 @@ class CMV22 extends Helicopter {
   get gearDown() { return this.conv < 0.5; }
   buildModel() { return buildCMV22(); }
 }
-const AIRCRAFT_TYPES = { fa18: FA18, f14: F14, f35: F35, e2d: E2D, mh60: MH60, ch53: CH53, ah1: AH1, uh1: UH1, cmv22: CMV22 };
-const FIXED_ORDER = ['fa18', 'f14', 'f35', 'e2d'], HELI_ORDER = ['mh60', 'ch53', 'ah1', 'uh1', 'cmv22'];
+const AIRCRAFT_TYPES = { fa18: FA18, f14: F14, f35: F35, e2d: E2D, mh60: MH60, ch53: CH53, ah1: AH1, cmv22: CMV22 };
+const FIXED_ORDER = ['fa18', 'f14', 'f35', 'e2d'], HELI_ORDER = ['mh60', 'ch53', 'ah1', 'cmv22'];
 
 /* ---- callsign allocation: groups of 4 jets / 2 helicopters per type ---- */
 function callsignsFor(key, n, offset) {

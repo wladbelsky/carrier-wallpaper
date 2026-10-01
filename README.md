@@ -24,7 +24,7 @@ Aircraft counts are set in the wallpaper properties.
 | F-14 Super Tomcat | variable sweep in flight, 75° oversweep when parked |
 | F-35C Lightning II | outer wing panels fold up |
 | E-2D Hawkeye (AWACS) | Sto-Wing: wings twist and fold back along the fuselage |
-| MH-60 Seahawk / CH-53 Sea Stallion / AH-1Z Viper / UH-1Y Venom | rotor blades fold aft |
+| MH-60 Seahawk / CH-53 Sea Stallion / AH-1Z Viper | rotor blades fold aft |
 | CMV-22B Osprey (COD tiltrotor) | blades fold, nacelles tilt forward, the wing turns 90° to lie along the fuselage |
 
 Each destroyer can also carry one MH-60 (optional).
@@ -47,7 +47,7 @@ helicopter departures and landings, and combat chatter while music is playing.
   - **Squadrons:** Wardog, Razgriz, Mage, Spare, Strider (F/A-18), Mobius, Galm, Crow, Indigo, Wizard (F-14),
     Garuda, Scarface, Antares, Ogre, Saber (F-35C).
   - **Helicopters / COD:** Sea Goblin, Osprey, Halo (MH-60), Atlas, Hercules, Titan (CH-53), Viper, Cobra,
-    Sweeper (AH-1Z), Stinger, Gunfighter, Red Dog (UH-1Y), Sunhawk, Greyhound, Pelican (CMV-22B).
+    Sweeper (AH-1Z), Sunhawk, Greyhound, Pelican (CMV-22B).
   - **AWACS:** SkyEye, Thunderhead, Eagle Eye, Long Caster, Bandog, Sky Keeper, Dealer.
   - **Ships:** carrier KESTREL, escorts BUCCANEER (port) and CUTLASS (starboard). The control panel
     lists them with their status (on station / engaging / damaged).
@@ -58,7 +58,7 @@ helicopter departures and landings, and combat chatter while music is playing.
 ## Missions
 
 While there is no music, flights periodically leave the screen on missions (CAP, intercepts, escorts,
-SAR, medevac, sonar searches, COD supply runs…). The UH-1Y flies both attack and transport tasks. Each mission has its own radio orders, and the flight returns to the orbit afterwards.
+SAR, medevac, sonar searches, COD supply runs…). Each mission has its own radio orders, and the flight returns to the orbit afterwards.
 
 - Assembled flights (all aircraft up and on station) go first; a partly launched flight only goes when
   no flight is complete. A four-ship flight goes as all four or as one of its pairs, chosen at random;

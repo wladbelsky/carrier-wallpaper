@@ -9,7 +9,6 @@ const CALLSIGNS = {
   mh60: ['SEA GOBLIN', 'OSPREY', 'HALO'],
   ch53: ['ATLAS', 'HERCULES', 'TITAN'],
   ah1: ['VIPER', 'COBRA', 'SWEEPER'],
-  uh1: ['STINGER', 'GUNFIGHTER', 'RED DOG'],
   cmv22: ['SUNHAWK', 'GREYHOUND', 'PELICAN'],
   flyby: ['YELLOW', 'SOL', 'GRABACR', 'OFNIR', 'SCHNEE', 'GELB'],
   ddheli: ['SEAHORSE', 'PETREL']      // one per destroyer, each with its own callsign

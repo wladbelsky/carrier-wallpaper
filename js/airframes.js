@@ -451,54 +451,6 @@ function buildAH1(color) {
   return heliModel(g, R, T, new V3(0.6, 0.06, 0));
 }
 
-/* ---------- UH-1Y Venom (utility) — 12.7 m fuselage, 14.9 m rotor, skids; shares engines and rotor with the AH-1Z ---------- */
-function buildUH1(color) {
-  const g = new THREE.Group(), C = M(color || 0x5f6656), C2 = M(0x535a4b), D = M(0x33383d), CAN = CANOPY();
-  // boxy cabin, cockpit with a big sloped windscreen, lengthened avionics nose with the FLIR turret
-  taper(g, 0.46, 0.24, 0.23, C, 0.07, 0.18, 0, 1.0, 0.85);                            // cabin
-  taper(g, 0.18, 0.24, 0.23, C, 0.39, 0.18, 0, 0.45, 0.8, -0.05);                     // cockpit
-  taper(g, 0.14, 0.12, 0.17, C, 0.55, 0.12, 0, 0.6, 0.75, -0.03);                     // nose
-  taper(g, 0.13, 0.11, 0.235, CAN, 0.44, 0.255, 0, 0.35, 0.8, -0.04);                 // windscreen
-  const fl = shade(new THREE.Mesh(new THREE.SphereGeometry(0.03, 8, 6), D)); fl.position.set(0.6, 0.06, 0); g.add(fl);
-  for (const s of [-1, 1]) {
-    box(g, 0.13, 0.08, 0.006, CAN, 0.39, 0.23, s * 0.112);                            // cockpit side windows
-    box(g, 0.24, 0.16, 0.006, D, 0.1, 0.17, s * 0.117);                               // open sliding cabin door
-    // GAU-17 door gun on a swing arm at the forward door frame
-    box(g, 0.02, 0.05, 0.03, D, 0.21, 0.17, s * 0.13);
-    const mg = cyl(g, 0.009, 0.009, 0.12, 5, 0x222, 0.26, 0.19, s * 0.15); mg.rotation.z = Math.PI / 2;
-    // outrigger pylon with a 7-tube rocket pod
-    box(g, 0.08, 0.015, 0.07, C, -0.06, 0.14, s * 0.15);
-    const rp = cyl(g, 0.028, 0.028, 0.16, 8, D, -0.05, 0.11, s * 0.18); rp.rotation.z = Math.PI / 2;
-  }
-  // "doghouse": transmission fairing, engines side by side behind the mast, exhausts turned up and out
-  taper(g, 0.36, 0.07, 0.15, C, 0.02, 0.33, 0, 0.85, 0.75);
-  for (const s of [-1, 1]) {
-    const e = cyl(g, 0.038, 0.038, 0.22, 8, C2, -0.12, 0.33, s * 0.06); e.rotation.z = Math.PI / 2;
-    const i = cyl(g, 0.032, 0.032, 0.02, 8, D, -0.005, 0.33, s * 0.06); i.rotation.z = Math.PI / 2;
-    const x = box(g, 0.07, 0.035, 0.045, D, -0.25, 0.35, s * 0.075); x.rotation.z = 0.5; x.rotation.y = s * 0.3;
-  }
-  cyl(g, 0.02, 0.03, 0.06, 6, D, 0.08, 0.39, 0);
-  // slim tail boom from the top of the cabin, synchronised elevator, swept fin with the tail rotor to port
-  const tb = taper(g, 0.12, 0.5, 0.09, C, -0.39, 0.24, 0, 0.4, 0.45, 0.04); tb.rotation.z = Math.PI / 2;
-  const elev = [[-0.38, 0.0], [-0.4, 0.13], [-0.47, 0.13], [-0.47, 0.0]];
-  prism(g, elev, 0.245, 0.012, C); prism(g, mirrorZ(elev), 0.245, 0.012, C);
-  taper(g, 0.12, 0.22, 0.025, C, -0.66, 0.37, 0, 0.55, 0.8, -0.05);
-  box(g, 0.012, 0.08, 0.012, D, -0.66, 0.22, 0);                                       // tail skid
-  // skids with two cross tubes
-  for (const s of [-1, 1]) {
-    const sk = cyl(g, 0.01, 0.01, 0.66, 5, D, 0.08, 0.012, s * 0.13); sk.rotation.z = Math.PI / 2;
-    const toe = cyl(g, 0.01, 0.01, 0.06, 5, D, 0.425, 0.03, s * 0.13); toe.rotation.z = Math.PI / 2 + 0.7;
-    for (const x of [-0.08, 0.27]) { const leg = box(g, 0.012, 0.06, 0.012, D, x, 0.04, s * 0.11); leg.rotation.x = s * 0.6; }
-  }
-  for (const x of [-0.08, 0.27]) box(g, 0.012, 0.012, 0.18, D, x, 0.065, 0);
-  const R = heliRotor(g, 0.08, 0.43, 4, 0.69, 0.05, 0x2d3237);
-  const th = new THREE.Group(); th.position.set(-0.69, 0.4, -0.03); g.add(th);
-  const T = tailRotor(th, 0, 0, 0, 0.14, 0x2d3237);
-  navLights(g, [[0.12, 0.31, -0.12, 0xff2a1a], [0.12, 0.31, 0.12, 0x22ff66], [-0.72, 0.32, 0, 0xffffff]], null, 0.8);
-  navLights(g, [[0.0, 0.05, 0, 0xff2020], [-0.1, 0.38, 0, 0xff3030]], { period: 0.95, duty: 0.18, phase: Math.random() }, 1.0);
-  return heliModel(g, R, T, new V3(0.58, 0.07, 0));
-}
-
 /* ---------- CMV-22B Osprey (COD tiltrotor) — 17.5 m fuselage, 14 m wing, two 11.6 m 3-blade proprotors ----------
    Nacelles tilt from 90° (VTOL) to 0° (airplane mode) with st.conv. Stow (fold 0 → 1): the blades swing inboard,
    the nacelles go to 0° (blades then lie along the leading edge) and the wing turns 90° clockwise over the fuselage. */

@@ -182,16 +182,8 @@ const WE_PROPERTIES = {
   "max": 4,
   "value": 1
  },
- "uh1count": {
-  "order": 47,
-  "text": "UH-1Y Venom — count",
-  "type": "slider",
-  "min": 0,
-  "max": 4,
-  "value": 1
- },
  "cmv22count": {
-  "order": 48,
+  "order": 47,
   "text": "CMV-22B Osprey — count",
   "type": "slider",
   "min": 0,
@@ -199,7 +191,7 @@ const WE_PROPERTIES = {
   "value": 1
  },
  "ddhelis": {
-  "order": 49,
+  "order": 48,
   "text": "Destroyer helicopters (MH-60)",
   "type": "bool",
   "value": true
