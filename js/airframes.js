@@ -360,52 +360,93 @@ function buildMH60(color) {
   return heliModel(g, R, T, new V3(0.5, 0.08, 0));
 }
 
-/* ---------- CH-53 Sea Stallion (heavy transport) ---------- */
+/* ---------- CH-53E Super Stallion (heavy transport) — 22.4 m fuselage, 24 m 7-blade rotor ---------- */
 function buildCH53(color) {
-  const g = new THREE.Group(), C = M(color || 0x6a705f), D = M(0x33383d), CAN = CANOPY();
-  taper(g, 1.5, 0.52, 0.52, C, 0, 0.44, 0, 0.95, 0.88);
-  taper(g, 0.48, 0.44, 0.5, C, 0.98, 0.4, 0, 0.6, 0.8, -0.09);
-  taper(g, 0.24, 0.18, 0.46, CAN, 1.0, 0.56, 0, 0.6, 0.9, -0.04);
+  const g = new THREE.Group(), C = M(color || 0x6a705f), C2 = M(0x5c624f), D = M(0x33383d), CAN = CANOPY();
+  // long boxy cabin, cockpit with sloped windscreen, rounded nose
+  taper(g, 1.05, 0.27, 0.27, C, 0.12, 0.2, 0, 1.0, 0.88);                             // cabin
+  taper(g, 0.26, 0.27, 0.27, C, 0.775, 0.2, 0, 0.55, 0.85, -0.06);                    // cockpit
+  taper(g, 0.12, 0.17, 0.24, C, 0.96, 0.15, 0, 0.6, 0.8, -0.03);                      // nose
+  taper(g, 0.14, 0.12, 0.275, CAN, 0.83, 0.27, 0, 0.4, 0.8, -0.04);                   // windscreen
   for (const s of [-1, 1]) {
-    taper(g, 0.8, 0.2, 0.22, C, -0.05, 0.22, s * 0.36, 0.9, 0.8);
-    const e = cyl(g, 0.085, 0.09, 0.55, 7, D, 0.12, 0.8, s * 0.22); e.rotation.z = Math.PI / 2;
-    box(g, 0.1, 0.12, 0.14, D, -0.15, 0.08, s * 0.36);
+    box(g, 0.16, 0.07, 0.006, CAN, 0.74, 0.25, s * 0.137);                            // cockpit side windows
+    for (const x of [0.45, 0.3, 0.15, 0.0, -0.15]) box(g, 0.04, 0.035, 0.006, CAN, x, 0.25, s * 0.137);   // cabin portholes
+    taper(g, 0.5, 0.11, 0.1, C, 0.08, 0.12, s * 0.18, 0.9, 0.7);                      // fuel sponson
+    const w = cyl(g, 0.045, 0.045, 0.04, 8, 0x1a1a1a, 0.1, 0.045, s * 0.2); w.rotation.x = Math.PI / 2;   // main wheel
+    const nw = cyl(g, 0.035, 0.035, 0.03, 8, 0x1a1a1a, 0.78, 0.035, s * 0.04); nw.rotation.x = Math.PI / 2; // twin nose wheels
   }
-  taper(g, 0.9, 0.2, 0.36, D, 0.02, 0.78, 0, 0.8, 0.8);
-  taper(g, 0.5, 0.42, 0.48, C, -0.98, 0.5, 0, 0.9, 0.75, 0.06);
-  taper(g, 0.8, 0.22, 0.18, C, -1.55, 0.64, 0, 1, 0.6);
-  const p = taper(g, 0.3, 0.62, 0.07, C, -2.0, 0.94, 0, 0.6, 1, -0.1); p.rotation.x = -0.3;
-  box(g, 0.18, 0.03, 0.46, C, -2.02, 1.12, 0.22);
-  box(g, 0.12, 0.12, 0.1, D, 0.75, 0.08, 0);
-  const R = heliRotor(g, 0.05, 0.98, 7, 1.15, 0.08, 0x2d3237);
-  const T = tailRotor(g, -2.05, 1.08, -0.1, 0.34, 0x2d3237);
-  navLights(g, [[0.2, 0.55, -0.48, 0xff2a1a], [0.2, 0.55, 0.48, 0x22ff66], [-2.05, 0.7, 0, 0xffffff]], null, 0.9);
-  navLights(g, [[0, 0.16, 0, 0xff2020], [0.05, 0.92, 0, 0xff3030]], { period: 1.1, duty: 0.18, phase: Math.random() }, 1.1);
-  return heliModel(g, R, T, new V3(1.1, 0.2, 0));
+  box(g, 0.025, 0.06, 0.025, D, 0.78, 0.07, 0);
+  box(g, 0.1, 0.16, 0.006, D, 0.55, 0.17, 0.137);                                      // crew door (starboard)
+  const probe = cyl(g, 0.012, 0.012, 0.5, 5, D, 1.03, 0.23, 0.12); probe.rotation.z = Math.PI / 2 - 0.08;  // refuelling probe
+  // rotor pylon with two engines alongside and the third behind the rotor head
+  taper(g, 0.55, 0.1, 0.2, C, 0.18, 0.385, 0, 0.75, 0.7);
+  for (const s of [-1, 1]) {
+    const e = cyl(g, 0.055, 0.055, 0.36, 8, C2, 0.2, 0.37, s * 0.165); e.rotation.z = Math.PI / 2;
+    const i = cyl(g, 0.047, 0.047, 0.02, 8, D, 0.38, 0.37, s * 0.165); i.rotation.z = Math.PI / 2;
+    const x = box(g, 0.08, 0.05, 0.06, D, 0.0, 0.38, s * 0.19); x.rotation.y = s * 0.5;
+  }
+  const e3 = cyl(g, 0.05, 0.05, 0.25, 8, C2, -0.08, 0.41, -0.06); e3.rotation.z = Math.PI / 2;
+  const i3 = cyl(g, 0.042, 0.042, 0.02, 8, D, 0.05, 0.41, -0.06); i3.rotation.z = Math.PI / 2;
+  cyl(g, 0.04, 0.05, 0.08, 6, D, 0.25, 0.47, 0);
+  // rear fuselage with the loading ramp sweeping up into the tail, pylon canted 20° to port
+  const tc = taper(g, 0.27, 0.7, 0.26, C, -0.755, 0.2, 0, 0.42, 0.4, 0.13); tc.rotation.z = Math.PI / 2;
+  const p = taper(g, 0.22, 0.52, 0.07, C, -1.15, 0.6, 0, 0.6, 0.8, -0.07); p.rotation.x = -0.35;
+  const stab = [[-1.1, 0.03], [-1.13, 0.42], [-1.24, 0.42], [-1.23, 0.03]];
+  prism(g, stab, 0.72, 0.02, C);                                                       // gull-wing stabiliser (starboard)
+  const R = heliRotor(g, 0.25, 0.51, 7, 1.15, 0.075, 0x2d3237);
+  const th = new THREE.Group(); th.position.set(-1.17, 0.7, -0.13); th.rotation.x = -0.35; g.add(th);   // tail rotor: port side, canted
+  const T = tailRotor(th, 0, 0, 0, 0.3, 0x2d3237);
+  navLights(g, [[0.4, 0.3, -0.14, 0xff2a1a], [0.4, 0.3, 0.14, 0x22ff66], [-1.24, 0.55, 0, 0xffffff]], null, 0.9);
+  navLights(g, [[0.3, 0.03, 0, 0xff2020], [0.0, 0.46, 0, 0xff3030]], { period: 1.1, duty: 0.18, phase: Math.random() }, 1.1);
+  return heliModel(g, R, T, new V3(0.98, 0.1, 0));
 }
 
-/* ---------- AH-1Z Viper (attack) ---------- */
+/* ---------- AH-1Z Viper (attack) — 13.9 m fuselage, 14.6 m rotor, tandem cockpit on skids ---------- */
 function buildAH1(color) {
-  const g = new THREE.Group(), C = M(color || 0x5c6352), D = M(0x33383d), CAN = CANOPY();
-  taper(g, 1.0, 0.36, 0.3, C, 0, 0.38, 0, 0.9, 0.7);
-  taper(g, 0.46, 0.26, 0.24, C, 0.72, 0.32, 0, 0.5, 0.7, -0.05);
-  taper(g, 0.3, 0.14, 0.2, CAN, 0.62, 0.5, 0, 0.7, 0.8);
-  taper(g, 0.3, 0.17, 0.2, CAN, 0.27, 0.56, 0, 0.7, 0.8);
-  taper(g, 0.62, 0.16, 0.32, D, -0.08, 0.62, 0, 0.8, 0.8);
-  const tur = shade(new THREE.Mesh(new THREE.SphereGeometry(0.07, 6, 5), D)); tur.position.set(0.86, 0.2, 0); g.add(tur);
-  const gun = cyl(g, 0.015, 0.015, 0.25, 4, 0x222, 0.98, 0.18, 0); gun.rotation.z = Math.PI / 2;
-  box(g, 0.24, 0.03, 0.86, C, 0.02, 0.36, 0);
+  const g = new THREE.Group(), C = M(color || 0x5c6352), C2 = M(0x50574a), D = M(0x33383d), CAN = CANOPY();
+  // slim fuselage: tandem cockpit (pilot raised behind the gunner), sensor ball on the nose
+  taper(g, 0.45, 0.14, 0.1, C, 0.33, 0.13, 0, 0.9, 0.85);                             // forward fuselage
+  taper(g, 0.08, 0.1, 0.09, C, 0.59, 0.12, 0, 0.6, 0.8, -0.01);                       // nose
+  const tss = shade(new THREE.Mesh(new THREE.SphereGeometry(0.04, 8, 6), D)); tss.position.set(0.64, 0.12, 0); g.add(tss);
+  taper(g, 0.18, 0.07, 0.095, CAN, 0.43, 0.235, 0, 0.7, 0.75, -0.01);                 // gunner canopy
+  taper(g, 0.18, 0.1, 0.095, CAN, 0.26, 0.25, 0, 0.75, 0.75, -0.02);                  // pilot canopy (raised)
+  taper(g, 0.38, 0.17, 0.12, C, -0.08, 0.15, 0, 1.0, 0.8);                            // engine bay
+  // engines either side of the transmission, exhausts turned upward
+  taper(g, 0.3, 0.06, 0.1, C, 0.0, 0.27, 0, 0.8, 0.7);
   for (const s of [-1, 1]) {
-    const pod = cyl(g, 0.055, 0.055, 0.3, 7, D, 0.02, 0.29, s * 0.3); pod.rotation.z = Math.PI / 2;
-    for (let i = 0; i < 2; i++) { const m = cyl(g, 0.022, 0.022, 0.3, 5, 0xd8d8d0, 0.03, 0.3 - i * 0.05, s * 0.42); m.rotation.z = Math.PI / 2; }
+    const e = cyl(g, 0.04, 0.04, 0.24, 8, C2, -0.06, 0.25, s * 0.075); e.rotation.z = Math.PI / 2;
+    const x = box(g, 0.07, 0.035, 0.045, D, -0.2, 0.27, s * 0.09); x.rotation.z = 0.5;
   }
-  taper(g, 1.0, 0.14, 0.12, C, -0.95, 0.44, 0, 1, 0.6);
-  taper(g, 0.22, 0.38, 0.04, C, -1.45, 0.62, 0, 0.6, 1, -0.06);
-  box(g, 0.12, 0.02, 0.36, C, -1.2, 0.44, 0);
-  for (const s of [-1, 1]) { box(g, 1.0, 0.03, 0.04, D, 0.05, 0.02, s * 0.22); box(g, 0.03, 0.2, 0.03, D, 0.3, 0.12, s * 0.2); box(g, 0.03, 0.2, 0.03, D, -0.2, 0.12, s * 0.2); }
-  const R = heliRotor(g, 0.02, 0.78, 4, 0.7, 0.06, 0x2d3237);
-  const T = tailRotor(g, -1.47, 0.68, 0.05, 0.15, 0x2d3237);
-  navLights(g, [[0.0, 0.36, -0.44, 0xff2a1a], [0.0, 0.36, 0.44, 0x22ff66], [-1.52, 0.55, 0, 0xffffff]], null, 0.8);
-  navLights(g, [[0, 0.7, 0, 0xff3030]], { period: 0.9, duty: 0.18, phase: Math.random() }, 1.0);
-  return heliModel(g, R, T, new V3(0.9, 0.15, 0));
+  cyl(g, 0.02, 0.03, 0.06, 6, D, 0.03, 0.33, 0);
+  // chin gun turret
+  const tur = shade(new THREE.Mesh(new THREE.SphereGeometry(0.03, 8, 6), D)); tur.position.set(0.47, 0.045, 0); g.add(tur);
+  const gun = cyl(g, 0.008, 0.008, 0.11, 4, 0x222, 0.53, 0.04, 0); gun.rotation.z = Math.PI / 2;
+  // stub wings: rocket pod (inner), Hellfire rack (outer), AIM-9 on the tips
+  const wing = [[0.05, 0.05], [0.03, 0.3], [-0.07, 0.3], [-0.09, 0.05]];
+  prism(g, wing, 0.16, 0.02, C); prism(g, mirrorZ(wing), 0.16, 0.02, C);
+  for (const s of [-1, 1]) {
+    const pod = cyl(g, 0.03, 0.03, 0.22, 8, D, -0.02, 0.12, s * 0.13); pod.rotation.z = Math.PI / 2;
+    box(g, 0.14, 0.025, 0.05, D, -0.02, 0.135, s * 0.23);
+    for (const dz of [-0.015, 0.015]) { const h = cyl(g, 0.011, 0.011, 0.16, 5, 0xd8d8d0, -0.01, 0.11, s * 0.23 + dz); h.rotation.z = Math.PI / 2; }
+    const sw = cyl(g, 0.01, 0.01, 0.2, 5, 0xd8d8d0, -0.01, 0.17, s * 0.31); sw.rotation.z = Math.PI / 2;
+  }
+  // slim tail boom with elevators and endplates, swept fin, tail rotor on the port side
+  const tb = taper(g, 0.11, 0.5, 0.08, C, -0.52, 0.17, 0, 0.45, 0.5, 0.04); tb.rotation.z = Math.PI / 2;
+  const elev = [[-0.48, 0.0], [-0.5, 0.14], [-0.58, 0.14], [-0.58, 0.0]];
+  prism(g, elev, 0.17, 0.012, C); prism(g, mirrorZ(elev), 0.17, 0.012, C);
+  for (const s of [-1, 1]) box(g, 0.08, 0.07, 0.008, C, -0.55, 0.18, s * 0.14);
+  taper(g, 0.12, 0.24, 0.025, C, -0.74, 0.33, 0, 0.55, 0.8, -0.05);
+  // skids with cross tubes
+  for (const s of [-1, 1]) {
+    const sk = cyl(g, 0.01, 0.01, 0.62, 5, D, 0.06, 0.012, s * 0.12); sk.rotation.z = Math.PI / 2;
+    const toe = cyl(g, 0.01, 0.01, 0.06, 5, D, 0.385, 0.03, s * 0.12); toe.rotation.z = Math.PI / 2 + 0.7;
+    for (const x of [-0.12, 0.2]) { const leg = box(g, 0.012, 0.06, 0.012, D, x, 0.04, s * 0.1); leg.rotation.x = s * 0.6; }
+  }
+  for (const x of [-0.12, 0.2]) box(g, 0.012, 0.012, 0.16, D, x, 0.065, 0);
+  const R = heliRotor(g, 0.03, 0.37, 4, 0.68, 0.05, 0x2d3237);
+  const th = new THREE.Group(); th.position.set(-0.76, 0.38, -0.03); g.add(th);
+  const T = tailRotor(th, 0, 0, 0, 0.15, 0x2d3237);
+  navLights(g, [[-0.02, 0.17, -0.3, 0xff2a1a], [-0.02, 0.17, 0.3, 0x22ff66], [-0.79, 0.3, 0, 0xffffff]], null, 0.8);
+  navLights(g, [[0.03, 0.31, 0, 0xff3030]], { period: 0.9, duty: 0.18, phase: Math.random() }, 1.0);
+  return heliModel(g, R, T, new V3(0.6, 0.06, 0));
 }
