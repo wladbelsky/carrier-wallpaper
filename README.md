@@ -59,6 +59,9 @@ SAR, medevac, sonar searches…). Each mission has its own radio orders, and the
   no flight is complete. A four-ship flight goes as all four or as one of its pairs, chosen at random;
   wingmen fly in trail.
 - A pair left behind waits for the other pair to come back before the flight is sent again.
+- The order addresses a whole flight through its lead (`WARDOG 1, proceed to…`) and part of a flight
+  by each aircraft (`WARDOG 3, WARDOG 4, …`); the lead answers with one of many acknowledgements
+  (common ones plus fighter / AWACS / helicopter flavoured), never the same twice in a row.
 - Several flights can be away at once, but one flight always stays on station.
 - The **Missions off-screen** property controls how often this happens (0 = off).
 - Destroyer helicopters have their own callsigns: SEAHORSE and PETREL.

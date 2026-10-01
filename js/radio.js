@@ -100,7 +100,22 @@ const MISSIONS = {
     ['a patrol boat is shadowing the fleet, bearing {B}. Shoo it away.', 'Patrol boat turned back. Returning.']
   ]
 };
-LINES.missionCopy = ['Copy, en route.', 'Wilco. Moving out.', 'Roger that, on our way.', 'Copy. Heading out now.', 'Understood.'];
+/* replies to a mission order: common lines plus a few per kind; never the same line twice in a row */
+LINES.missionCopy = {
+  any: ['Copy, en route.', 'Roger that, on our way.', 'Copy. Heading out now.', 'Understood.', 'Wilco.', "Copy that. We're on it.",
+    'Roger. Leaving the pattern.', 'Acknowledged. Moving out.', 'Copy, will report on arrival.', 'On our way. Keep the coffee warm.',
+    'Roger, breaking off now.', 'Affirmative, heading out.', 'Copy all. En route.', "Understood. We'll take it from here."],
+  fighter: ['Copy, going to burner. On our way.', 'Roger, climbing to angels two-five.', 'Copy. Weapons check complete, heading out.',
+    "Flight, on me. Let's go.", 'Copy, fence in. Vectoring now.', 'Roger. Tanker on the way back, right?'],
+  awacs: ['Copy, repositioning now.', 'Roger, moving the orbit. Picture stays live.', 'Understood, relocating. Keep the chatter down.'],
+  heli: ['Copy, nose down, en route.', 'Roger, heading out low and fast.', "Understood, we're on our way. Crew, strap in.", 'Copy. ETA about ten minutes.']
+};
+let lastMissionCopy = '';
+function missionCopy(kind) {
+  const pool = LINES.missionCopy.any.concat(LINES.missionCopy[kind.startsWith('heli') ? 'heli' : kind] || []);
+  let line; do line = pick(pool); while (line === lastMissionCopy);
+  return lastMissionCopy = line;
+}
 function makeMission(kind) {
   const [order, done] = pick(MISSIONS[kind]);
   const sectors = ['Alpha', 'Bravo', 'Charlie', 'Delta', 'Echo', 'Foxtrot', 'Kilo', 'Sierra'];

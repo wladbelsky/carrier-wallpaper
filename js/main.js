@@ -591,7 +591,7 @@ function dispatchFlight() {
     if (!ready.length || ready.some(a => a.state !== 'orbit' || a.landReq)) continue;
     onStation++;                                             // counts a pair left behind while the other is away
     // never send part of a flight while its other part is away; members on deck don't block (manual ops)
-    if (!all.some(a => a.onMission) && ready.every(a => a.airT > 15)) cands.push({ base, ready, full: ready.length === all.length });
+    if (!all.some(a => a.onMission) && ready.every(a => a.airT > 15)) cands.push({ base, ready, full: ready.length === all.length, size: all.length });
   }
   // several flights can be away at once, but one flight always stays on station over the fleet
   if (!cands.length || onStation <= 1) return false;
@@ -608,9 +608,10 @@ function dispatchFlight() {
     a.startMission({ far, heading: h, delay: i * 1.6, away: away + i * 1.6, lead: i === 0, done: task.done });
   });
   const awacs = AIRCRAFT.find(a => a.isAwacs && a.airborne && a !== lead);
-  const who = g.ready.length > 1 ? g.base : lead.callsign;
+  // the whole flight is addressed through its lead; part of a flight by each aircraft (WARDOG 3, WARDOG 4)
+  const who = g.ready.length === g.size ? lead.callsign : g.ready.map(a => a.callsign).join(', ');
   RADIO.say(awacs ? awacs.callsign : RADIO_NAMES.carrier, `${who}, ${task.order}`, { role: awacs ? 'awacs' : 'ship', prio: 1 });
-  lead.say(pick(LINES.missionCopy), { prio: 1, delay: 0.3 });
+  lead.say(missionCopy(kind), { prio: 1, delay: 0.3 });
   return true;
 }
 
