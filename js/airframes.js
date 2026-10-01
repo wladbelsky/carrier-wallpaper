@@ -312,25 +312,52 @@ function heliModel(g, R, T, searchPos) {
   };
 }
 
-/* ---------- MH-60 Seahawk (utility / transport) ---------- */
+/* ---------- MH-60R Seahawk (utility / ASW) — real proportions: 15.3 m fuselage, 16.4 m rotor ---------- */
 function buildMH60(color) {
-  const g = new THREE.Group(), C = M(color || 0x6f7880), D = M(0x33383d), CAN = CANOPY();
-  taper(g, 0.9, 0.42, 0.44, C, 0, 0.36, 0, 0.9, 0.85);
-  taper(g, 0.34, 0.32, 0.4, C, 0.6, 0.32, 0, 0.6, 0.8, -0.06);
-  taper(g, 0.2, 0.16, 0.38, CAN, 0.62, 0.46, 0, 0.6, 0.9, -0.03);
-  taper(g, 0.6, 0.16, 0.36, D, -0.02, 0.65, 0, 0.8, 0.8);
-  for (const s of [-1, 1]) { const e = cyl(g, 0.06, 0.06, 0.3, 6, D, 0.02, 0.63, s * 0.17); e.rotation.z = Math.PI / 2; }
-  box(g, 0.34, 0.26, 0.02, 0x2a2d31, 0.05, 0.36, 0.225);                         // cabin door
-  taper(g, 1.0, 0.14, 0.14, C, -0.95, 0.46, 0, 1, 0.55);
-  taper(g, 0.22, 0.42, 0.05, C, -1.47, 0.64, 0, 0.6, 1, -0.07);
-  box(g, 0.12, 0.02, 0.42, C, -1.42, 0.46, 0);
-  for (const s of [-1, 1]) { box(g, 0.1, 0.1, 0.12, D, 0.3, 0.07, s * 0.25); box(g, 0.03, 0.12, 0.2, D, 0.3, 0.16, s * 0.2); }
-  box(g, 0.08, 0.1, 0.06, D, -1.05, 0.08, 0);
-  const R = heliRotor(g, 0.02, 0.82, 4, 0.8, 0.07, 0x2d3237);
-  const T = tailRotor(g, -1.5, 0.74, -0.06, 0.16, 0x2d3237);
-  navLights(g, [[0.1, 0.45, -0.24, 0xff2a1a], [0.1, 0.45, 0.24, 0x22ff66], [-1.55, 0.6, 0, 0xffffff]], null, 0.8);
-  navLights(g, [[0, 0.14, 0, 0xff2020], [0, 0.72, 0, 0xff3030]], { period: 1.0, duty: 0.18, phase: Math.random() }, 1.0);
-  return heliModel(g, R, T, new V3(0.72, 0.18, 0));
+  const g = new THREE.Group(), C = M(color || 0x6f7880), C2 = M(0x626b73), D = M(0x33383d), CAN = CANOPY();
+  // fuselage: boxy cabin, cockpit with sloped windscreen, short drooping nose
+  taper(g, 0.46, 0.2, 0.24, C, 0.03, 0.14, 0, 1.0, 0.85);                             // cabin
+  taper(g, 0.22, 0.2, 0.235, C, 0.37, 0.14, 0, 0.55, 0.8, -0.05);                     // cockpit
+  taper(g, 0.14, 0.11, 0.2, C, 0.53, 0.095, 0, 0.6, 0.8, -0.03);                      // nose
+  taper(g, 0.12, 0.1, 0.24, CAN, 0.43, 0.2, 0, 0.4, 0.8, -0.035);                     // windscreen
+  for (const s of [-1, 1]) {
+    box(g, 0.15, 0.065, 0.006, CAN, 0.36, 0.175, s * 0.119);                          // cockpit side windows
+    box(g, 0.06, 0.05, 0.006, CAN, 0.17, 0.18, s * 0.121);                            // cabin window
+  }
+  box(g, 0.17, 0.14, 0.006, D, 0.04, 0.12, 0.122);                                     // sliding cabin door (starboard)
+  // engine deck: fairing, twin engines side by side, exhausts angled outboard, rotor mast
+  taper(g, 0.5, 0.07, 0.19, C, -0.01, 0.275, 0, 0.85, 0.75);
+  for (const s of [-1, 1]) {
+    const e = cyl(g, 0.045, 0.045, 0.28, 8, C2, -0.05, 0.285, s * 0.1); e.rotation.z = Math.PI / 2;
+    const i = cyl(g, 0.038, 0.038, 0.02, 8, D, 0.095, 0.285, s * 0.1); i.rotation.z = Math.PI / 2;
+    const x = box(g, 0.08, 0.04, 0.05, D, -0.21, 0.29, s * 0.13); x.rotation.y = s * 0.5;
+  }
+  cyl(g, 0.025, 0.035, 0.07, 6, D, 0.0, 0.345, 0);
+  // tail cone: deep at the cabin, slim at the pylon, bottom sweeping up (a taper turned to point aft)
+  const tc = taper(g, 0.17, 0.64, 0.16, C, -0.49, 0.145, 0, 0.35, 0.38, 0.05); tc.rotation.z = Math.PI / 2;
+  taper(g, 0.17, 0.32, 0.045, C, -0.86, 0.36, 0, 0.55, 0.8, -0.06);                   // swept tail pylon
+  box(g, 0.06, 0.04, 0.05, D, -0.9, 0.48, 0);                                          // tail gearbox
+  const stab = [[-0.8, 0.0], [-0.82, 0.22], [-0.92, 0.22], [-0.92, 0.0]];
+  prism(g, stab, 0.22, 0.015, C); prism(g, mirrorZ(stab), 0.22, 0.015, C);           // stabilator at the pylon base
+  // landing gear: two main wheels under the cockpit, tail wheel aft of the cabin
+  for (const s of [-1, 1]) {
+    const st = box(g, 0.025, 0.09, 0.025, D, 0.33, 0.07, s * 0.145); st.rotation.x = s * 0.35;
+    const w = cyl(g, 0.035, 0.035, 0.03, 8, 0x1a1a1a, 0.33, 0.035, s * 0.165); w.rotation.x = Math.PI / 2;
+  }
+  box(g, 0.025, 0.06, 0.025, D, -0.42, 0.06, 0);
+  const tw = cyl(g, 0.03, 0.03, 0.025, 8, 0x1a1a1a, -0.43, 0.03, 0); tw.rotation.x = Math.PI / 2;
+  // MH-60R kit: chin FLIR ball, belly radome, weapon pylons (Mk 54 torpedo port, Hellfire rack starboard)
+  const fl =shade(new THREE.Mesh(new THREE.SphereGeometry(0.03, 8, 6), D)); fl.position.set(0.52, 0.045, 0); g.add(fl);
+  const rd = shade(new THREE.Mesh(new THREE.SphereGeometry(0.045, 10, 5, 0, TAU, 0, Math.PI / 2), M(0xd8d8d0))); rd.rotation.x = Math.PI; rd.position.set(-0.02, 0.05, 0); g.add(rd);
+  for (const s of [-1, 1]) box(g, 0.1, 0.015, 0.09, C, -0.1, 0.2, s * 0.16);
+  const tp = cyl(g, 0.018, 0.018, 0.22, 6, 0x9a9a92, -0.1, 0.172, -0.2); tp.rotation.z = Math.PI / 2;
+  box(g, 0.14, 0.04, 0.05, D, -0.1, 0.175, 0.2);
+  const R = heliRotor(g, 0.0, 0.38, 4, 0.77, 0.055, 0x2d3237);
+  const th = new THREE.Group(); th.position.set(-0.9, 0.43, 0.04); th.rotation.x = -0.35; g.add(th);   // tail rotor: starboard, canted 20°
+  const T = tailRotor(th, 0, 0, 0, 0.167, 0x2d3237);
+  navLights(g, [[0.1, 0.2, -0.13, 0xff2a1a], [0.1, 0.2, 0.13, 0x22ff66], [-0.96, 0.3, 0, 0xffffff]], null, 0.8);
+  navLights(g, [[0, 0.03, 0, 0xff2020], [0, 0.33, 0, 0xff3030]], { period: 1.0, duty: 0.18, phase: Math.random() }, 1.0);
+  return heliModel(g, R, T, new V3(0.5, 0.08, 0));
 }
 
 /* ---------- CH-53 Sea Stallion (heavy transport) ---------- */
