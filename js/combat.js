@@ -7,22 +7,14 @@ let banditTimer = 6, vampTimer = 14;
 const SAY_CD = {};
 function sayOnce(key, cd, fn) { if ((SAY_CD[key] || -99) > T) return; SAY_CD[key] = T + cd; fn(); }
 
-function buildBandit() {                       // generic delta-wing fighter, dark camo
-  const g = new THREE.Group(), C = M(0x58544a), R = M(0x8f2b22), CAN = CANOPY();
-  const b = new THREE.Group(); b.position.y = 0.2; g.add(b);
-  taper(b, 1.35, 0.2, 0.22, C, 0, 0, 0, 0.85, 0.7);
-  const nose = shade(new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.45, 6), C)); nose.rotation.z = -Math.PI / 2; nose.position.set(0.9, 0, 0); b.add(nose);
-  taper(b, 0.36, 0.1, 0.13, CAN, 0.42, 0.13, 0, 0.6, 0.7, -0.04);
-  const wing = [[0.3, 0.1], [-0.55, 0.78], [-0.66, 0.78], [-0.62, 0.1]];
-  prism(b, wing, -0.02, 0.035, C); prism(b, mirrorZ(wing), -0.02, 0.035, C);
-  taper(b, 0.42, 0.42, 0.03, C, -0.5, 0.28, 0, 0.45, 1, -0.14);
-  box(b, 0.14, 0.08, 0.035, R, -0.62, 0.47, 0);
-  for (const s of [-1, 1]) box(b, 0.12, 0.012, 0.25, R, -0.38, 0.0, s * 0.62);   // red wing bands
-  const n = cyl(b, 0.09, 0.1, 0.12, 6, 0x222, -0.72, 0, 0); n.rotation.z = Math.PI / 2;
-  const glow = glowSprite(g, -0.9, 0.2, 0, 0.8, 0xff9a50); glow.material.opacity = 0.7;
-  mergeStatic(g, []);
-  return g;
-}
+/* Bandit types (models in airframes.js). A wave is one flight of one type; the newer, stealthier
+   fighters show up more often as stress builds. vamp = chance to loose an anti-ship missile on the run in. */
+const ENEMY_TYPES = {
+  su25: { name: 'Su-25 Frogfoot', build: buildSu25, speed: [18, 22], alt: [12, 18], hp: 3, vamp: 0.5, w: st => 1.3 - st },   // slow, armoured attack jet
+  su33: { name: 'Su-33 Flanker', build: buildSu33, speed: [22, 27], alt: [17, 26], hp: 2, vamp: 0.3, w: () => 1 },
+  su47: { name: 'Su-47 Berkut', build: buildSu47, speed: [25, 30], alt: [18, 27], hp: 2, vamp: 0.2, w: st => 0.35 + st },
+  su57: { name: 'Su-57 Felon', build: buildSu57, speed: [26, 31], alt: [18, 27], hp: 2, vamp: 0.35, w: st => 0.25 + st * 1.2 }
+};
 function buildVampire() {
   const g = new THREE.Group();
   const body = cyl(g, 0.07, 0.07, 0.8, 6, 0xd8d8d0, 0, 0, 0); body.rotation.z = Math.PI / 2;
@@ -35,8 +27,8 @@ function buildVampire() {
 /* Enemy models are built once; every enemy is a clone sharing geometry and materials, so spawning
    allocates no GPU buffers and removed enemies leave nothing behind. */
 const ENEMY_MODELS = {};
-function enemyMesh(kind) {
-  const tpl = ENEMY_MODELS[kind] || (ENEMY_MODELS[kind] = kind === 'bandit' ? buildBandit() : buildVampire());
+function enemyMesh(key) {     // 'vampire' or an ENEMY_TYPES key
+  const tpl = ENEMY_MODELS[key] || (ENEMY_MODELS[key] = key === 'vampire' ? buildVampire() : ENEMY_TYPES[key].build());
   return tpl.clone();
 }
 
@@ -50,18 +42,19 @@ function compassWord(h) { return ['east', 'south-east', 'south', 'south-west', '
 function hq() { const aw = AIRCRAFT.find(a => a.isAwacs && a.airborne); return aw ? [aw.callsign, 'awacs'] : [RADIO_NAMES.carrier, 'ship']; }
 
 function spawnBandits(n) {
+  const st = STRESS.level, type = wpick(Object.keys(ENEMY_TYPES).map(k => ({ k, w: Math.max(0.05, ENEMY_TYPES[k].w(st)) }))).k, ty = ENEMY_TYPES[type];
   const h = rand(0, TAU), perp = new V3(-Math.sin(h), 0, Math.cos(h));
-  const pass = new V3(rand(-22, 22), 0, rand(-22, 22)), alt = rand(17, 26), speed = rand(22, 28);
+  const pass = new V3(rand(-22, 22), 0, rand(-22, 22)), alt = rand(ty.alt[0], ty.alt[1]), speed = rand(ty.speed[0], ty.speed[1]);
   for (let i = 0; i < n; i++) {
     const p = new V3(Math.cos(h) * 135, alt + rand(-1.5, 1.5), Math.sin(h) * 135).addScaledVector(perp, (i - (n - 1) / 2) * 6);
     p.addScaledVector(new V3(Math.cos(h), 0, Math.sin(h)), i * 5);
     const target = pass.clone().addScaledVector(perp, (i - (n - 1) / 2) * 6); target.y = p.y;
     const v = target.sub(p).normalize().multiplyScalar(speed);
-    const mesh = enemyMesh('bandit'); mesh.scale.setScalar(1.25); scene.add(mesh);
-    ENEMIES.push({ kind: 'bandit', mesh, p, v, hp: 2, age: 0, fired: false, smokeT: 0 });
+    const mesh = enemyMesh(type); mesh.scale.setScalar(1.25); scene.add(mesh);
+    ENEMIES.push({ kind: 'bandit', type, mesh, p, v, hp: ty.hp, age: 0, fired: false, smokeT: 0 });
   }
   const [who, role] = hq();
-  RADIO.say(who, pick(COMBAT.newBandits).replace('{B}', bearingWords(h)).replace('{D}', compassWord(h)).replace('{N}', n === 1 ? 'a single bandit' : n === 2 ? 'two bandits' : n === 3 ? 'three bandits' : 'multiple bandits'), { role, cat: 'combat', prio: 2 });
+  RADIO.say(who, pick(COMBAT.newBandits).replace('{B}', bearingWords(h)).replace('{D}', compassWord(h)).replace('{T}', ty.name).replace('{N}', n === 1 ? 'a single bandit' : n === 2 ? 'two bandits' : n === 3 ? 'three bandits' : 'multiple bandits'), { role, cat: 'combat', prio: 2 });
 }
 function vampireTarget() {
   const s = pick(SHIPS), half = s.len * 0.35;
@@ -189,7 +182,7 @@ function updateCombat(dt) {
       if (e.smoking) { e.smokeT += dt; while (e.smokeT > 0.06) { e.smokeT -= 0.06; FX.smoke.spawn(e.p.clone(), { s0: 0.5, s1: 2, life: 1.8, a0: 0.5, color: 0x333333, v: new V3(-WAVE.flow, 0.3, 0) }); } }
       // bandits loose anti-ship missiles on their run in
       const dc = Math.hypot(e.p.x, e.p.z);
-      if (armed && !e.fired && dc < 85 && dc > 50) { e.fired = true; if (Math.random() < 0.25 + st * 0.25) { spawnVampire(e.p.clone()); sayOnce('vamp', 6, () => { const sh = pick(SHIPS.slice(1)); RADIO.say(sh.radio, pick(['Vampire launch! Bandit fired on us!', 'Missile off the rail, inbound!']), { role: 'ship', cat: 'combat', prio: 3 }); }); } }
+      if (armed && !e.fired && dc < 85 && dc > 50) { e.fired = true; if (Math.random() < ENEMY_TYPES[e.type].vamp + st * 0.25) { spawnVampire(e.p.clone()); sayOnce('vamp', 6, () => { const sh = pick(SHIPS.slice(1)); RADIO.say(sh.radio, pick(['Vampire launch! Bandit fired on us!', 'Missile off the rail, inbound!']), { role: 'ship', cat: 'combat', prio: 3 }); }); } }
       if (dc > 175 && e.age > 3) { e.dead = true; scene.remove(e.mesh); }
     } else {                                   // vampire: descend to sea-skimming height and run at a ship
       const tw = e.tgt.ship.group.localToWorld(e.tgt.local.clone());

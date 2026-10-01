@@ -472,6 +472,10 @@ class F14 extends FixedWing {
   static spec = Object.assign({}, FixedWing.spec, { key: 'f14', tag: 'F-14', speed: 18, turnR: 24, orbitR: [36, 46], alt: [14, 19], ballName: 'Tomcat', armed: true });
   buildModel() { return buildF14(); }
 }
+class F35 extends FixedWing {
+  static spec = Object.assign({}, FixedWing.spec, { key: 'f35', tag: 'F-35C', speed: 17, turnR: 22, orbitR: [36, 45], alt: [13, 18], ballName: 'Lightning', armed: true });
+  buildModel() { return buildF35(); }
+}
 class E2D extends FixedWing {
   static spec = Object.assign({}, FixedWing.spec, { key: 'e2d', tag: 'E-2D', speed: 12, turnR: 26, orbitR: [46, 52], alt: [21, 24], ballName: 'Hawkeye', catIndex: 0, approachV: 11, climbOut: 36, awacs: true, bankMax: 0.5, callsignGroup: 1 });
   buildModel() { return buildE2D(); }
@@ -488,8 +492,8 @@ class AH1 extends Helicopter {
   static spec = Object.assign({}, Helicopter.spec, { key: 'ah1', tag: 'AH-1Z', speed: 8.5, orbitR: [15, 21], alt: [7, 9], armed: true });
   buildModel() { return buildAH1(); }
 }
-const AIRCRAFT_TYPES = { fa18: FA18, f14: F14, e2d: E2D, mh60: MH60, ch53: CH53, ah1: AH1 };
-const FIXED_ORDER = ['fa18', 'f14', 'e2d'], HELI_ORDER = ['mh60', 'ch53', 'ah1'];
+const AIRCRAFT_TYPES = { fa18: FA18, f14: F14, f35: F35, e2d: E2D, mh60: MH60, ch53: CH53, ah1: AH1 };
+const FIXED_ORDER = ['fa18', 'f14', 'f35', 'e2d'], HELI_ORDER = ['mh60', 'ch53', 'ah1'];
 
 /* ---- callsign allocation: groups of 4 jets / 2 helicopters per type ---- */
 function callsignsFor(key, n, offset) {
@@ -504,7 +508,8 @@ function callsignsFor(key, n, offset) {
 }
 
 /* ======================= Fly-bys past the camera ======================= */
-const FLYBY_MODELS = { true: [], false: [] };   // jets of finished fly-bys, reused instead of rebuilt (keyed by `tomcat`)
+const FLYBY_JETS = { f14: () => buildF14(0x626b74, true), fa18: () => buildFA18(0x646e78, true), f35: () => buildF35(0x5e666e, true) };
+const FLYBY_MODELS = { f14: [], fa18: [], f35: [] };   // jets of finished fly-bys, reused instead of rebuilt
 class Flyby {
   constructor() {
     this.planes = [];
@@ -512,10 +517,10 @@ class Flyby {
     this.dir = new V3(Math.cos(ang), 0, Math.sin(ang));
     const perp = new V3(-this.dir.z, 0, this.dir.x), off = rand(-18, 18), alt = rand(30, 42);
     this.speed = rand(42, 55); this.bankPh = rand(0, 6); this.bankAmp = rand(0.05, 0.35);
-    this.tomcat = Math.random() < 0.5;
+    this.type = pick(Object.keys(FLYBY_JETS));
     const cs = callsignsFor('flyby', n, randi(0, CALLSIGNS.flyby.length - 1) * 4);
     for (let i = 0; i < n; i++) {
-      const model = FLYBY_MODELS[this.tomcat].pop() || (this.tomcat ? buildF14(0x626b74, true) : buildFA18(0x646e78, true));
+      const model = FLYBY_MODELS[this.type].pop() || FLYBY_JETS[this.type]();
       model.setFold(0); model.group.scale.setScalar(2.4); scene.add(model.group);
       const side = i === 0 ? 0 : (i % 2 ? 1 : -1);
       const p = this.dir.clone().multiplyScalar(-150 - i * 7).addScaledVector(perp, off + side * 7);
@@ -545,7 +550,7 @@ class Flyby {
     if (!this.announced && AUD.armed && this.planes[0].p.length() < 90) {
       this.announced = true; RADIO.say(this.planes[0].cs, pick(['Engaging!', 'Coming in hot!', 'Beginning attack run.', 'Rolling in, cover me.']), { role: 'ace', cat: 'combat', prio: 0 });
     }
-    if (this.t * this.speed > 310) { this.dead = true; for (const pl of this.planes) { scene.remove(pl.m); FLYBY_MODELS[this.tomcat].push(pl.model); } }
+    if (this.t * this.speed > 310) { this.dead = true; for (const pl of this.planes) { scene.remove(pl.m); FLYBY_MODELS[this.type].push(pl.model); } }
   }
   inView(pl) { return pl.p.length() < 75; }
   fireGuns(dur) { for (const pl of this.planes) if (this.inView(pl)) pl.gun = Math.max(pl.gun, dur); }

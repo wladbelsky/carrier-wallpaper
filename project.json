@@ -1,6 +1,6 @@
 {
 	"title": "Carrier Strike Group — Audio Reactive",
-	"description": "Isometric carrier strike group: carrier, two escorting destroyers, a configurable air wing (F/A-18, F-14, E-2D, MH-60, CH-53, AH-1Z) with folding wings, deck-edge elevators and a flight-deck control panel. Guns, CIWS and aircraft fire to the beat, Ace Combat style radio subtitles, time of day follows your PC clock.",
+	"description": "Isometric carrier strike group: carrier, two escorting destroyers, a configurable air wing (F/A-18, F-14, F-35C, E-2D, MH-60, CH-53, AH-1Z) with folding wings, deck-edge elevators and a flight-deck control panel. Guns, CIWS and aircraft fire to the beat, Ace Combat style radio subtitles, time of day follows your PC clock.",
 	"file": "index.html",
 	"preview": "preview.jpg",
 	"type": "web",
@@ -151,8 +151,16 @@
 				"max": 8,
 				"value": 2
 			},
-			"e2dcount": {
+			"f35count": {
 				"order": 42,
+				"text": "F-35C Lightning II — count",
+				"type": "slider",
+				"min": 0,
+				"max": 8,
+				"value": 2
+			},
+			"e2dcount": {
+				"order": 43,
 				"text": "E-2D Hawkeye (AWACS) — count",
 				"type": "slider",
 				"min": 0,
@@ -160,7 +168,7 @@
 				"value": 1
 			},
 			"mh60count": {
-				"order": 43,
+				"order": 44,
 				"text": "MH-60 Seahawk — count",
 				"type": "slider",
 				"min": 0,
@@ -168,7 +176,7 @@
 				"value": 1
 			},
 			"ch53count": {
-				"order": 44,
+				"order": 45,
 				"text": "CH-53 Sea Stallion — count",
 				"type": "slider",
 				"min": 0,
@@ -176,7 +184,7 @@
 				"value": 1
 			},
 			"ah1count": {
-				"order": 45,
+				"order": 46,
 				"text": "AH-1Z Viper — count",
 				"type": "slider",
 				"min": 0,
@@ -184,13 +192,13 @@
 				"value": 1
 			},
 			"ddhelis": {
-				"order": 46,
+				"order": 47,
 				"text": "Destroyer helicopters (MH-60)",
 				"type": "bool",
 				"value": true
 			},
 			"subtitles": {
-				"order": 47,
+				"order": 48,
 				"text": "Radio subtitles",
 				"type": "bool",
 				"value": true

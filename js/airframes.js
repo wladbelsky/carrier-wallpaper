@@ -90,6 +90,137 @@ function buildF14(color, big) {
   };
 }
 
+/* ---------- F-35C Lightning II — stealth, outer wing panels fold up ---------- */
+function buildF35(color, big) {
+  const g = new THREE.Group(), C = M(color || 0x737b83), C2 = M(0x646c74), D = M(0x33383d), CAN = M(0x3a3320, { shininess: 90, specular: 0xccaa55 });
+  const b = new THREE.Group(); b.position.y = 0.2; g.add(b);
+  taper(b, 0.5, 0.15, 0.2, C, 0.52, 0.03, 0, 0.75, 0.55);                                   // chined forebody
+  const nose = shade(new THREE.Mesh(new THREE.ConeGeometry(0.075, 0.3, 4), C)); nose.rotation.set(Math.PI / 4, 0, -Math.PI / 2); nose.position.set(0.92, 0.03, 0); b.add(nose);
+  taper(b, 0.9, 0.22, 0.44, C, -0.15, 0.01, 0, 0.9, 0.8);                                    // wide body, single engine
+  taper(b, 0.34, 0.1, 0.13, CAN, 0.48, 0.14, 0, 0.6, 0.7, -0.04);
+  for (const s of [-1, 1]) taper(b, 0.2, 0.12, 0.07, D, 0.24, 0.0, s * 0.21, 0.7, 1, 0.04);   // DSI intakes
+  const inner = [[0.22, 0.2], [-0.24, 0.5], [-0.47, 0.5], [-0.46, 0.2]];
+  prism(b, inner, -0.01, 0.03, C); prism(b, mirrorZ(inner), -0.01, 0.03, C);
+  const pivots = [];
+  for (const s of [1, -1]) {
+    const pv = new THREE.Group(); pv.position.set(0, -0.01, s * 0.5); b.add(pv);
+    const outer = [[-0.24, 0], [-0.36, 0.17], [-0.49, 0.17], [-0.47, 0]];
+    prism(pv, s > 0 ? outer : mirrorZ(outer), 0, 0.03, C);
+    pivots.push({ pv, s });
+  }
+  const stab = [[-0.52, 0.15], [-0.67, 0.38], [-0.8, 0.38], [-0.77, 0.15]];
+  prism(b, stab, 0.0, 0.025, C); prism(b, mirrorZ(stab), 0.0, 0.025, C);
+  for (const s of [-1, 1]) { const f = taper(b, 0.3, 0.3, 0.03, C2, -0.56, 0.24, s * 0.15, 0.5, 1, -0.1); f.rotation.x = s * 0.4; }
+  const n = cyl(b, 0.09, 0.1, 0.14, 8, 0x3a3a3a, -0.68, 0.01, 0); n.rotation.z = Math.PI / 2;
+  const gr = big ? null : gear(g, [[0.6, 0], [-0.22, 0.22], [-0.22, -0.22]], 0.2);
+  const glow = glowSprite(g, -0.82, 0.21, 0, 0.75);
+  mergeStatic(g, [...pivots.map(p => p.pv), gr]);
+  return {
+    group: g,
+    setFold(f) { for (const p of pivots) p.pv.rotation.x = -p.s * f * 1.75; },
+    tick(dt, st) { if (gr) gr.visible = st.gearDown !== false; glow.material.opacity += ((st.glow || 0) - glow.material.opacity) * Math.min(1, dt * 6); const sc = 0.5 + glow.material.opacity * 0.6; glow.scale.set(sc, sc, 1); }
+  };
+}
+
+/* ---------- Enemy fighters (static models; red fin tips mark hostiles) ---------- */
+function enemyGlows(g, x, y, zs, s) { for (const z of zs) glowSprite(g, x, y, z, s, 0xff9a50).material.opacity = 0.7; }
+/* Su-25 Frogfoot — subsonic attack jet: straight shoulder wing, twin engine pods, wingtip airbrake pods */
+function buildSu25() {
+  const g = new THREE.Group(), C = M(0x6b6a52), C2 = M(0x55553f), D = M(0x2c2a26), R = M(0x8f2b22), CAN = CANOPY();
+  const b = new THREE.Group(); b.position.y = 0.2; g.add(b);
+  taper(b, 1.2, 0.17, 0.16, C, 0.05, 0.03, 0, 0.85, 0.75);
+  const nose = shade(new THREE.Mesh(new THREE.ConeGeometry(0.075, 0.28, 6), C)); nose.rotation.z = -Math.PI / 2; nose.position.set(0.79, 0.03, 0); b.add(nose);
+  taper(b, 0.3, 0.1, 0.12, CAN, 0.42, 0.14, 0, 0.6, 0.7, -0.03);
+  const wing = [[0.18, 0.1], [0.04, 0.72], [-0.12, 0.72], [-0.2, 0.1]];
+  prism(b, wing, 0.06, 0.03, C); prism(b, mirrorZ(wing), 0.06, 0.03, C);
+  for (const s of [-1, 1]) {
+    taper(b, 0.72, 0.15, 0.13, C2, -0.12, 0.0, s * 0.15, 0.95, 0.9);                      // engine nacelle
+    const nz = cyl(b, 0.055, 0.06, 0.08, 6, 0x222, -0.5, 0.0, s * 0.15); nz.rotation.z = Math.PI / 2;
+    box(b, 0.2, 0.04, 0.04, D, -0.04, 0.07, s * 0.73);                                      // wingtip airbrake pod
+    for (const z of [0.36, 0.55]) { const bomb = cyl(b, 0.025, 0.025, 0.22, 5, 0x55554a, 0.0, 0.0, s * z); bomb.rotation.z = Math.PI / 2; }
+  }
+  taper(b, 0.32, 0.36, 0.03, C, -0.56, 0.25, 0, 0.5, 1, -0.12);
+  box(b, 0.12, 0.07, 0.035, R, -0.66, 0.42, 0);
+  const stab = [[-0.5, 0.06], [-0.66, 0.34], [-0.76, 0.34], [-0.74, 0.06]];
+  prism(b, stab, 0.12, 0.025, C); prism(b, mirrorZ(stab), 0.12, 0.025, C);
+  enemyGlows(g, -0.58, 0.2, [-0.15, 0.15], 0.55);
+  mergeStatic(g, []); return g;
+}
+/* Su-33 Flanker-D — naval Flanker: long nose, canards, widely spaced engines, twin fins, tail sting */
+function buildSu33() {
+  const g = new THREE.Group(), C = M(0x5f6c7a), C2 = M(0x4a5663), D = M(0x2c2f33), R = M(0x8f2b22), CAN = CANOPY();
+  const b = new THREE.Group(); b.position.y = 0.22; g.add(b);
+  taper(b, 0.72, 0.15, 0.16, C, 0.62, 0.06, 0, 0.75, 0.7);
+  const nose = shade(new THREE.Mesh(new THREE.ConeGeometry(0.075, 0.34, 6), C)); nose.rotation.z = -Math.PI / 2; nose.position.set(1.15, 0.06, 0); b.add(nose);
+  taper(b, 0.3, 0.1, 0.12, CAN, 0.66, 0.18, 0, 0.6, 0.7, -0.04);
+  prism(b, [[0.4, 0.15], [-0.95, 0.3], [-0.95, -0.3], [0.4, -0.15]], -0.02, 0.1, C);        // lifting body
+  const wing = [[0.45, 0.14], [-0.12, 0.4], [-0.45, 0.8], [-0.6, 0.8], [-0.62, 0.28]];
+  prism(b, wing, 0.03, 0.03, C); prism(b, mirrorZ(wing), 0.03, 0.03, C);
+  const can = [[0.4, 0.14], [0.24, 0.33], [0.15, 0.33], [0.17, 0.14]];
+  prism(b, can, 0.06, 0.02, C); prism(b, mirrorZ(can), 0.06, 0.02, C);
+  for (const s of [-1, 1]) {
+    taper(b, 0.95, 0.15, 0.16, C2, -0.42, -0.07, s * 0.2, 0.95, 0.9);
+    box(b, 0.16, 0.12, 0.14, D, 0.12, -0.08, s * 0.2);                                     // intake
+    const nz = cyl(b, 0.07, 0.075, 0.1, 6, 0x222, -0.94, -0.07, s * 0.2); nz.rotation.z = Math.PI / 2;
+    taper(b, 0.38, 0.42, 0.03, C, -0.68, 0.3, s * 0.3, 0.5, 1, -0.14);
+    box(b, 0.1, 0.06, 0.035, R, -0.85, 0.49, s * 0.3);
+  }
+  const stab = [[-0.7, 0.28], [-0.9, 0.6], [-1.02, 0.6], [-1.0, 0.28]];
+  prism(b, stab, -0.03, 0.025, C); prism(b, mirrorZ(stab), -0.03, 0.025, C);
+  const sting = cyl(b, 0.04, 0.05, 0.25, 6, C2, -1.05, 0.0, 0); sting.rotation.z = Math.PI / 2;
+  enemyGlows(g, -1.02, 0.15, [-0.2, 0.2], 0.6);
+  mergeStatic(g, []); return g;
+}
+/* Su-47 Berkut — forward-swept wings, canards, tail booms, dark finish */
+function buildSu47() {
+  const g = new THREE.Group(), C = M(0x34383d), C2 = M(0x26292d), D = M(0x1c1d20), R = M(0x8f2b22), CAN = CANOPY();
+  const b = new THREE.Group(); b.position.y = 0.22; g.add(b);
+  taper(b, 0.75, 0.15, 0.16, C, 0.65, 0.06, 0, 0.75, 0.7);
+  const nose = shade(new THREE.Mesh(new THREE.ConeGeometry(0.075, 0.34, 6), C)); nose.rotation.z = -Math.PI / 2; nose.position.set(1.2, 0.06, 0); b.add(nose);
+  taper(b, 0.3, 0.1, 0.12, CAN, 0.7, 0.18, 0, 0.6, 0.7, -0.04);
+  prism(b, [[0.45, 0.15], [-0.95, 0.27], [-0.95, -0.27], [0.45, -0.15]], -0.02, 0.1, C);
+  const wing = [[0.05, 0.2], [0.14, 0.84], [-0.02, 0.86], [-0.62, 0.24]];                   // forward sweep
+  prism(b, wing, 0.03, 0.03, C); prism(b, mirrorZ(wing), 0.03, 0.03, C);
+  const can = [[0.55, 0.13], [0.38, 0.36], [0.28, 0.36], [0.31, 0.13]];
+  prism(b, can, 0.06, 0.02, C); prism(b, mirrorZ(can), 0.06, 0.02, C);
+  for (const s of [-1, 1]) {
+    taper(b, 0.95, 0.15, 0.15, C2, -0.42, -0.07, s * 0.19, 0.95, 0.9);
+    box(b, 0.16, 0.12, 0.13, D, 0.14, -0.08, s * 0.19);
+    const nz = cyl(b, 0.065, 0.07, 0.1, 6, 0x111, -0.94, -0.07, s * 0.19); nz.rotation.z = Math.PI / 2;
+    const f = taper(b, 0.34, 0.38, 0.03, C, -0.66, 0.29, s * 0.3, 0.5, 1, -0.12); f.rotation.x = s * 0.12;
+    box(b, 0.1, 0.06, 0.035, R, -0.8, 0.46, s * 0.33);
+    const boom = cyl(b, 0.03, 0.04, 0.3, 5, C2, -1.0, 0.0, s * 0.3); boom.rotation.z = Math.PI / 2;  // tail boom
+  }
+  const stab = [[-0.82, 0.3], [-0.96, 0.52], [-1.06, 0.52], [-1.04, 0.3]];
+  prism(b, stab, 0.0, 0.025, C); prism(b, mirrorZ(stab), 0.0, 0.025, C);
+  enemyGlows(g, -1.0, 0.15, [-0.19, 0.19], 0.6);
+  mergeStatic(g, []); return g;
+}
+/* Su-57 Felon — stealth: flat lifting body, LEVCONs, wide-spaced engines, all-moving canted fins */
+function buildSu57() {
+  const g = new THREE.Group(), C = M(0x7a838c), C2 = M(0x545b62), D = M(0x2c2f33), R = M(0x8f2b22), CAN = M(0x3a3320, { shininess: 90, specular: 0xccaa55 });
+  const b = new THREE.Group(); b.position.y = 0.2; g.add(b);
+  taper(b, 0.55, 0.14, 0.2, C, 0.8, 0.04, 0, 0.7, 0.55);
+  const nose = shade(new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.3, 4), C)); nose.rotation.set(Math.PI / 4, 0, -Math.PI / 2); nose.position.set(1.2, 0.04, 0); b.add(nose);
+  taper(b, 0.32, 0.1, 0.13, CAN, 0.78, 0.16, 0, 0.6, 0.7, -0.04);
+  prism(b, [[0.6, 0.1], [0.2, 0.3], [-0.86, 0.36], [-0.86, -0.36], [0.2, -0.3], [0.6, -0.1]], -0.02, 0.1, C);
+  const levcon = [[0.55, 0.12], [0.36, 0.31], [0.28, 0.31], [0.3, 0.12]];
+  prism(b, levcon, 0.03, 0.02, C); prism(b, mirrorZ(levcon), 0.03, 0.02, C);
+  const wing = [[0.2, 0.3], [-0.38, 0.76], [-0.56, 0.76], [-0.6, 0.3]];
+  prism(b, wing, 0.03, 0.03, C); prism(b, mirrorZ(wing), 0.03, 0.03, C);
+  for (const s of [-1, 1]) {
+    taper(b, 0.9, 0.14, 0.17, C2, -0.42, -0.07, s * 0.24, 0.95, 0.9);
+    taper(b, 0.18, 0.12, 0.12, D, 0.14, -0.08, s * 0.24, 0.8, 1, 0.03);
+    const nz = cyl(b, 0.065, 0.07, 0.1, 8, 0x222, -0.92, -0.07, s * 0.24); nz.rotation.z = Math.PI / 2;
+    const f = taper(b, 0.32, 0.32, 0.03, C2, -0.62, 0.24, s * 0.27, 0.5, 1, -0.12); f.rotation.x = s * 0.45;
+    box(b, 0.09, 0.05, 0.035, R, -0.75, 0.37, s * 0.36);
+  }
+  const stab = [[-0.62, 0.36], [-0.82, 0.6], [-0.95, 0.6], [-0.9, 0.36]];
+  prism(b, stab, 0.0, 0.025, C); prism(b, mirrorZ(stab), 0.0, 0.025, C);
+  enemyGlows(g, -1.0, 0.13, [-0.24, 0.24], 0.6);
+  mergeStatic(g, []); return g;
+}
+
 /* ---------- E-2D Hawkeye (AWACS) — Sto-Wing fold ---------- */
 function buildE2D(color) {
   const g = new THREE.Group(), C = M(color || 0xc2c6ca), C2 = M(0xa9aeb3), D = M(0x33383d), CAN = CANOPY();

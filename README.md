@@ -22,6 +22,7 @@ Aircraft counts are set in the wallpaper properties.
 |---|---|
 | F/A-18 Hornet | outer wing panels fold up |
 | F-14 Super Tomcat | variable sweep in flight, 75° oversweep when parked |
+| F-35C Lightning II | outer wing panels fold up |
 | E-2D Hawkeye (AWACS) | Sto-Wing: wings twist and fold back along the fuselage |
 | MH-60 Seahawk / CH-53 Sea Stallion / AH-1Z Viper | rotor blades fold aft |
 
@@ -40,7 +41,8 @@ Ace Combat style lines appear at the top of the screen: catapult clearances, "ca
 helicopter departures and landings, and combat chatter while music is playing.
 
 - Callsigns come from Ace Combat 04 / 5 / Zero / 7 / 8:
-  - **Squadrons:** Wardog, Razgriz, Mage, Spare, Strider, Mobius, Galm, Crow, Indigo, Wizard.
+  - **Squadrons:** Wardog, Razgriz, Mage, Spare, Strider (F/A-18), Mobius, Galm, Crow, Indigo, Wizard (F-14),
+    Garuda, Scarface, Antares, Ogre, Saber (F-35C).
   - **AWACS:** SkyEye, Thunderhead, Eagle Eye, Long Caster, Bandog, Sky Keeper, Dealer.
   - **Ships:** carrier KESTREL, escorts BUCCANEER (port) and CUTLASS (starboard). The control panel
     lists them with their status (on station / engaging / damaged).
@@ -78,6 +80,17 @@ A "heaviness" meter (auto-gained loudness density) drives extra effects:
 
 During combat, enemy fighters (bandits) make passes over the fleet, and anti-ship missiles (vampires)
 skim in toward the ships.
+
+- **Bandit types:** each wave is one flight of one type, and the radio names it in the contact report.
+
+  | Type | Behaviour |
+  |---|---|
+  | Su-25 Frogfoot | slow, armoured (takes an extra hit), most likely to launch anti-ship missiles |
+  | Su-33 Flanker | carrier-based fighter |
+  | Su-47 Berkut | fast, forward-swept wings |
+  | Su-57 Felon | fast stealth fighter |
+
+  At low threat most waves are Su-25s and Su-33s; as stress builds, Su-47s and Su-57s take over.
 
 - **Targeting:**
   - Guns track bandits (AA mode).

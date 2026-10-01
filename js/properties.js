@@ -142,8 +142,16 @@ const WE_PROPERTIES = {
   "max": 8,
   "value": 2
  },
- "e2dcount": {
+ "f35count": {
   "order": 42,
+  "text": "F-35C Lightning II — count",
+  "type": "slider",
+  "min": 0,
+  "max": 8,
+  "value": 2
+ },
+ "e2dcount": {
+  "order": 43,
   "text": "E-2D Hawkeye (AWACS) — count",
   "type": "slider",
   "min": 0,
@@ -151,7 +159,7 @@ const WE_PROPERTIES = {
   "value": 1
  },
  "mh60count": {
-  "order": 43,
+  "order": 44,
   "text": "MH-60 Seahawk — count",
   "type": "slider",
   "min": 0,
@@ -159,7 +167,7 @@ const WE_PROPERTIES = {
   "value": 1
  },
  "ch53count": {
-  "order": 44,
+  "order": 45,
   "text": "CH-53 Sea Stallion — count",
   "type": "slider",
   "min": 0,
@@ -167,7 +175,7 @@ const WE_PROPERTIES = {
   "value": 1
  },
  "ah1count": {
-  "order": 45,
+  "order": 46,
   "text": "AH-1Z Viper — count",
   "type": "slider",
   "min": 0,
@@ -175,13 +183,13 @@ const WE_PROPERTIES = {
   "value": 1
  },
  "ddhelis": {
-  "order": 46,
+  "order": 47,
   "text": "Destroyer helicopters (MH-60)",
   "type": "bool",
   "value": true
  },
  "subtitles": {
-  "order": 47,
+  "order": 48,
   "text": "Radio subtitles",
   "type": "bool",
   "value": true

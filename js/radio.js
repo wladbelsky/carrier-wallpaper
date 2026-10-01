@@ -4,6 +4,7 @@ const CALLSIGNS = {
   // Squadron names from Ace Combat 04 / 5 / Zero / 7 / 8 — groups of 4 for jets, 2 for helicopters
   fa18: ['WARDOG', 'RAZGRIZ', 'MAGE', 'SPARE', 'STRIDER'],
   f14: ['MOBIUS', 'GALM', 'CROW', 'INDIGO', 'WIZARD'],
+  f35: ['GARUDA', 'SCARFACE', 'ANTARES', 'OGRE', 'SABER'],
   e2d: ['SKYEYE', 'THUNDERHEAD', 'EAGLE EYE', 'LONG CASTER', 'BANDOG', 'SKY KEEPER', 'DEALER'],
   mh60: ['SEA GOBLIN', 'OSPREY', 'HALO'],
   ch53: ['ATLAS', 'HERCULES', 'TITAN'],
@@ -219,7 +220,7 @@ const COMBAT = {
   },
   vampireDown: ['Vampire splashed!', 'Missile intercepted!', 'CIWS kill!', 'Got the vampire!'],
   shipHit: ["We've been hit! Damage control!", 'Missile impact! Fires on deck!', 'Hit, starboard side! Still fighting!'],
-  newBandits: ['New contacts, bearing {B}. {N}!', 'Bogeys inbound from the {D}, {N}!', 'Enemy fighters, bearing {B}, closing fast!'],
+  newBandits: ['New contacts, bearing {B}, {N}! Identified as {T}.', 'Bogeys inbound from the {D}, {N}! Type: {T}.', '{T}, bearing {B}, closing fast!', '{T}s inbound from the {D}, {N}!'],
   vampires: ['Vampire, vampire! Bearing {B}!', 'Inbound anti-ship missiles, bearing {B}!', 'Missile launch detected! Vampires inbound!']
 };
 
