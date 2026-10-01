@@ -29,8 +29,8 @@ Aircraft counts are set in the wallpaper properties.
 Each destroyer can also carry one MH-60 (optional).
 
 - Three jets and one helicopter park on deck. Everything else lives in the hangar and uses the deck-edge elevators.
-- Automatic flight ops work by flights (aircraft sharing a callsign): a whole flight or its lead section
-  (half, starting with №1) launches together, the rest of a split flight follows later to join it,
+- Automatic flight ops work by flights (aircraft sharing a callsign): a four-ship flight launches as
+  all four or as its lead pair (chosen at random), the second pair usually follows soon to join it,
   and flights are recovered together. About half of the air wing is airborne on average.
 - Jets fly turn-radius-limited paths (Dubins curves), so launches, orbits and approaches use wide, realistic turns.
 - Landing gear retracts in flight.
@@ -55,10 +55,11 @@ helicopter departures and landings, and combat chatter while music is playing.
 While there is no music, flights periodically leave the screen on missions (CAP, intercepts, escorts,
 SAR, medevac, sonar searches…). Each mission has its own radio orders, and the flight returns to the orbit afterwards.
 
-- Whole flights go together, with wingmen in trail.
+- Assembled flights (all aircraft up and on station) go first; a partly launched flight only goes when
+  no flight is complete. A four-ship flight goes as all four or as one of its pairs, chosen at random;
+  wingmen fly in trail.
+- A pair left behind waits for the other pair to come back before the flight is sent again.
 - Several flights can be away at once, but one flight always stays on station.
-- A flight is never sent while any of its aircraft is still launching.
-- Partial flights only go when no flight is complete.
 - The **Missions off-screen** property controls how often this happens (0 = off).
 - Destroyer helicopters have their own callsigns: SEAHORSE and PETREL.
 

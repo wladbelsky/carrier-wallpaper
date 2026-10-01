@@ -454,15 +454,18 @@ function flightGroups() {
   return g;
 }
 const isDown = a => a.state === 'parked' || a.state === 'hangar';
-const settled = a => isDown(a) || a.state === 'orbit' || a.onMission;   // not launching or landing right now
+// not launching or landing right now (an aircraft holding in orbit for its turn to land is landing)
+const settled = a => isDown(a) || ((a.state === 'orbit' || a.onMission) && !a.landReq);
 function wpick(cands) { let r = Math.random() * cands.reduce((s, c) => s + c.w, 0); for (const c of cands) if ((r -= c.w) <= 0) return c; return cands[cands.length - 1]; }
-function autoLaunch() {
+const flightSize = n => n >= 4 && Math.random() < 0.5 ? 2 : n;   // a four-ship flight goes as a pair or as all four
+function autoLaunch(joinOnly) {
   const cands = [];
   for (const all of flightGroups().values()) {
     if (!all.every(settled)) continue;
     const down = all.filter(isDown); if (!down.length) continue;
     const split = down.length < all.length;     // part of the flight is already up: send the rest to join it
-    const n = split || down.length <= 2 || Math.random() < 0.5 ? down.length : Math.ceil(down.length / 2);
+    if (joinOnly && !split) continue;
+    const n = split ? down.length : flightSize(down.length);
     cands.push({ list: down.slice(0, n), w: (split ? 4 : 1) + down.filter(a => a.state === 'parked').length * 0.5 });
   }
   if (!cands.length) return false;
@@ -474,7 +477,8 @@ function autoRecover() {
   for (const all of flightGroups().values()) {
     if (!all.every(settled) || all.some(a => a.onMission)) continue;
     const air = all.filter(a => a.state === 'orbit' && !a.landReq);
-    if (!air.length || air.some(a => a.airT < 25)) continue;
+    // a pair whose flight-mates are still on deck waits for them to join instead of being recovered
+    if (!air.length || air.length < all.length || air.some(a => a.airT < 25)) continue;
     cands.push({ list: air, w: 1 + Math.min(...air.map(a => a.airT)) / 60 });   // longest on station first
   }
   if (!cands.length) return false;
@@ -485,6 +489,8 @@ function autoFlight(dt) {
   if (!CFG.auto) return;
   autoTimer -= dt; if (autoTimer > 0) return;
   autoTimer = rand(10, 20);
+  // a pair already up is usually joined by the rest of its flight, even past the air wing cap
+  if (Math.random() < 0.7 && autoLaunch(true)) return;
   const busy = AIRCRAFT.filter(a => !isDown(a)).length;
   const N = AIRCRAFT.length;
   if ((busy < Math.max(3, N * 0.5) || (busy < N * 0.65 && Math.random() < 0.25)) && autoLaunch()) return;
@@ -578,17 +584,21 @@ function updateMissions(dt) {
   for (let n = 0; n < 2; n++) if (!dispatchFlight()) break;              // up to two flights per call
 }
 function dispatchFlight() {
-  const cands = [];
+  const cands = []; let onStation = 0;
   for (const [base, all] of flightGroups()) {
-    if (all.some(a => LAUNCHING.has(a.state))) continue;   // wait until the whole flight is up
-    const ready = all.filter(a => a.state === 'orbit' && !a.landReq && a.airT > 15);
-    if (ready.length) cands.push({ base, ready, full: ready.length === all.length, n: ready.length });
+    if (all.some(a => LAUNCHING.has(a.state))) continue;
+    const ready = all.filter(a => !isDown(a) && !a.onMission);
+    if (!ready.length || ready.some(a => a.state !== 'orbit' || a.landReq)) continue;
+    onStation++;                                             // counts a pair left behind while the other is away
+    // never send part of a flight while its other part is away; members on deck don't block (manual ops)
+    if (!all.some(a => a.onMission) && ready.every(a => a.airT > 15)) cands.push({ base, ready, full: ready.length === all.length });
   }
   // several flights can be away at once, but one flight always stays on station over the fleet
-  if (cands.length <= 1) return false;
-  // whole flights first (any type, chosen at random); partial flights only if no flight is complete
-  const score = c => c.full ? 100 : c.n;
-  const top = Math.max(...cands.map(score)), g = pick(cands.filter(c => score(c) === top));
+  if (!cands.length || onStation <= 1) return false;
+  // assembled flights first; a partly launched flight only goes when no flight is complete
+  const full = cands.filter(c => c.full), g = pick(full.length ? full : cands);
+  // a four-ship flight goes as all four or as one of its pairs (lead or second section)
+  if (g.ready.length > 2 && flightSize(g.ready.length) === 2) { const sec = Math.random() < 0.5 ? 2 : 0; g.ready = g.ready.slice(sec, sec + 2); }
   const lead = g.ready[0], isHeli = lead instanceof Helicopter;
   const kind = lead.isAwacs ? 'awacs' : isHeli ? (lead.spec.armed ? 'heli_attack' : 'heli_transport') : 'fighter';
   const task = makeMission(kind);
