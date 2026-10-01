@@ -87,7 +87,7 @@
   demoRow('Tempo, BPM', r => { const c = el('input', 'cfg-ctl'), o = el('span', 'cfg-val', String(DEMO.bpm)); Object.assign(c, { type: 'range', min: 70, max: 180, step: 1, value: DEMO.bpm }); c.oninput = () => { DEMO.bpm = +c.value; o.textContent = c.value; persist(); }; r.append(c, o); });
   demoRow('Loudness', r => { const c = el('input', 'cfg-ctl'), o = el('span', 'cfg-val', DEMO.level.toFixed(1)); Object.assign(c, { type: 'range', min: 0.3, max: 1.5, step: 0.1, value: DEMO.level }); c.oninput = () => { DEMO.level = +c.value; o.textContent = (+c.value).toFixed(1); persist(); }; r.append(c, o); });
   demoRow('Silent gaps between loops', r => { r.classList.add('cfg-bool'); const c = el('input', 'cfg-ctl'); c.type = 'checkbox'; c.checked = DEMO.pauses; c.onchange = () => { DEMO.pauses = c.checked; persist(); }; r.append(c); });
-  body.append(el('div', 'cfg-note', `Sound must play for ${ARM_DELAY} s before the fleet opens fire — short notification sounds never trigger it.`));
+  body.append(el('div', 'cfg-note', `Sound must play for ${ARM_DELAY} s before the fleet opens fire — short notification sounds never trigger it. After the music stops, the fleet holds for ${DISARM_DELAY} s before standing down.`));
 
   /* audio file player — analysed with Web Audio into the same 128-bin array WE provides */
   body.append(el('div', 'cfg-sec', 'Play an audio file'));

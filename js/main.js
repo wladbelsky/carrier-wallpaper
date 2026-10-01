@@ -216,11 +216,27 @@ function updateEnvironment() {
 }
 
 /* ---- audio ---- */
-/* Sound must last ARM_DELAY seconds before the fleet opens fire — short notification sounds never trigger it. */
-const ARM_DELAY = 5;
-const AUD = { level: 0, lastActive: -99, soundStart: -1, wasArmed: false, raw: new Float32Array(128), demo: false,
+/* Sound must last ARM_DELAY seconds before the fleet opens fire — short notification sounds never trigger it.
+   Combat is latched (updateArming): when the sound stops, the fleet holds for DISARM_DELAY seconds ("no more
+   contacts" — no new enemies, passes or missions) and only then stands down; sound lasting RESUME_DELAY seconds in the
+   meantime resumes the fight (a notification ping doesn't). */
+const ARM_DELAY = 5, DISARM_DELAY = 5, RESUME_DELAY = 1;
+const AUD = { level: 0, lastActive: -99, soundStart: -1, wasArmed: false, raw: new Float32Array(128), demo: false, combat: false, holdUntil: 0,
   get active() { return RT() - this.lastActive < 1.6; },
-  get armed() { return this.soundStart >= 0 && this.active && RT() - this.soundStart >= ARM_DELAY; } };
+  get hot() { return this.soundStart >= 0 && this.active && RT() - this.soundStart >= ARM_DELAY; },   // long enough to fight
+  get armed() { return this.combat; },                        // engaged: aircraft in combat, no missions
+  get holding() { return this.holdUntil > 0; },
+  get fighting() { return this.combat && !this.holding; } };  // armed and not holding: enemies, passes, weapons, chatter
+function updateArming() {
+  if (!AUD.combat) { AUD.combat = AUD.hot; return; }
+  // during the hold only sound that keeps going for RESUME_DELAY s brings the fight back
+  if (AUD.active && (!AUD.holding || AUD.lastActive - AUD.soundStart >= RESUME_DELAY)) {
+    if (AUD.holding) { AUD.holdUntil = 0; const [w, role] = hq(); RADIO.say(w, radioLine(COMBAT.resume), { role, cat: 'combat', prio: 3 }); }
+    return;
+  }
+  if (!AUD.holding) { AUD.holdUntil = RT() + DISARM_DELAY; const [w, role] = hq(); RADIO.say(w, radioLine(COMBAT.lull), { role, cat: 'combat', prio: 3 }); }
+  else if (RT() >= AUD.holdUntil) { AUD.holdUntil = 0; AUD.combat = false; }   // updateChatter says COMBAT.end
+}
 function RT() { return performance.now() / 1000; }   // real-time clock (independent of FPS limits)
 const BANDS = {
   low:  { from: 0, to: 4,   thr: 0.10, ratio: 1.35, gap: 0.2,  hist: [], prev: 0, last: -9, val: 0, fh: [], peak: 0.2, norm: 0 },
@@ -345,7 +361,7 @@ function launchVLS() {
   spawnGuidedMissile(p, new V3(0, 16, 0), 0.7, dir, 45, 6, true, bandits.length ? pick(bandits) : null, 0.82, s);
   for (let i = 0; i < 6; i++) FX.smoke.spawn(p.clone().add(new V3(rand(-0.5, 0.5), rand(0, 0.6), rand(-0.5, 0.5))), { s0: 1.2, s1: 4.5, life: 2.6, a0: 0.7, smoke: true, v: new V3(rand(-1, 1) - WAVE.flow, rand(0.5, 1.5), rand(-1, 1)), drag: 0.8 });
   FX.flash.spawn(p, { s0: 3, s1: 4, life: 0.25, a0: 1 }); FX.lights.flash(p, 4, 0.4);
-  if (Math.random() < 0.5) RADIO.say(s.radio || RADIO_NAMES.carrier, pick(['Birds away!', 'Standard missile away!', 'Launching SM-2!']), { role: 'ship', cat: 'combat', prio: 0 });
+  if (Math.random() < 0.5) RADIO.say(s.radio || RADIO_NAMES.carrier, radioLine(COMBAT.vls), { role: 'ship', cat: 'combat', prio: 0 });
 }
 function launchRAM() {
   if (!CARRIER.rams || (CARRIER.ramCd || 0) > 0) return;
@@ -370,7 +386,7 @@ function startCIWS(dur) {
 }
 function onBeat(band, strength) {
   const f = CFG.fire / 100;
-  if (f <= 0 || !AUD.armed || paused) return;   // no frames run while paused: spawned missiles/shells would only pile up
+  if (f <= 0 || !AUD.fighting || paused) return;   // no frames run while paused: spawned missiles/shells would only pile up
   resolveHits(true);                     // projectiles that reached a target score on the beat
   const heavy = AUD.heavy;
   if (band === 'low' && strength > 1.5 && CFG.shake) camShake = Math.min(1, camShake + 0.35 + heavy * 0.4);
@@ -622,25 +638,25 @@ function updateChatter(dt) {
   if (arming && !AUD.wasArming) RADIO.q = RADIO.q.filter(m => m.cat !== 'alert');   // a pending "false alarm" is obsolete now
   if (arming && !AUD.wasArming && T > (AUD.alertCd || 0)) {
     AUD.alertCd = T + 6; AUD.alerted = true;
-    RADIO.say(hq[0], pick(LINES.unknownContacts).replace('{B}', bearingWords(rand(0, TAU))), { role: hq[1], cat: 'alert', prio: 3 });
+    RADIO.say(hq[0], radioLine(LINES.unknownContacts, { B: bearingWords(rand(0, TAU)) }), { role: hq[1], cat: 'alert', prio: 3 });
   }
   if (!arming && AUD.wasArming && !armed && AUD.alerted) {
     AUD.alerted = false;
-    RADIO.say(hq[0], pick(LINES.falseAlarm), { role: hq[1], cat: 'alert', prio: 3 });
+    RADIO.say(hq[0], radioLine(LINES.falseAlarm), { role: hq[1], cat: 'alert', prio: 3 });
   }
   if (armed && !AUD.wasArmed) RADIO.q = RADIO.q.filter(m => m.cat !== 'alert');
   if (armed) AUD.alerted = false;
   AUD.wasArming = arming;
-  if (armed && !AUD.wasArmed) { RADIO.say(hq[0], STRESS.pick(COMBAT.start), { role: hq[1], cat: 'combat', prio: 3 }); chatterTimer = rand(3, 5); }
-  if (!armed && AUD.wasArmed) RADIO.say(hq[0], pick(COMBAT.end), { role: hq[1], prio: 2, delay: 1 });
+  if (armed && !AUD.wasArmed) { RADIO.say(hq[0], radioLine(COMBAT.start), { role: hq[1], cat: 'combat', prio: 3 }); chatterTimer = rand(3, 5); }
+  if (!armed && AUD.wasArmed) RADIO.say(hq[0], radioLine(COMBAT.end), { role: hq[1], prio: 2, delay: 1 });
   AUD.wasArmed = armed;
-  if (!armed) return;
+  if (!AUD.fighting) return;
   chatterTimer -= dt; if (chatterTimer > 0) return;
   chatterTimer = rand(3.5, 7) * (1 - 0.45 * STRESS.level);       // more radio traffic as stress builds
   if (RADIO.q.filter(m => m.cat === 'combat').length > 1) return;
   // fighters and helicopters talk about their own passes (js/airwar.js); here only the AWACS and the ships
-  if (awacs && Math.random() < 0.45) awacs.say(STRESS.pick(COMBAT.awacs), C);
-  else RADIO.say(pick(RADIO_NAMES.escorts), STRESS.pick(COMBAT.ship), { role: 'ship', cat: 'combat', prio: 0 });
+  if (awacs && Math.random() < 0.45) awacs.say(radioLine(COMBAT.awacs), C);
+  else RADIO.say(pick(RADIO_NAMES.escorts), radioLine(COMBAT.ship), { role: 'ship', cat: 'combat', prio: 0 });
 }
 
 /* ---- control panel ---- */
@@ -703,7 +719,7 @@ function updateUI() {
   const as = document.getElementById('audiostate');
   const arming = AUD.active && !AUD.armed && AUD.soundStart >= 0;
   // fleet status: patrol in silence, unknown contacts while the sound arms, combat once armed
-  as.textContent = (AUD.armed ? '● COMBAT' : arming ? `◌ UNKNOWN CONTACTS · ${Math.max(0, ARM_DELAY - (RT() - AUD.soundStart)).toFixed(0)}s` : '○ ON PATROL') + (FILE_AUDIO.playing ? ' (FILE)' : AUD.demo && DEMO.on ? ' (DEMO)' : '');
+  as.textContent = (AUD.holding ? `◐ NO CONTACTS · ${Math.max(0, AUD.holdUntil - RT()).toFixed(0)}s` : AUD.armed ? '● COMBAT' : arming ? `◌ UNKNOWN CONTACTS · ${Math.max(0, ARM_DELAY - (RT() - AUD.soundStart)).toFixed(0)}s` : '○ ON PATROL') + (FILE_AUDIO.playing ? ' (FILE)' : AUD.demo && DEMO.on ? ' (DEMO)' : '');
   as.className = AUD.armed ? 'on' : '';
   const th = document.getElementById('threat');
   if (th) { const n = Math.round(STRESS.level * 10); th.textContent = '▮'.repeat(n) + '▯'.repeat(10 - n) + '  ' + STRESS.label; th.className = 'lv' + Math.min(3, Math.floor(STRESS.level * 4)); }
@@ -767,6 +783,7 @@ const TIME_SCALE = Math.max(1, Math.round(parseFloat(QS.get('ts') || '1')));
 let wcAcc = 0;
 function step(dt) {
   T += dt;
+  updateArming();
   WAVE.flow = 2.2 * CFG.speed / 100; WAVE.amp = CFG.waves / 100;
   waveAdvance(dt);
   waterUniforms.uPh.value.set(WAVE.phase[0], WAVE.phase[1], WAVE.phase[2], WAVE.phase[3]); waterUniforms.uAmp.value = WAVE.amp;

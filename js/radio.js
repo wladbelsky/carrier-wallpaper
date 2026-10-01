@@ -130,93 +130,109 @@ LINES.missionCopy = {
 let lastMissionCopy = '';
 function missionCopy(kind) {
   const pool = LINES.missionCopy.any.concat(LINES.missionCopy[kind.startsWith('heli') ? 'heli' : kind] || []);
-  let line; do line = pick(pool); while (line === lastMissionCopy);
+  let line; do line = radioLine(pool); while (line === lastMissionCopy);
   return lastMissionCopy = line;
 }
 function makeMission(kind) {
   const [order, done] = pick(MISSIONS[kind]);
   const sectors = ['Alpha', 'Bravo', 'Charlie', 'Delta', 'Echo', 'Foxtrot', 'Kilo', 'Sierra'];
   const bearing = bearingWords(rand(0, TAU));
-  const fill = t => t.replace('{S}', pick(sectors)).replace('{B}', bearing).replace('{G}', `${randi(1, 9)}-${randi(1, 9)}`)
-    .replace('{P}', randi(4, 24)).replace('{W}', (randi(4, 24) * 500).toLocaleString('en-US'));
-  return { order: fill(order), done: fill(done) };
+  const vars = { S: pick(sectors), B: bearing, G: `${randi(1, 9)}-${randi(1, 9)}`, P: randi(4, 24), W: (randi(4, 24) * 500).toLocaleString('en-US') };
+  return { order: fillLine(order, vars), done: fillLine(done, vars) };
 }
 
 /* ===== Stress: builds up over ~10 minutes of continuous combat music, eases off in silence ===== */
 const STRESS = {
   level: 0,
-  update(dt) { this.level = clamp(this.level + (AUD.armed ? dt / 600 : -dt / 180), 0, 1); },
+  update(dt) { this.level = clamp(this.level + (AUD.fighting ? dt / 600 : -dt / 180), 0, 1); },
   bump(v) { this.level = clamp(this.level + v, 0, 1); },
-  get tier() { return this.level < 0.33 ? 'calm' : this.level < 0.66 ? 'tense' : 'panic'; },
-  get label() { return ['LOW', 'ELEVATED', 'HIGH', 'CRITICAL'][Math.min(3, Math.floor(this.level * 4))]; },
-  /* pick from a tiered pool; higher tiers still mix in calmer lines now and then */
-  pick(pool) {
-    const t = this.tier;
-    if (t === 'panic' && pool.panic && Math.random() < 0.7) return pick(pool.panic);
-    if ((t === 'tense' || t === 'panic') && pool.tense && Math.random() < 0.7) return pick(pool.tense);
-    return pick(pool.calm);
-  }
+  get tierIndex() { const i = THREAT_TIERS.findIndex(t => this.level < t.upTo); return i < 0 ? THREAT_TIERS.length - 1 : i; },
+  get tier() { return THREAT_TIERS[this.tierIndex].key; },
+  get label() { return ['LOW', 'ELEVATED', 'HIGH', 'CRITICAL'][Math.min(3, Math.floor(this.level * 4))]; }
 };
 
-/* ===== Routine flight-deck calls — calm versions + combat versions (used while music plays) ===== */
+/* ===== Radio line pools and threat tiers =====
+   THREAT_TIERS maps STRESS.level to a tier, calmest first — add a tier by adding an entry (and lines under its key).
+   A line pool is either
+     - an array: the same lines at any time, or
+     - an object keyed by tier ({ calm, tense, panic, … }) plus an optional `peace` (outside combat).
+   Keys may be left out: a missing tier falls back to the next calmer one (and from there to any tier present).
+   radioLine(pool, vars):
+     - outside combat: `peace` if the pool has it, otherwise the current tier;
+     - in combat: the current tier, but MIX_CALMER of the time one tier calmer (variety, repeatable down the tiers);
+     - fills {name} placeholders from vars ({c}, {C}, {T}, {B}, {D}, {N}, …); unknown ones are left untouched.   */
+const THREAT_TIERS = [
+  { key: 'calm', upTo: 0.33 },
+  { key: 'tense', upTo: 0.66 },
+  { key: 'panic', upTo: Infinity }
+];
+const MIX_CALMER = 0.3;
+const fillLine = (t, vars) => vars ? t.replace(/\{(\w+)\}/g, (m, k) => vars[k] != null ? vars[k] : m) : t;
+function radioLine(pool, vars) {
+  let list = Array.isArray(pool) ? pool : !AUD.armed && pool.peace;
+  if (!list) {
+    let i = STRESS.tierIndex;
+    while (i > 0 && (!pool[THREAT_TIERS[i].key] || Math.random() < MIX_CALMER)) i--;
+    list = pool[THREAT_TIERS[i].key] || THREAT_TIERS.map(t => pool[t.key]).find(Boolean) || pool.peace;
+  }
+  return fillLine(pick(list), vars);
+}
+
+/* ===== Routine flight-deck calls — peace versions + combat versions by tier (used while music plays) ===== */
 const OPS = {
   launchClear: {
-    calm: ["{c}, you're cleared for launch.", '{c}, catapult is ready. Good luck.', '{c}, wind is on the nose. Cleared to go.'],
-    combat: ['{c}, hot deck! Launch, launch, launch!', '{c}, bandits inbound — get airborne now!', "{c}, cat's ready, go! We need you up there!", '{c}, scramble! Scramble!'],
+    peace: ["{c}, you're cleared for launch.", '{c}, catapult is ready. Good luck.', '{c}, wind is on the nose. Cleared to go.'],
+    calm: ['{c}, hot deck! Launch, launch, launch!', '{c}, bandits inbound — get airborne now!', "{c}, cat's ready, go! We need you up there!", '{c}, scramble! Scramble!'],
     panic: ["{c}, launch NOW! They're right on top of us!", "{c}, go, go, go! Deck's under fire!", "{c}, get off this deck before it's too late!"]
   },
   launchReady: {
-    calm: ['Ready.', 'Roger, launching.', "Let's go.", 'Copy. Full power.'],
-    combat: ['Going hot!', 'Copy, launching hot!', 'Master arm on. Go!', 'Roger, scrambling!'],
+    peace: ['Ready.', 'Roger, launching.', "Let's go.", 'Copy. Full power.'],
+    calm: ['Going hot!', 'Copy, launching hot!', 'Master arm on. Go!', 'Roger, scrambling!'],
     panic: ['Launching! Get me out there!', 'Going, going!', 'Hang on, here we go!']
   },
   airborne: {
-    calm: ['airborne.', 'is off the deck.', 'airborne, climbing to angels one-five.', 'wheels up.'],
-    combat: ['airborne, weapons hot!', 'off the deck, heading for the fight!', 'airborne, looking for trade.', 'up and armed. Point me at them.'],
+    peace: ['airborne.', 'is off the deck.', 'airborne, climbing to angels one-five.', 'wheels up.'],
+    calm: ['airborne, weapons hot!', 'off the deck, heading for the fight!', 'airborne, looking for trade.', 'up and armed. Point me at them.'],
     panic: ['airborne! Engaging immediately!', "I'm up! Where do you need me?!", 'airborne — they are everywhere!']
   },
   awacsUp: {
-    calm: ['airborne. Radar is up.', 'on station. Picture is clean.', 'airborne. I have eyes on the whole sector.'],
-    combat: ['airborne. Radar is up — I count multiple hostiles.', 'on station. Picture is hot, bandits everywhere.'],
+    peace: ['airborne. Radar is up.', 'on station. Picture is clean.', 'airborne. I have eyes on the whole sector.'],
+    calm: ['airborne. Radar is up — I count multiple hostiles.', 'on station. Picture is hot, bandits everywhere.'],
     panic: ['airborne! The scope is full of red!', 'on station — enemy numbers are off the charts!']
   },
   approach: {
-    calm: ['commencing approach.', 'RTB, requesting landing.', 'low on fuel, coming home.'],
-    combat: ['winchester, RTB to rearm.', 'bingo fuel, coming in hot.', 'out of missiles, requesting recovery.', 'need to rearm, coming in.'],
+    peace: ['commencing approach.', 'RTB, requesting landing.', 'low on fuel, coming home.'],
+    calm: ['winchester, RTB to rearm.', 'bingo fuel, coming in hot.', 'out of missiles, requesting recovery.', 'need to rearm, coming in.'],
     panic: ["I'm hit, coming in! Clear the deck!", 'winchester and bingo, coming home under fire!', 'battle damage, I need that deck now!']
   },
   callBall: {
-    calm: ['{c}, call the ball.'],
-    combat: ['{c}, call the ball. Make it quick!', '{c}, call the ball, bandits on your six!'],
+    peace: ['{c}, call the ball.'],
+    calm: ['{c}, call the ball. Make it quick!', '{c}, call the ball, bandits on your six!'],
     panic: ['{c}, just get it down! Call the ball!', '{c}, ball! Now, now!']
   },
   trap: {
-    calm: ['Three-wire. Nice trap.', 'Good pass. Welcome home.', 'Two-wire, fair pass.', 'Four-wire. Try harder next time.', 'OK pass, three-wire.'],
-    combat: ['Trapped! Rearm and refuel, fast!', 'Good trap. Ordnance crews, move!', 'On deck. Get that bird turned around!'],
+    peace: ['Three-wire. Nice trap.', 'Good pass. Welcome home.', 'Two-wire, fair pass.', 'Four-wire. Try harder next time.', 'OK pass, three-wire.'],
+    calm: ['Trapped! Rearm and refuel, fast!', 'Good trap. Ordnance crews, move!', 'On deck. Get that bird turned around!'],
     panic: ['Trapped! Get it below, now!', 'On deck! Hurry, more bandits inbound!', 'Caught a wire! Clear the landing area!']
   },
   heliUp: {
-    calm: ['lifting off.', 'airborne, heading out.', 'wheels up.'],
-    combat: ['lifting off, staying low!', 'airborne, keep your heads down!', 'up and moving, watch the flak!'],
+    peace: ['lifting off.', 'airborne, heading out.', 'wheels up.'],
+    calm: ['lifting off, staying low!', 'airborne, keep your heads down!', 'up and moving, watch the flak!'],
     panic: ['lifting off under fire!', 'airborne — that was close!']
   },
   heliCleared: {
-    calm: ['{c}, cleared to land.'],
-    combat: ['{c}, cleared to land, make it fast!', '{c}, deck is clear, get down quick!'],
+    peace: ['{c}, cleared to land.'],
+    calm: ['{c}, cleared to land, make it fast!', '{c}, deck is clear, get down quick!'],
     panic: ["{c}, land now, we're under attack!", '{c}, get down, get down!']
   },
   heliDown: {
-    calm: ['on deck.', 'touchdown. Shutting down.', 'safe on deck.'],
-    combat: ['on deck, rearm us quick!', 'down. Refuel and we go again.'],
+    peace: ['on deck.', 'touchdown. Shutting down.', 'safe on deck.'],
+    calm: ['on deck, rearm us quick!', 'down. Refuel and we go again.'],
     panic: ['down! That was too close!', 'on deck — we took some hits!']
   }
 };
 /* returns [text, hot]: hot lines keep their priority during combat */
-function opsLine(key, c) {
-  const pool = OPS[key], armed = AUD.armed;
-  const tier = !armed ? 'calm' : (STRESS.tier === 'panic' && pool.panic ? 'panic' : pool.combat ? 'combat' : 'calm');
-  return [pick(pool[tier]).replace(/\{c\}/g, c || ''), armed];
-}
+function opsLine(key, c) { return [radioLine(OPS[key], { c: c || '' }), AUD.armed]; }
 
 /* ===== Combat chatter by stress tier ===== */
 const COMBAT = {
@@ -226,6 +242,17 @@ const COMBAT = {
     panic: ['They just keep coming! Every gun, open fire!', 'Massive enemy wave! Defend the carrier at all costs!']
   },
   end: ['Airspace is clear. Good work, everyone.', 'No more contacts on radar. Stand down.', 'Enemy has withdrawn. Nice work out there.'],
+  // the music stopped: hold DISARM_DELAY s, then `end` — or `resume` if it starts again
+  lull: {
+    calm: ['No more contacts on the scope. Stand by.', "Scope's clearing. Hold your fire, stay sharp.", "Last bandit's off the scope. Holding."],
+    tense: ["Contacts fading... Don't relax yet.", 'Scope is quiet. Too quiet. Stay alert.'],
+    panic: ["They've pulled back... Is that all of them?", 'No contacts... Everybody hold, they could be regrouping.']
+  },
+  resume: {
+    calm: ['New contacts! Here they come again!', 'Scratch that, more bandits inbound. Weapons free!'],
+    tense: ["They're back! All units, re-engage!", 'Contacts reappearing! Weapons free!'],
+    panic: ["It was a feint! They're coming back in force!", 'More of them! Back to your guns!']
+  },
   awacs: {
     calm: ['Enemy fighters inbound, bearing two-seven-zero.', 'Good kill. Next group is closing fast.', 'Keep the enemy away from the fleet!', 'Enemy formation breaking up. Keep the pressure on.'],
     tense: ['Multiple enemy flights inbound, all units weapons free!', 'Enemy strength increasing! Hold your ground!', 'Vampires launched, ships, stand by!'],
@@ -244,42 +271,122 @@ const COMBAT = {
   vampireDown: ['Vampire splashed!', 'Missile intercepted!', 'CIWS kill!', 'Got the vampire!'],
   shipHit: ["We've been hit! Damage control!", 'Missile impact! Fires on deck!', 'Hit, starboard side! Still fighting!'],
   newBandits: ['New contacts, bearing {B}, {N}! Identified as {T}.', 'Bogeys inbound from the {D}, {N}! Type: {T}.', '{T}, bearing {B}, closing fast!', '{T}s inbound from the {D}, {N}!'],
-  vampires: ['Vampire, vampire! Bearing {B}!', 'Inbound anti-ship missiles, bearing {B}!', 'Missile launch detected! Vampires inbound!']
+  vampires: ['Vampire, vampire! Bearing {B}!', 'Inbound anti-ship missiles, bearing {B}!', 'Missile launch detected! Vampires inbound!'],
+  vampLaunch: ['Vampire launch! Bandit fired on us!', 'Missile off the rail, inbound!'],
+  vls: ['Birds away!', 'Standard missile away!', 'Launching SM-2!'],
+  flybyIn: { calm: ['Engaging!', 'Beginning attack run.', 'Rolling in, cover me.'], tense: ['Coming in hot!', 'Rolling in, hold on, fleet!'], panic: ['Coming in hot! Hang on down there!'] }
 };
 
 /* ---- air combat passes (js/airwar.js): each line matches what is on screen at that moment ----
    {T} enemy type, {C} callsign, {B} bearing, {D} compass direction */
 const AIRWAR_LINES = {
-  engage: ['Breaking off to intercept!', 'Flight, follow me in. Weapons free!', "Leaving the orbit. Let's go hunting.", 'Engaging! Stay on my wing.', 'Pushing out to intercept, buster!'],
-  rtb: ['Bandits cleared. Rejoining the orbit.', "Fight's over. Heading back to station.", 'Returning to the orbit. Good hunting, everyone.', 'Winchester on missiles. Coming back to station.'],
+  engage: {
+    calm: ['Breaking off to intercept!', 'Flight, follow me in. Weapons free!', "Leaving the orbit. Let's go hunting."],
+    tense: ['Engaging! Stay on my wing.', 'Pushing out to intercept, buster!', 'More of them coming. Flight, with me!'],
+    panic: ['Everyone with me, now! Engage!', "No time, they're on top of the fleet! Engaging!", 'Break off and fight! Go, go!']
+  },
+  rtb: {
+    calm: ['Bandits cleared. Rejoining the orbit.', "Fight's over. Heading back to station.", 'Returning to the orbit. Good hunting, everyone.'],
+    tense: ['Winchester on missiles. Coming back to station.', 'That was close. Rejoining the orbit.'],
+    panic: ['We made it. Barely. Returning to station.', 'Low on everything. Heading back to the orbit.', 'Is it really over? Rejoining.']
+  },
   chaseIntro: {
     calm: ["{T} at my twelve, I'm on him!", 'Tally one {T}, engaging!', 'Got him in my sights!', "On his six. He's not getting away."],
     tense: ['{T} dead ahead, going for the kill!', "I'm on his tail! Stay with me!", "He's trying to shake me. No chance!"],
     panic: ["I'm on him, I'm on him!", 'Got one in front of me! Going for it!']
   },
-  chaseEscape: ["He's bugging out. Let him go.", "Missed him! He's out of range.", 'He slipped away. Damn it!', 'Lost him. He ran for it.'],
+  chaseEscape: {
+    calm: ["He's bugging out. Let him go.", 'Lost him. He ran for it.'],
+    tense: ["Missed him! He's out of range.", 'He slipped away. Damn it!'],
+    panic: ["He got away! He'll be back!", "Can't chase him, too many others!"]
+  },
   chasedIntro: {
     calm: ['{T} on my six! Shaking him off.', 'Bandit on my tail, defending.', "He's behind me, breaking left!"],
     tense: ["Bandit on my six! Can't shake him!", 'Break right, break right!', "He's all over me!", "I'm taking fire!"],
     panic: ["I can't shake him!", 'Someone get this guy off me!', "He's right behind me! Help!"]
   },
-  saveIntro: ["Hang on, {C}, I'm on him!", 'Moving in, {C}! Keep him busy!', "I've got him, {C}! Break left!", '{C}, hold on, coming in hot!'],
-  sixWarning: ['{C}, bandit on your six!', '{C}, check six! Check six!', "{C}, you've got one on your tail!"],
-  thanks: ['Thanks, I owe you one!', "He's off me. Thanks!", "Good shooting! I'm clear.", 'Close one. Thanks for the save.'],
-  sweep: ['Sweeping through. Eyes open.', 'Passing over the fleet, no tally.', 'Low and fast over the ships, looking for leakers.'],
-  fox: ['Fox 2!', 'Fox 3!', 'Fox 2, Fox 2!', 'Missile away!'],
-  guns: ['Guns, guns, guns!', 'Guns!', 'Hosing him down!'],
-  flares: ['Flares! Flares!', 'Defending, popping flares!', 'Missile lock! Countermeasures!'],
-  heliOut: ['Moving out to hunt surface contacts, bearing {B}.', "Going low. We'll take the boats.", 'Heading out, hunting small boats to the {D}.', "Rolling out to cover the fleet's flank."],
-  heliAway: ['Engaging small boats to the {D}, rockets away!', 'Two boats burning to the {D}. Looking for more.', 'Hellfire hit, target destroyed. {D} sector clear.',
-    'Taking fire from the boats to the {D}, still in the fight!', 'Gun run on a patrol craft, {D} of the fleet.'],
-  boatContact: ["Surface contacts, fast attack craft bearing {B}. Gunships, they're yours.", 'Small boats closing from the {D}! Gunships, engage!', 'Patrol boats inbound, bearing {B}.'],
-  boatsIntro: ['Small boats below, rolling in!', 'Fast attack craft, I see them! Rockets!', "Boats at twelve o'clock, going hot.", 'Tally the boats. Engaging.'],
-  boatFire: ['Taking fire from the boats!', "Tracers! They're shooting at us!", "Boat's got a gun on us, jinking!"],
-  boatKill: ['Boat destroyed!', 'Scratch one boat!', 'Target burning!', "Good hit, boat's going down!"],
-  cover: ['Covering the fleet, eyes open.', 'Low pass over the ships, hunting leakers.', 'Watching for vampires over the fleet.'],
-  sidewinder: ['Fox 2! Sidewinder away!', 'Sidewinder away!', 'Taking the shot, Fox 2!'],
-  vampGun: ['Gun on the vampire!', 'Shooting at the missile!', 'Firing on the vampire!']
+  saveIntro: {
+    calm: ["Hang on, {C}, I'm on him!", 'Moving in, {C}! Keep him busy!'],
+    tense: ["I've got him, {C}! Break left!", '{C}, hold on, coming in hot!'],
+    panic: ["{C}, hold on! I'm coming!", 'Hang in there, {C}! Almost on him!']
+  },
+  sixWarning: {
+    calm: ['{C}, bandit on your six.', '{C}, check six.'],
+    tense: ['{C}, check six! Check six!', "{C}, you've got one on your tail!"],
+    panic: ['{C}, BREAK! Bandit on your six!', "{C}, he's right behind you! Break now!"]
+  },
+  thanks: {
+    calm: ['Thanks, I owe you one!', "Good shooting! I'm clear."],
+    tense: ["He's off me. Thanks!", 'Close one. Thanks for the save.'],
+    panic: ['Thank God! I thought I was done!', 'You saved my life out there!']
+  },
+  sweep: {
+    calm: ['Sweeping through. Eyes open.', 'Passing over the fleet, no tally.'],
+    tense: ['Low and fast over the ships, looking for leakers.', 'Sweeping the sector, stay sharp.'],
+    panic: ["Sweeping again, there's got to be more!", 'Keep looking! They could be anywhere!']
+  },
+  fox: {
+    calm: ['Fox 2!', 'Fox 3!', 'Missile away!'],
+    tense: ['Fox 2, Fox 2!', 'Fox 3! Another one away!'],
+    panic: ['Fox 2! Just go down!', 'Missile away! Come on, hit!']
+  },
+  guns: {
+    calm: ['Guns!', 'Guns, guns, guns!'],
+    tense: ['Hosing him down!', 'Guns! Eat this!'],
+    panic: ["Guns! I'm out of missiles!", 'Shooting everything I have!']
+  },
+  flares: {
+    calm: ['Flares, defending.', 'Popping flares.'],
+    tense: ['Missile lock! Countermeasures!', 'Defending, popping flares!'],
+    panic: ["Flares, flares! He's got me locked!", 'Missile on me! Dumping everything!']
+  },
+  heliOut: {
+    calm: ['Moving out to hunt surface contacts, bearing {B}.', "Going low. We'll take the boats."],
+    tense: ['Heading out, hunting small boats to the {D}.', "Rolling out to cover the fleet's flank."],
+    panic: ['Boats all over the {D}! Moving out!', 'Going low and fast, bearing {B}. Wish us luck!']
+  },
+  heliAway: {
+    calm: ['Engaging small boats to the {D}, rockets away!', 'Hellfire hit, target destroyed. {D} sector clear.'],
+    tense: ['Two boats burning to the {D}. Looking for more.', 'Gun run on a patrol craft, {D} of the fleet.'],
+    panic: ['Taking fire from the boats to the {D}, still in the fight!', "There's dozens of boats to the {D}! Rockets away!"]
+  },
+  boatContact: {
+    calm: ["Surface contacts, fast attack craft bearing {B}. Gunships, they're yours.", 'Patrol boats inbound, bearing {B}.'],
+    tense: ['Small boats closing from the {D}! Gunships, engage!', 'More boats, bearing {B}! Gunships, intercept!'],
+    panic: ['Boat swarm from the {D}! Stop them before they reach the ships!', 'Fast attack craft everywhere, bearing {B}!']
+  },
+  boatsIntro: {
+    calm: ['Tally the boats. Engaging.', "Boats at twelve o'clock, going hot."],
+    tense: ['Small boats below, rolling in!', 'Fast attack craft, I see them! Rockets!'],
+    panic: ['Boats right under us! Firing!', "They're heading for the ships! Engaging!"]
+  },
+  boatFire: {
+    calm: ['Taking fire from the boats.', 'Small arms from the boats, jinking.'],
+    tense: ["Tracers! They're shooting at us!", "Boat's got a gun on us, jinking!"],
+    panic: ["We're taking hits from the boats!", 'Heavy fire from below! Hang on!']
+  },
+  boatKill: {
+    calm: ['Boat destroyed.', 'Scratch one boat.'],
+    tense: ['Target burning!', "Good hit, boat's going down!"],
+    panic: ["Boat's down! Next one!", 'Got one! More boats coming!']
+  },
+  cover: {
+    calm: ['Covering the fleet, eyes open.', 'Watching for vampires over the fleet.'],
+    tense: ['Low pass over the ships, hunting leakers.', 'Staying close to the fleet, weapons hot.'],
+    panic: ['Staying over the ships! Nothing gets through!', 'Covering the carrier, whatever it takes!']
+  },
+  sidewinder: {
+    calm: ['Sidewinder away!', 'Taking the shot, Fox 2.'],
+    tense: ['Fox 2! Sidewinder away!', 'Fox 2 from the helo!'],
+    panic: ['Sidewinder away! Get off our fleet!', 'Fox 2! Take that!']
+  },
+  vampGun: {
+    calm: ['Gun on the vampire.', 'Firing on the vampire.'],
+    tense: ['Gun on the vampire!', 'Shooting at the missile!'],
+    panic: ['Vampire! Shoot it down, shoot it down!', 'Gun on the missile! Come on!']
+  },
+  hellfire: { calm: ['Hellfire away.'], tense: ['Hellfire away!', 'Hellfire, rifle!'], panic: ['Hellfire away! Sink it!'] },
+  rockets: { calm: ['Rockets away.', 'Firing rockets.'], tense: ['Rockets away!', 'Rippling rockets!'], panic: ['Rockets! Everything we have!'] }
 };
 
 /* ---- the 5-second check before combat ---- */

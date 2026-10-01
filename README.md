@@ -139,7 +139,7 @@ skim in toward the ships.
 Stress builds over ~10 minutes of continuous music and falls off in silence. The panel shows it as **THREAT**.
 
 It changes:
-- the radio tone (calm → tense → panic);
+- the radio tone (calm → tense → panic) — every combat call, from the deck crew to the dogfights, has lines for each level;
 - the radio frequency;
 - enemy wave size and spawn rate.
 
@@ -159,6 +159,11 @@ arming and `COMBAT` once the fleet engages.
 
 During those 5 seconds the radio reports unidentified radar contacts. If the sound stops early,
 a "false alarm, stand down" call follows; otherwise combat begins.
+
+Combat doesn't end the moment the music stops. After a short silence the radio reports that the scope is clear,
+and the STATUS line shows `NO CONTACTS · Ns`. For 5 seconds no new enemies or passes appear and no missions
+are sent. If the music comes back in that time, the radio reports new contacts and the fight continues at once;
+otherwise the fleet stands down ("Airspace is clear") and the aircraft return to their orbits.
 
 ## Deck parking
 

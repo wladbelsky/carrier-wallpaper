@@ -19,7 +19,7 @@ User-facing docs: `README.md` (keep it in sync when behaviour or properties chan
 | `js/models.js` | mesh helpers (`M`, `box`, `cyl`, `taper`, `prism`…), `mergeStatic`, `disposeTree`, nav lights, searchlights, CIWS/gun mounts, `buildCarrier`, `buildDestroyer` |
 | `js/airframes.js` | aircraft model builders → `{ group, setFold(f), tick(dt, st) }` |
 | `js/effects.js` | `Tracers` (InstancedMesh), `SpriteFX` (flash/smoke pools), `Splashes`, `Foam` (points), `FlashLights` |
-| `js/radio.js` | callsigns, `RADIO` subtitle queue, mission orders, `STRESS`, tiered lines `OPS` / `COMBAT` |
+| `js/radio.js` | callsigns, `RADIO` subtitle queue, mission orders, `STRESS` + `THREAT_TIERS`, `radioLine()`, line pools `OPS` / `COMBAT` / `AIRWAR_LINES` / `LINES` (see "Radio lines & threat tiers") |
 | `js/aircraft.js` | `Aircraft` → `FixedWing` / `Helicopter` state machines, deck resources `FD` / `DECK`, types, `Flyby` |
 | `js/combat.js` | enemies: `ENEMY_TYPES` (Su-25/33/47/57 — model builders live in `airframes.js`; speed, altitude, hp, anti-ship missile chance, stress-based weight), vampires, boats, dogfight bandits (`duel`, flying a pass path), beat-synced hit resolution, ship damage |
 | `js/airwar.js` | `AIRWAR`: combat passes — armed aircraft wait off-screen (`cbt_wait`) and cross the screen chasing / chased by a dogfight bandit or hunting boats; screen helpers (`ndc`, `onScreen`, `groundAt`), pass weapons on the beat (`AIRWAR.onBeat`), pass radio |
@@ -30,7 +30,7 @@ User-facing docs: `README.md` (keep it in sync when behaviour or properties chan
 
 ## Rules / conventions
 - **After changing any JS/CSS file, bump the cache-buster** `?v=N` on all `<script>`/`<link>` tags in
-  `index.html` (WE's CEF caches aggressively). Current: `v=27`.
+  `index.html` (WE's CEF caches aggressively). Current: `v=29`.
 - **New WE property**: add it to `project.json`, read it in `applyUserProperties` (`main.js`) into `CFG`,
   then run `python tools/gen_properties.py`. Property `order` decides the browser-drawer group
   (0–9 camera/time, 10–19 audio/combat, 20–29 sea, 30–39 panel, 40–49 air wing, 50–59 hull number).
@@ -44,6 +44,32 @@ User-facing docs: `README.md` (keep it in sync when behaviour or properties chan
   The CMV-22B tiltrotor is a `Helicopter` with `conv` (0 = VTOL, 1 = airplane mode) and `gearDown` getters read by its model.
 - Match the existing style: dense one-liners, short comments, `const` scratch vectors at module level.
 - Sim time is `T` (advances only in `step(dt)`); real time is `RT()` (audio arming, beat gaps).
+- **Combat state** is latched in `updateArming()` (`main.js`, first thing in `step`): `AUD.hot` = sound for
+  `ARM_DELAY` s → `AUD.combat` (read everywhere as `AUD.armed`). When the sound stops, `AUD.holding` is true for
+  `DISARM_DELAY` s: still `armed` (aircraft stay engaged, no missions), but not `AUD.fighting` — no new waves, passes,
+  weapons on the beat or chatter, and inbound vampires are intercepted / boats turn away. Radio `COMBAT.lull`, then
+  `COMBAT.end` on stand-down, or `COMBAT.resume` if sound keeps going for `RESUME_DELAY` s.
+  Use `AUD.fighting` for anything that should only happen while the fight is on; `AUD.armed` for "combat mode".
+
+## Radio lines & threat tiers (`js/radio.js`)
+- **Every radio line goes through `radioLine(pool, vars)`** — never `pick()` a line pool directly, never build
+  lines with `.replace('{X}', …)`. `opsLine(key, c)` (flight-deck calls) is a thin wrapper returning `[text, hot]`.
+- **Pools** live in `radio.js`: `OPS` (deck routine), `COMBAT` (fleet/combat chatter), `AIRWAR_LINES` (combat passes),
+  `LINES` (alerts, mission acknowledgements), `MISSIONS` (order/done pairs). A pool is either
+  - an array — the same lines at any time, or
+  - an object keyed by threat tier (`calm`, `tense`, `panic`, …) plus optional `peace` (used outside combat).
+- **Tiers** are defined once in `THREAT_TIERS` (calmest first, `upTo` = upper bound of `STRESS.level`).
+  To add a tier, add an entry there and lines under its key where wanted; nothing else changes.
+- **Resolution:**
+  - outside combat (`!AUD.armed`): `peace` if present, otherwise the current tier;
+  - in combat: the current tier, but `MIX_CALMER` (30 %) of the time one tier calmer, repeatable down the tiers;
+  - a missing tier key falls back to the next calmer tier, then to any tier present.
+  So a pool may define only some tiers (e.g. `{ calm, panic }`).
+- **Placeholders** `{name}` are filled from `vars` (`radioLine(pool, { C: callsign, T: type })`); unknown ones stay as
+  they are. In use: `{c}` deck-call callsign, `{C}` callsign, `{T}` enemy type, `{B}` bearing words, `{D}` compass
+  direction, `{N}` bandit count; missions also use `{S}` sector, `{G}` grid, `{P}` passengers, `{W}` pounds.
+- **New line set:** add the pool (tiered when it is said in combat) and call `radioLine`. Combat lines are sent with
+  `cat: 'combat'`; the queue drops stale ones (prio < 3 after 4 s), so speak them when the event is on screen.
 
 ## Performance & memory invariants (the wallpaper never restarts — leaks accumulate for days)
 - **Never create geometry per spawn and drop it.** Enemies are clones of one template (`enemyMesh()`

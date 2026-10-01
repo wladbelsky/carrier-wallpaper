@@ -639,7 +639,7 @@ class Flyby {
       }
     }
     if (!this.announced && AUD.armed && this.planes[0].p.length() < 90) {
-      this.announced = true; RADIO.say(this.planes[0].cs, pick(['Engaging!', 'Coming in hot!', 'Beginning attack run.', 'Rolling in, cover me.']), { role: 'ace', cat: 'combat', prio: 0 });
+      this.announced = true; RADIO.say(this.planes[0].cs, radioLine(COMBAT.flybyIn), { role: 'ace', cat: 'combat', prio: 0 });
     }
     if (this.t * this.speed > 310) { this.dead = true; for (const pl of this.planes) { scene.remove(pl.m); FLYBY_MODELS[this.type].push(pl.model); } }
   }

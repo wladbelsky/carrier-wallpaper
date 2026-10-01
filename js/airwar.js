@@ -14,7 +14,6 @@ const _nd = new V3(), _ro = new V3(), _rd = new V3(), _fs = new V3();
 const FLARES = [], FLARE_DRAG = 0.9, FLARE_G = 5;
 const FLARE_STATES = new Set(['orbit', 'climb', 'depart', 'cbt_pass', 'cbt_rtb', 'mission_out', 'mission_back']);
 const CBT = { cat: 'combat', prio: 2 }, CBT0 = { cat: 'combat', prio: 0 };
-const fillLine = (t, o) => t.replace('{T}', o.T || '').replace('{C}', o.C || '').replace('{B}', o.B || '').replace('{D}', o.D || '');
 const shortType = e => ENEMY_TYPES[e.type].name.split(' ')[0];
 
 const AIRWAR = {
@@ -96,7 +95,7 @@ const AIRWAR = {
         p.boats.push(spawnBoat(st, dir, sp));
       }
       const b0 = p.boats[0].p, bh = Math.atan2(b0.z, b0.x);
-      sayOnce('boats', 25, () => { const [w, role] = hq(); RADIO.say(w, fillLine(pick(AIRWAR_LINES.boatContact), { B: bearingWords(bh), D: compassWord(bh) }), { role, cat: 'combat', prio: 1 }); });
+      sayOnce('boats', 25, () => { const [w, role] = hq(); RADIO.say(w, radioLine(AIRWAR_LINES.boatContact, { B: bearingWords(bh), D: compassWord(bh) }), { role, cat: 'combat', prio: 1 }); });
     }
     this.passes.push(p);
   },
@@ -106,7 +105,7 @@ const AIRWAR = {
     camera.updateMatrixWorld();
     this.updateFlares(dt);
     for (let i = this.passes.length - 1; i >= 0; i--) if (!this.tickPass(this.passes[i], dt)) this.passes.splice(i, 1);
-    if (!combatOn()) return;
+    if (!combatOn() || !AUD.fighting) return;   // holding after the music stopped: no new passes
     const st = STRESS.level;
     if ((this.timer -= dt) <= 0) { this.timer = rand(2.5, 5) * (1 - 0.4 * st); if (this.passes.filter(p => !p.heli).length < 2 + st) this.startJetPass(); }
     if ((this.heliTimer -= dt) <= 0) { this.heliTimer = rand(5, 9) * (1 - 0.3 * st); if (this.passes.filter(p => p.heli).length < (st > 0.5 ? 2 : 1)) this.startHeliPass(); }
@@ -115,15 +114,15 @@ const AIRWAR = {
     const away = AIRCRAFT.filter(a => a.state === 'cbt_wait' && a instanceof Helicopter && a.t > 4);
     if (away.length) sayOnce('heliAway', rand(14, 22), () => {
       const a = pick(away), h = Math.atan2(a.mesh.position.z, a.mesh.position.x);
-      a.say(fillLine(pick(AIRWAR_LINES.heliAway), { D: compassWord(h) }), CBT0);
+      a.say(radioLine(AIRWAR_LINES.heliAway, { D: compassWord(h) }), CBT0);
     });
   },
   tickPass(p, dt) {
     const live = p.crew.filter(a => a.pass === p && a.state === 'cbt_pass'), b = p.bandit;
     if (!p.intro && (live.some(a => this.onScreen(a.mesh.position, -0.1)) || (enemyAlive(b) && this.onScreen(b.p, -0.1)))) { p.intro = true; this.introLines(p); }
     if (b && !p.outcome) {
-      if (b.falling) { p.outcome = 'kill'; if (p.kind === 'chased' && Math.random() < 0.7) p.crew[0].say(pick(AIRWAR_LINES.thanks), Object.assign({ delay: 1.8 }, CBT0)); }
-      else if (b.escaped) { p.outcome = 'escaped'; if (p.kind === 'chase' && p.intro && Math.random() < 0.6) p.crew[0].say(pick(AIRWAR_LINES.chaseEscape), CBT0); }
+      if (b.falling) { p.outcome = 'kill'; if (p.kind === 'chased' && Math.random() < 0.7) p.crew[0].say(radioLine(AIRWAR_LINES.thanks), Object.assign({ delay: 1.8 }, CBT0)); }
+      else if (b.escaped) { p.outcome = 'escaped'; if (p.kind === 'chase' && p.intro && Math.random() < 0.6) p.crew[0].say(radioLine(AIRWAR_LINES.chaseEscape), CBT0); }
     }
     if (enemyAlive(b) && b.gunT > 0) this.enemyGuns(b, b.cbtTgt, dt);
     for (const e of p.boats) if (enemyAlive(e) && e.gunT > 0) this.enemyGuns(e, e.gunAt, dt);
@@ -132,14 +131,14 @@ const AIRWAR = {
   introLines(p) {
     const [a, w] = p.crew, L = AIRWAR_LINES;
     switch (p.kind) {
-      case 'chase': a.say(fillLine(STRESS.pick(L.chaseIntro), { T: shortType(p.bandit) }), CBT); break;
+      case 'chase': a.say(radioLine(L.chaseIntro, { T: shortType(p.bandit) }), CBT); break;
       case 'chased':
-        if (w) { a.say(fillLine(STRESS.pick(L.chasedIntro), { T: shortType(p.bandit) }), CBT); w.say(fillLine(pick(L.saveIntro), { C: a.callsign }), Object.assign({ delay: 0.8 }, CBT)); }
-        else { const [who, role] = hq(); RADIO.say(who, fillLine(pick(L.sixWarning), { C: a.callsign }), { role, cat: 'combat', prio: 2 }); a.say(fillLine(STRESS.pick(L.chasedIntro), { T: shortType(p.bandit) }), Object.assign({ delay: 0.8 }, CBT)); }
+        if (w) { a.say(radioLine(L.chasedIntro, { T: shortType(p.bandit) }), CBT); w.say(radioLine(L.saveIntro, { C: a.callsign }), Object.assign({ delay: 0.8 }, CBT)); }
+        else { const [who, role] = hq(); RADIO.say(who, radioLine(L.sixWarning, { C: a.callsign }), { role, cat: 'combat', prio: 2 }); a.say(radioLine(L.chasedIntro, { T: shortType(p.bandit) }), Object.assign({ delay: 0.8 }, CBT)); }
         break;
-      case 'sweep': if (Math.random() < 0.35) a.say(pick(L.sweep), CBT0); break;
-      case 'boats': a.say(pick(L.boatsIntro), CBT); break;
-      case 'cover': if (Math.random() < 0.4) a.say(pick(L.cover), CBT0); break;
+      case 'sweep': if (Math.random() < 0.35) a.say(radioLine(L.sweep), CBT0); break;
+      case 'boats': a.say(radioLine(L.boatsIntro), CBT); break;
+      case 'cover': if (Math.random() < 0.4) a.say(radioLine(L.cover), CBT0); break;
     }
   },
   /* enemy gunfire (dogfight bandit at its quarry, boats at the helicopters): aimed a little off — it misses */
@@ -201,7 +200,7 @@ const AIRWAR = {
       for (const e of p.boats) {
         if (!enemyAlive(e) || !this.onScreen(e.p, -0.05) || Math.random() > 0.5 * f) continue;
         const h = p.crew.find(a => a.pass === p && a.mesh.position.distanceTo(e.p) < 40); if (!h) continue;
-        e.gunT = 0.4; e.gunAt = h; sayOnce('boatFire', 10, () => h.say(pick(AIRWAR_LINES.boatFire), CBT0));
+        e.gunT = 0.4; e.gunAt = h; sayOnce('boatFire', 10, () => h.say(radioLine(AIRWAR_LINES.boatFire), CBT0));
       }
     }
   },
@@ -212,7 +211,7 @@ const AIRWAR = {
     // the kill shot waits until the fight is well inside the screen, so the chase plays out on screen
     const deep = this.onScreen(a.mesh.position, -0.3) && tg && this.onScreen(tg.p, -0.2);
     if (band === 'low') {
-      if (deep && shots < 2 && this.ahead(a, tg, 8, 70) && Math.random() < 0.45 * f) { a.fireMissile(tg); if (Math.random() < 0.4) a.say(pick(L.fox), CBT0); return 1; }
+      if (deep && shots < 2 && this.ahead(a, tg, 8, 70) && Math.random() < 0.45 * f) { a.fireMissile(tg); if (Math.random() < 0.4) a.say(radioLine(L.fox), CBT0); return 1; }
       if (!CFG.enemies && Math.random() < 0.2 * f) { a.fireMissile(null); return 1; }
       const b = a.chasedBy;
       if (enemyAlive(b) && (a.flareT || 0) < T && this.onScreen(b.p, 0) && Math.random() < 0.6) {
@@ -221,10 +220,10 @@ const AIRWAR = {
         const decoy = this.dropFlares(a.mesh.position, a.fwd, a.v, 6).addScaledVector(a.fwd, -3), from = b.p.clone().addScaledVector(_rd.copy(b.v).normalize(), 1);
         const v = decoy.sub(from).normalize().multiplyScalar(b.speed + 30); v.y -= 2;
         MISSILES.push({ p: from, v, life: 1.6, smokeT: 0, glow: true });
-        sayOnce('flares', 6, () => a.say(pick(L.flares), CBT0));
+        sayOnce('flares', 6, () => a.say(radioLine(L.flares), CBT0));
       }
     } else if (band === 'mid' && tg && this.onScreen(tg.p, -0.1) && !(a.gunT > 0) && this.ahead(a, tg, 3, 35) && Math.random() < 0.7 * f) {
-      a.startGuns(tg, 0.3, 0.35); sayOnce('guns', 5, () => a.say(pick(L.guns), CBT0));
+      a.startGuns(tg, 0.3, 0.35); sayOnce('guns', 5, () => a.say(radioLine(L.guns), CBT0));
     }
     return 0;
   },
@@ -233,18 +232,18 @@ const AIRWAR = {
     const boat = nearestEnemy(pos, ['boat'], 45), vamp = nearestEnemy(pos, ['vampire'], 30);
     if (band === 'low') {
       const bandit = boat ? null : nearestEnemy(pos, ['bandit'], 60);
-      if (boat && Math.random() < 0.55 * f) { a.fireMissileAt(boat, 40, 0.8); sayOnce('hellfire', 6, () => a.say('Hellfire away!', CBT0)); }
-      else if (bandit && this.onScreen(bandit.p, 0) && Math.random() < 0.3 * f) { a.fireMissileAt(bandit, 55, 0.55); sayOnce('sidewinder', 6, () => a.say(pick(L.sidewinder), CBT0)); }
+      if (boat && Math.random() < 0.55 * f) { a.fireMissileAt(boat, 40, 0.8); sayOnce('hellfire', 6, () => a.say(radioLine(L.hellfire), CBT0)); }
+      else if (bandit && this.onScreen(bandit.p, 0) && Math.random() < 0.3 * f) { a.fireMissileAt(bandit, 55, 0.55); sayOnce('sidewinder', 6, () => a.say(radioLine(L.sidewinder), CBT0)); }
     } else if (band === 'mid') {
-      if (boat && boat.p.distanceTo(pos) < 35 && Math.random() < 0.6 * f) { a.fireRockets(boat); sayOnce('rockets', 5, () => a.say(pick(['Rockets away!', 'Firing rockets!', 'Rippling rockets!']), CBT0)); }
-      else if (vamp && !(a.gunT > 0) && Math.random() < 0.7 * f) { a.startGuns(vamp, 0.45, 0.4); sayOnce('vampGun', 6, () => a.say(pick(L.vampGun), CBT0)); }
+      if (boat && boat.p.distanceTo(pos) < 35 && Math.random() < 0.6 * f) { a.fireRockets(boat); sayOnce('rockets', 5, () => a.say(radioLine(L.rockets), CBT0)); }
+      else if (vamp && !(a.gunT > 0) && Math.random() < 0.7 * f) { a.startGuns(vamp, 0.45, 0.4); sayOnce('vampGun', 6, () => a.say(radioLine(L.vampGun), CBT0)); }
     }
   },
 
   /* --- hooks from the aircraft state machine --- */
   onEngage(a) {
     const heli = a instanceof Helicopter, h = Math.atan2(a.mesh.position.z, a.mesh.position.x);
-    sayOnce('engage ' + flightOf(a), 30, () => a.say(heli ? fillLine(pick(AIRWAR_LINES.heliOut), { B: bearingWords(h), D: compassWord(h) }) : pick(AIRWAR_LINES.engage), CBT0));
+    sayOnce('engage ' + flightOf(a), 30, () => a.say(heli ? radioLine(AIRWAR_LINES.heliOut, { B: bearingWords(h), D: compassWord(h) }) : radioLine(AIRWAR_LINES.engage), CBT0));
   },
-  onRtb(a) { if (!combatOn()) sayOnce('rtb ' + flightOf(a), 40, () => a.say(pick(AIRWAR_LINES.rtb), { prio: 1 })); }
+  onRtb(a) { if (!combatOn()) sayOnce('rtb ' + flightOf(a), 40, () => a.say(radioLine(AIRWAR_LINES.rtb), { prio: 1 })); }
 };
