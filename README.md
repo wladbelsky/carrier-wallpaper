@@ -42,7 +42,8 @@ helicopter departures and landings, and combat chatter while music is playing.
 - Callsigns come from Ace Combat 04 / 5 / Zero / 7 / 8:
   - **Squadrons:** Wardog, Razgriz, Mage, Spare, Strider, Mobius, Galm, Crow, Indigo, Wizard.
   - **AWACS:** SkyEye, Thunderhead, Eagle Eye, Long Caster, Bandog, Sky Keeper, Dealer.
-  - **Carrier:** KESTREL.
+  - **Ships:** carrier KESTREL, escorts BUCCANEER (port) and CUTLASS (starboard). The control panel
+    lists them with their status (on station / engaging / damaged).
 - Jets are grouped 4 per callsign, helicopters 2.
 - As in Ace Combat, the speaker's callsign is shown on its own line above the line, colored by role
   (pilots, AWACS, ships, helicopters, aces).

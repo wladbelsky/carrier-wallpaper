@@ -680,6 +680,18 @@ function buildUI() {
   };
   const meter = document.getElementById('meter');
   for (let i = 0; i < 28; i++) meter.appendChild(document.createElement('i'));
+  // ship callsigns, for reference
+  const fleet = document.getElementById('fleet');
+  SHIPS.forEach(s => {
+    const row = document.createElement('div'); row.className = 'row';
+    row.innerHTML = '<span class="tp"></span><span class="nm"></span><span class="st"></span>';
+    row.querySelector('.tp').textContent = s === CARRIER ? 'CVN' : 'DDG';
+    row.querySelector('.nm').innerHTML = '<b></b><i></i>';
+    row.querySelector('.nm b').textContent = s.radio;
+    row.querySelector('.nm i').textContent = s === CARRIER ? 'carrier' : s.side < 0 ? 'escort · port' : 'escort · stbd';
+    s.ui = { st: row.querySelector('.st') };
+    fleet.appendChild(row);
+  });
 }
 function updateUI() {
   const now = getNow();
@@ -703,6 +715,11 @@ function updateUI() {
     else { b.textContent = '···'; b.disabled = true; b.className = 'act'; }
   }
   document.getElementById('count').textContent = `${airN}/${AIRCRAFT.length}`;
+  const engaged = AUD.armed && CFG.fire > 0;
+  for (const s of SHIPS) {
+    const [txt, cls] = SHIP_FIRES.some(f => f.ship === s) ? ['DAMAGED', 'wait'] : engaged ? ['ENGAGING', 'busy'] : ['ON STATION', 'deck'];
+    s.ui.st.textContent = txt; s.ui.st.className = 'st ' + cls;
+  }
   const chk = document.getElementById("autoChk"); if (chk.checked !== CFG.auto) chk.checked = CFG.auto;
 }
 function updateMeter() {
