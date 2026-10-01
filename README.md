@@ -87,6 +87,8 @@ A "heaviness" meter (auto-gained loudness density) drives extra effects:
   - New bursts start at most every 0.4 s, with at most 2 mounts firing at once.
 - **Flak:** destroyer guns throw AA shells that burst in the sky on riffs and snares.
 - **Missiles:** on big hits, the destroyers launch SM-2s vertically from their VLS cells and the carrier fires RAM salvos.
+- **Flares:** now and then on the snare an aircraft on screen (air wing or fly-by jet) pops a few decoy flares
+  that arc down trailing thin smoke — one burst at a time, more often when the music is heavy.
 - **Camera shake** on heavy kicks — subtle, controlled by the **Camera shake on heavy hits** property.
 
 ## Air combat

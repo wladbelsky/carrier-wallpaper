@@ -9,13 +9,16 @@
                      flies near the fleet (bandits: Sidewinder, vampires: chin gun).
    Weapons fire on the beat (AIRWAR.onBeat); radio lines are spoken when the pass comes on screen.        */
 function combatOn() { return AUD.armed && CFG.fire > 0; }
-const _nd = new V3(), _ro = new V3(), _rd = new V3();
+const _nd = new V3(), _ro = new V3(), _rd = new V3(), _fs = new V3();
+// decoy flares: the glow is one flash sprite flying on its own; FLARES mirrors its motion for a thin smoke trail
+const FLARES = [], FLARE_DRAG = 0.9, FLARE_G = 5;
+const FLARE_STATES = new Set(['orbit', 'climb', 'depart', 'cbt_pass', 'cbt_rtb', 'mission_out', 'mission_back']);
 const CBT = { cat: 'combat', prio: 2 }, CBT0 = { cat: 'combat', prio: 0 };
 const fillLine = (t, o) => t.replace('{T}', o.T || '').replace('{C}', o.C || '').replace('{B}', o.B || '').replace('{D}', o.D || '');
 const shortType = e => ENEMY_TYPES[e.type].name.split(' ')[0];
 
 const AIRWAR = {
-  passes: [], timer: 2, heliTimer: 5,
+  passes: [], timer: 2, heliTimer: 5, flareCd: 0,
 
   /* --- screen helpers (orthographic camera: any zoom / rotation) --- */
   ndc(p) { return _nd.copy(p).project(camera); },
@@ -101,6 +104,7 @@ const AIRWAR = {
   /* --- per frame --- */
   update(dt) {
     camera.updateMatrixWorld();
+    this.updateFlares(dt);
     for (let i = this.passes.length - 1; i >= 0; i--) if (!this.tickPass(this.passes[i], dt)) this.passes.splice(i, 1);
     if (!combatOn()) return;
     const st = STRESS.level;
@@ -151,14 +155,40 @@ const AIRWAR = {
       if (Math.random() < 0.4) FX.flash.spawn(from, { s0: 0.7, s1: 1.0, life: 0.05, a0: 0.9 });
     }
   },
-  flares(a) {
-    const p = a.mesh.position.clone().addScaledVector(a.fwd, -0.8), back = a.fwd.clone().multiplyScalar(a.v * 0.3);
-    for (let i = 0; i < 6; i++) FX.flash.spawn(p, { s0: 0.9, s1: 0.4, life: rand(0.9, 1.4), a0: 1, color: 0xffe0a0, v: back.clone().add(new V3(rand(-3, 3), rand(-4, -1), rand(-3, 3))), drag: 0.6 });
+  /* n flares in pairs, kicked out left and right and down behind the aircraft; returns the release point */
+  dropFlares(pos, fwd, speed, n) {
+    const side = _fs.set(-fwd.z, 0, fwd.x).normalize(), p = pos.clone().addScaledVector(fwd, -0.6); p.y -= 0.15;
+    for (let i = 0; i < n; i++) {
+      const v = fwd.clone().multiplyScalar(speed * 0.35).addScaledVector(side, (i % 2 ? 1 : -1) * rand(2, 4)); v.y -= rand(1, 2.5);
+      const life = rand(1.1, 1.6);
+      FX.flash.spawn(p, { s0: 2.0, s1: 1.1, life, a0: 1, color: 0xfff0c0, v, drag: FLARE_DRAG, rise: -FLARE_G });
+      FLARES.push({ p: p.clone(), v: v.clone(), life, tt: rand(0, 0.3) });
+    }
     return p;
+  },
+  updateFlares(dt) {
+    for (let i = FLARES.length - 1; i >= 0; i--) {
+      const f = FLARES[i];
+      if ((f.life -= dt) <= 0) { FLARES.splice(i, 1); continue; }
+      f.v.multiplyScalar(Math.max(0, 1 - FLARE_DRAG * dt)); f.v.y -= FLARE_G * dt; f.p.addScaledVector(f.v, dt);   // same motion as the sprite
+      if ((f.tt -= dt) <= 0) { f.tt += 0.3; FX.smoke.spawn(f.p, { s0: 0.4, s1: 1.5, life: 1.0, a0: 0.45, smoke: true, v: new V3(-WAVE.flow * 0.5, 0.2, 0), drag: 0.5 }); }
+    }
+  },
+  /* flares on the snare: one aircraft at a time (at most one burst per 1.8 s, 5 s per aircraft), on screen only */
+  musicFlares(f) {
+    if (T < this.flareCd || Math.random() > (0.2 + 0.3 * AUD.heavy) * f) return;
+    const cands = AIRCRAFT.filter(a => a.mesh.visible && FLARE_STATES.has(a.state) && T > (a.flareT || 0) && this.onScreen(a.mesh.position, -0.05));
+    for (const fb of FLYBYS) for (const pl of fb.planes) if (T > (pl.flareT || 0) && this.onScreen(pl.p, -0.05)) cands.push(pl);
+    if (!cands.length) return;
+    const a = pick(cands), n = Math.random() < 0.5 ? 4 : 6;
+    a.flareT = T + 5; this.flareCd = T + 1.8;
+    if (a instanceof Aircraft) this.dropFlares(a.mesh.position, a.fwd, a.v, n);
+    else { const fb = FLYBYS.find(x => x.planes.includes(a)); this.dropFlares(a.p, fb.dir, fb.speed, n); }
   },
 
   /* --- weapons on the beat (only aircraft on screen fire) --- */
   onBeat(band, f) {
+    if (band === 'mid') this.musicFlares(f);
     let shots = 0;
     for (const p of this.passes) for (const a of p.crew) {
       if (a.pass !== p || a.state !== 'cbt_pass' || !this.onScreen(a.mesh.position, -0.05)) continue;
@@ -188,7 +218,7 @@ const AIRWAR = {
       if (enemyAlive(b) && (a.flareT || 0) < T && this.onScreen(b.p, 0) && Math.random() < 0.6) {
         // the bandit fires a missile, our fighter dumps flares and the missile goes for them
         a.flareT = T + 2.5;
-        const decoy = this.flares(a).addScaledVector(a.fwd, -3), from = b.p.clone().addScaledVector(_rd.copy(b.v).normalize(), 1);
+        const decoy = this.dropFlares(a.mesh.position, a.fwd, a.v, 6).addScaledVector(a.fwd, -3), from = b.p.clone().addScaledVector(_rd.copy(b.v).normalize(), 1);
         const v = decoy.sub(from).normalize().multiplyScalar(b.speed + 30); v.y -= 2;
         MISSILES.push({ p: from, v, life: 1.6, smokeT: 0, glow: true });
         sayOnce('flares', 6, () => a.say(pick(L.flares), CBT0));
