@@ -100,13 +100,19 @@ const MISSIONS = {
     ['sweep the coastline, grid {G}.', 'Coastline is clear. RTB.'],
     ['a patrol boat is shadowing the fleet, bearing {B}. Shoo it away.', 'Patrol boat turned back. Returning.']
   ],
-  cod: [
-    ['COD run to the shore base: mail, parts and passengers.', 'Inbound with fresh mail and spare parts.'],
-    ['pick up the replacement F135 engine module at the airfield, grid {G}.', 'Engine module aboard. Heading home.'],
+  cod: [   // CMV-22B: long carrier-onboard-delivery runs that end with a landing on the carrier
+    ['COD run to the shore base: mail, parts and passengers.', 'Inbound from the beach with {P} passengers and {W} pounds of mail and parts.'],
+    ['pick up the replacement F135 engine module at the airfield, grid {G}.', 'Engine module in the back, strapped down. Heading home.'],
     ['fly the inspection team over to the supply ship, bearing {B}.', 'Team delivered. Returning to Mother.'],
     ['medevac run to the hospital ship, bearing {B}.', 'Patient handed over. RTB.'],
     ['bring the spare radar module out from the shore base.', 'Got the parts. On our way back.'],
-    ['pick up the VIP party at the island airstrip, grid {G}.', 'VIPs aboard. Coming home, smooth ride guaranteed.']
+    ['pick up the VIP party at the island airstrip, grid {G}.', 'VIPs aboard. Coming home, smooth ride guaranteed.'],
+    ['fresh produce is waiting at the logistics hub, grid {G}. Go get it.', 'Inbound with {W} pounds of groceries. Tell the galley.'],
+    ['ferry {P} replacement aircrew out from the naval air station.', 'New aircrew aboard. Coming home.'],
+    ['rush the ordnance techs and missile spares to the destroyer group, bearing {B}.', 'Techs and spares delivered. Returning.'],
+    ['long-range logistics run to the forward base, grid {G}.', 'Inbound with {W} pounds of cargo for the air wing.'],
+    ['collect the mail at the amphibious group, bearing {B}.', 'Mail bags aboard. Morale is inbound.'],
+    ['the tanker at grid {G} has parts for our catapult. Go pick them up.', 'Catapult parts aboard. Deck crew, stand by.']
   ]
 };
 /* replies to a mission order: common lines plus a few per kind; never the same line twice in a row */
@@ -117,7 +123,8 @@ LINES.missionCopy = {
   fighter: ['Copy, going to burner. On our way.', 'Roger, climbing to angels two-five.', 'Copy. Weapons check complete, heading out.',
     "Flight, on me. Let's go.", 'Copy, fence in. Vectoring now.', 'Roger. Tanker on the way back, right?'],
   awacs: ['Copy, repositioning now.', 'Roger, moving the orbit. Picture stays live.', 'Understood, relocating. Keep the chatter down.'],
-  cod: ['Copy, converting to airplane mode. En route.', 'Roger, nacelles forward, on our way.', 'Copy. Loadmaster, secure the ramp.', 'Understood. Mail call in about an hour.'],
+  cod: ['Copy, converting to airplane mode. En route.', 'Roger, nacelles forward, on our way.', 'Copy. Loadmaster, secure the ramp.', 'Understood. Mail call in about an hour.',
+    'Roger. Long haul, crew, get comfortable.', "Copy. We'll bring back the good coffee this time."],
   heli: ['Copy, nose down, en route.', 'Roger, heading out low and fast.', "Understood, we're on our way. Crew, strap in.", 'Copy. ETA about ten minutes.']
 };
 let lastMissionCopy = '';
@@ -130,7 +137,8 @@ function makeMission(kind) {
   const [order, done] = pick(MISSIONS[kind]);
   const sectors = ['Alpha', 'Bravo', 'Charlie', 'Delta', 'Echo', 'Foxtrot', 'Kilo', 'Sierra'];
   const bearing = bearingWords(rand(0, TAU));
-  const fill = t => t.replace('{S}', pick(sectors)).replace('{B}', bearing).replace('{G}', `${randi(1, 9)}-${randi(1, 9)}`);
+  const fill = t => t.replace('{S}', pick(sectors)).replace('{B}', bearing).replace('{G}', `${randi(1, 9)}-${randi(1, 9)}`)
+    .replace('{P}', randi(4, 24)).replace('{W}', (randi(4, 24) * 500).toLocaleString('en-US'));
   return { order: fill(order), done: fill(done) };
 }
 

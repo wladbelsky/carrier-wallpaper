@@ -58,7 +58,7 @@ helicopter departures and landings, and combat chatter while music is playing.
 ## Missions
 
 While there is no music, flights periodically leave the screen on missions (CAP, intercepts, escorts,
-SAR, medevac, sonar searches, COD supply runs…). Each mission has its own radio orders, and the flight returns to the orbit afterwards.
+SAR, medevac, sonar searches…). Each mission has its own radio orders, and the flight returns to the orbit afterwards.
 
 - Assembled flights (all aircraft up and on station) go first; a partly launched flight only goes when
   no flight is complete. A four-ship flight goes as all four or as one of its pairs, chosen at random;
@@ -68,6 +68,8 @@ SAR, medevac, sonar searches, COD supply runs…). Each mission has its own radi
   by each aircraft (`WARDOG 3, WARDOG 4, …`); the lead answers with one of many acknowledgements
   (common ones plus fighter / AWACS / helicopter flavoured), never the same twice in a row.
 - Several flights can be away at once, but one flight always stays on station.
+- The CMV-22B flies its own COD runs (mail, cargo, engine modules, passengers, medevac): it stays away longer
+  and lands on the carrier when it comes back, reporting what it brought.
 - The **Missions off-screen** property controls how often this happens (0 = off).
 - Destroyer helicopters have their own callsigns: SEAHORSE and PETREL.
 

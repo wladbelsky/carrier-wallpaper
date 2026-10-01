@@ -160,7 +160,8 @@ class Aircraft {
         if (m.lead && m.done) this.say(m.done, { prio: 1 });
       }
     } else if (this.state === 'mission_back') {
-      if (this.followPath(dt)) { this.state = 'orbit'; this.mission = null; this.airT = 0; }
+      // COD runs end on deck: the cargo goes straight down to the hangar
+      if (this.followPath(dt)) { this.state = 'orbit'; this.mission = null; this.airT = 0; if (S.landAfterMission) this.landReq = true; }
     }
     return true;
   }
@@ -494,7 +495,7 @@ class AH1 extends Helicopter {
 }
 /* Tiltrotor: takes off and lands like a helicopter, converts to airplane mode (nacelles forward, gear up) in cruise */
 class CMV22 extends Helicopter {
-  static spec = Object.assign({}, Helicopter.spec, { key: 'cmv22', tag: 'CMV-22B', speed: 11, turnR: 12, orbitR: [30, 38], alt: [11, 14], bankMax: 0.55, foldRate: 0.12, blades: 3, noseDown: 0.02, missions: ['cod'] });
+  static spec = Object.assign({}, Helicopter.spec, { key: 'cmv22', tag: 'CMV-22B', speed: 11, turnR: 12, orbitR: [30, 38], alt: [11, 14], bankMax: 0.55, foldRate: 0.12, blades: 3, noseDown: 0.02, missions: ['cod'], missionAway: [100, 160], missionDist: 160, landAfterMission: true });
   get conv() { return this.state === 'orbit' || this.onMission ? 1 : this.state === 'depart' || this.state === 'ret' ? smoothstep(0.3, 0.85, this.v / this.spec.speed) : 0; }
   get gearDown() { return this.conv < 0.5; }
   buildModel() { return buildCMV22(); }

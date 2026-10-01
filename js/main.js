@@ -602,7 +602,8 @@ function dispatchFlight() {
   const lead = g.ready[0], isHeli = lead instanceof Helicopter;
   const kind = lead.isAwacs ? 'awacs' : lead.spec.missions ? pick(lead.spec.missions) : isHeli ? (lead.spec.armed ? 'heli_attack' : 'heli_transport') : 'fighter';
   const task = makeMission(kind);
-  const h = rand(0, TAU), dist = isHeli ? 120 : 175, perp = new V3(-Math.sin(h), 0, Math.cos(h)), away = rand(50, 110);
+  const S = lead.spec, h = rand(0, TAU), dist = S.missionDist || (isHeli ? 120 : 175), perp = new V3(-Math.sin(h), 0, Math.cos(h));
+  const away = S.missionAway ? rand(S.missionAway[0], S.missionAway[1]) : rand(50, 110);
   g.ready.forEach((a, i) => {
     const far = new V3(Math.cos(h) * dist, a.orbit.alt, Math.sin(h) * dist).addScaledVector(perp, (i - (g.ready.length - 1) / 2) * 6);
     a.startMission({ far, heading: h, delay: i * 1.6, away: away + i * 1.6, lead: i === 0, done: task.done });

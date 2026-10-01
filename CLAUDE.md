@@ -29,7 +29,7 @@ User-facing docs: `README.md` (keep it in sync when behaviour or properties chan
 
 ## Rules / conventions
 - **After changing any JS/CSS file, bump the cache-buster** `?v=N` on all `<script>`/`<link>` tags in
-  `index.html` (WE's CEF caches aggressively). Current: `v=24`.
+  `index.html` (WE's CEF caches aggressively). Current: `v=25`.
 - **New WE property**: add it to `project.json`, read it in `applyUserProperties` (`main.js`) into `CFG`,
   then run `python tools/gen_properties.py`. Property `order` decides the browser-drawer group
   (0–9 camera/time, 10–19 audio/combat, 20–29 sea, 30–39 panel, 40–49 air wing, 50–59 hull number).
@@ -37,8 +37,9 @@ User-facing docs: `README.md` (keep it in sync when behaviour or properties chan
 - **New aircraft type**: builder in `airframes.js`, subclass with static `spec` + `buildModel()` in
   `aircraft.js`, register in `AIRCRAFT_TYPES` and `FIXED_ORDER`/`HELI_ORDER`, callsign pool in `radio.js`,
   `<key>count` slider in `project.json`.
-  Optional `spec` keys: `missions` (mission kinds to pick from, see `MISSIONS` in `radio.js`), `blades`
-  (rotor blade count, for the stop-index snap), `noseDown` (helicopter cruise pitch), `callsignGroup`.
+  Optional `spec` keys: `missions` (mission kinds to pick from, see `MISSIONS` in `radio.js`), `missionAway`,
+  `missionDist`, `landAfterMission`, `blades` (rotor blade count, for the stop-index snap), `noseDown` (helicopter cruise pitch),
+  `callsignGroup`.
   The CMV-22B tiltrotor is a `Helicopter` with `conv` (0 = VTOL, 1 = airplane mode) and `gearDown` getters read by its model.
 - Match the existing style: dense one-liners, short comments, `const` scratch vectors at module level.
 - Sim time is `T` (advances only in `step(dt)`); real time is `RT()` (audio arming, beat gaps).
