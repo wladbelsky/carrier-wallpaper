@@ -84,7 +84,9 @@ const MISSIONS = {
   ],
   awacs: [
     ['relocate on bearing {B} to extend radar coverage.', 'Coverage extended. Back on station.'],
-    ['move to sector {S} and relay comms for the strike group.', 'Relay complete. Returning to orbit.']
+    ['move to sector {S} and relay comms for the strike group.', 'Relay complete. Returning to orbit.'],
+    ['shift your track toward bearing {B}. The strike package needs eyes over the coast.', 'Strike package is home safe. Back on my orbit.'],
+    ["run a radar sweep of sector {S}. Something keeps popping up on our scope.", 'Sector is clean, just sea clutter. Back on station.']
   ],
   heli_transport: [
     ['resupply run to the frigate at grid {G}.', 'Cargo delivered. Heading back.'],
@@ -195,7 +197,7 @@ LINES.missionCopy = {
     'Roger, breaking off now.', 'Affirmative, heading out.', 'Copy all. En route.', "Understood. We'll take it from here."],
   fighter: ['Copy, going to burner. On our way.', 'Roger, climbing to angels two-five.', 'Copy. Weapons check complete, heading out.',
     "Flight, on me. Let's go.", 'Copy, fence in. Vectoring now.', 'Roger. Tanker on the way back, right?'],
-  awacs: ['Copy, repositioning now.', 'Roger, moving the orbit. Picture stays live.', 'Understood, relocating. Keep the chatter down.'],
+  awacs: ['Copy, moving the orbit. Picture stays up.', 'Roger, repositioning. Datalink stays live the whole way.', 'Understood. Shifting my track, back on station shortly.'],
   cod: ['Copy, converting to airplane mode. En route.', 'Roger, nacelles forward, on our way.', 'Copy. Loadmaster, secure the ramp.', 'Understood. Mail call in about an hour.',
     'Roger. Long haul, crew, get comfortable.', "Copy. We'll bring back the good coffee this time."],
   heli: ['Copy, nose down, en route.', 'Roger, heading out low and fast.', "Understood, we're on our way. Crew, strap in.", 'Copy. ETA about ten minutes.']
@@ -270,9 +272,10 @@ const OPS = {
     panic: ['airborne! Engaging immediately!', "I'm up! Where do you need me?!", 'airborne — they are everywhere!']
   },
   awacsUp: {
-    peace: ['airborne. Radar is up.', 'on station. Picture is clean.', 'airborne. I have eyes on the whole sector.'],
-    calm: ['airborne. Radar is up — I count multiple hostiles.', 'on station. Picture is hot, bandits everywhere.'],
-    panic: ['airborne! The scope is full of red!', 'on station — enemy numbers are off the charts!']
+    peace: ['airborne. Radar is up, picture clean.', 'on station. Datalink is up, all flights check in.',
+      "airborne and climbing. I'll call the picture from up here.", "on station. Scope is quiet. Let's keep it that way."],
+    calm: ['airborne. Picture is hot, multiple groups inbound.', 'on station. Bandits on the scope, stand by for vectors.', 'up and radiating. Hostiles in the air. Weapons free.'],
+    panic: ['airborne. Scope is saturated, too many tracks to count!', 'on station. Hostiles everywhere. All flights, engage at will!']
   },
   approach: {
     peace: ['commencing approach.', 'RTB, requesting landing.', 'low on fuel, coming home.'],
@@ -319,7 +322,7 @@ const COMBAT = {
   // the music stopped: hold DISARM_DELAY s, then `end` — or `resume` if it starts again
   lull: {
     calm: ['No more contacts on the scope. Stand by.', "Scope's clearing. Hold your fire, stay sharp.", "Last bandit's off the scope. Holding."],
-    tense: ["Contacts fading... Don't relax yet.", 'Scope is quiet. Too quiet. Stay alert.'],
+    tense: ["Contacts fading... Don't relax yet.", 'Scope is going quiet. Keep your eyes open.'],
     panic: ["They've pulled back... Is that all of them?", 'No contacts... Everybody hold, they could be regrouping.']
   },
   resume: {
@@ -328,9 +331,11 @@ const COMBAT = {
     panic: ["It was a feint! They're coming back in force!", 'More of them! Back to your guns!']
   },
   awacs: {
-    calm: ['Enemy fighters inbound, bearing two-seven-zero.', 'Good kill. Next group is closing fast.', 'Keep the enemy away from the fleet!', 'Enemy formation breaking up. Keep the pressure on.'],
-    tense: ['Multiple enemy flights inbound, all units weapons free!', 'Enemy strength increasing! Hold your ground!', 'Vampires launched, ships, stand by!'],
-    panic: ['Enemy forces overwhelming! Hold the line!', 'All units, defend the carrier at all costs!', "I've never seen this many contacts!"]
+    calm: ['New group, four ships, closing on the fleet. Commit.', 'Good kill. Next group is right behind it.', 'Picture update: enemy formation is breaking up. Keep the pressure on.',
+      'Hostiles turning toward the carrier. Cut them off.', 'Nice shooting. Stay on your targets.'],
+    tense: ['Multiple groups inbound. All flights, weapons free.', 'More hostiles joining the fight. Hold your ground.', 'Vampires in the air! Escorts, stand by.',
+      'Leakers getting through. Tighten up around the fleet.'],
+    panic: ['Scope is full of hostiles! Hold the line!', 'All flights, defend the carrier. Nothing gets through!', "I've lost count of the tracks. Just keep shooting!"]
   },
   ship: {
     calm: ['CIWS engaging!', 'Shells away!', 'Air contact inbound, guns tracking.', 'Splash! Target down.'],
