@@ -114,7 +114,7 @@ function init() {
 /* ---- air wing from the per-type counts ---- */
 function buildAirWing() {
   airWingDirty = false;
-  AIRCRAFT.forEach(a => a.dispose()); AIRCRAFT = []; AIRWAR.passes.length = 0; CARGO.reset();
+  AIRCRAFT.forEach(a => a.dispose()); AIRCRAFT = []; AIRWAR.passes.length = 0; missionWorldReset();
   HELI_LIGHTS.n = 0;
   resetDeck();
   const fixedSpots = DECK.fixedSpots.slice(0, DECK.INITIAL_DECK), heliSpots = DECK.heliSpots.slice();
@@ -783,7 +783,7 @@ function step(dt) {
   updateMounts(dt);
   updateDeckMachinery(dt);
   for (const a of AIRCRAFT) a.update(dt);
-  CARGO.update(dt);
+  missionWorldUpdate(dt);
   updateFlak(dt);
   camShake = Math.max(0, camShake - dt * 3);
   if (CFG.camRotate || camShake > 0) { if (CFG.camRotate) camAz += CFG.camDir * CFG.camSpeed * DEG * dt; updateCameraPose(); }

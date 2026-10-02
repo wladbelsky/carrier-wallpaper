@@ -76,6 +76,10 @@ SAR, medevac, sonar searches…). Each mission has its own radio orders, and the
 - Sling loads: now and then an MH-60 or CH-53 gets a sling-load job. Half the time a container comes up on
   elevator one, the helicopter hovers over it, hooks it and flies off with it on a line; otherwise it comes back
   with a container, sets it down on elevator one and the elevator takes it below.
+- Ship missions (MH-60s): a ship shows up ahead of the fleet — a container feeder, a fishing trawler or a foreign
+  corvette. If it is burning and listing, the helicopter hovers over it and hoists the survivors up one by one;
+  if it is intact, a boarding team fast-ropes onto its deck while the wingman circles overhead. The carrier sails
+  past, the scene drifts off-screen behind the fleet, and the helicopters come back from astern.
 - Destroyer helicopters have their own callsigns: SEAHORSE and PETREL.
 
 ## Heavy music

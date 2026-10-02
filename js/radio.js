@@ -93,6 +93,17 @@ const MISSIONS = {
     ['medevac from the supply ship, bearing {B}.', 'Casualty aboard. Coming home.'],
     ['possible submarine in sector {S}. Start a sonar search.', 'Sector clear, no contacts. RTB.']
   ],
+  // ShipMission (missions.js): a ship ahead of the fleet — {V} = 'a container feeder' / 'a fishing trawler' / 'a foreign corvette'
+  ship: {
+    rescue: [
+      ['{V} ahead of the fleet is on fire and dead in the water. Rescue the crew.', 'All crew recovered, {P} souls aboard. Returning to Mother.'],
+      ['mayday from {V} dead ahead — fire on board. Get her crew off.', 'Survivors aboard, nobody left behind. Heading home.']
+    ],
+    inspect: [
+      ['{V} ahead of the fleet is not answering the radio. Board and inspect her.', 'Inspection complete, papers in order. Team recovered, RTB.'],
+      ['{V} is closing on the fleet from ahead. Put a team on her deck and check her out.', 'All clear on board. Team is back with us. Returning.']
+    ]
+  },
   // SlingMission (missions.js): out = take a load from elevator one, in = bring one back to it
   sling: {
     out: [
@@ -133,6 +144,14 @@ LINES.sling = {
   dropClear: ['{c}, elevator one is clear. Set it down.', '{c}, cleared to lower the load onto elevator one.'],
   released: ['Load released. Clear of the deck.', 'Load is down. Pulling away.', 'Released. Thanks, deck.']
 };
+/* ship missions (missions.js): the lead on arrival, and when the first survivor is up */
+LINES.ship = {
+  onScene: {
+    rescue: ["On scene. Swimmer's going down.", 'On scene, survivors on deck. Lowering the hoist.', 'Over the ship now. Starting the hoist.'],
+    inspect: ['On scene. Fast-roping the team down.', 'Over her deck now. Team going down the rope.', 'In position. Boarding team, go, go.']
+  },
+  hoist: ['First survivor up. Going back for the next one.', 'One aboard. Hoist going down again.', 'Got the first one. Keep them coming.']
+};
 LINES.missionCopy = {
   any: ['Copy, en route.', 'Roger that, on our way.', 'Copy. Heading out now.', 'Understood.', 'Wilco.', "Copy that. We're on it.",
     'Roger. Leaving the pattern.', 'Acknowledged. Moving out.', 'Copy, will report on arrival.', 'On our way. Keep the coffee warm.',
@@ -150,12 +169,12 @@ function missionCopy(kind) {
   let line; do line = radioLine(pool); while (line === lastMissionCopy);
   return lastMissionCopy = line;
 }
-/* order / done texts for a MISSIONS key; nested keys use a dot ('sling.out') */
-function makeMission(kind) {
+/* order / done texts for a MISSIONS key; nested keys use a dot ('sling.out'); extra = more placeholders ({V} …) */
+function makeMission(kind, extra) {
   const [order, done] = pick(kind.split('.').reduce((o, k) => o[k], MISSIONS));
   const sectors = ['Alpha', 'Bravo', 'Charlie', 'Delta', 'Echo', 'Foxtrot', 'Kilo', 'Sierra'];
   const bearing = bearingWords(rand(0, TAU));
-  const vars = { S: pick(sectors), B: bearing, G: `${randi(1, 9)}-${randi(1, 9)}`, P: randi(4, 24), W: (randi(4, 24) * 500).toLocaleString('en-US') };
+  const vars = Object.assign({ S: pick(sectors), B: bearing, G: `${randi(1, 9)}-${randi(1, 9)}`, P: randi(4, 24), W: (randi(4, 24) * 500).toLocaleString('en-US') }, extra);
   return { order: fillLine(order, vars), done: fillLine(done, vars) };
 }
 

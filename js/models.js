@@ -428,3 +428,61 @@ function buildDestroyer(side) { // side: -1 = port of the carrier, +1 = starboar
   return { group: g, ciws, guns: [gun], lights, radars: [radar], winMat: W, floods: [], searchlights: [sl], wakeEmit, name: 'destroyer', side, bob: 0.55, len: 15 };
 }
 
+/* ===== Ships met on missions (missions.js VESSEL_KINDS): templates, cloned per mission; +X bow, waterline y = 0 ===== */
+const hullPts = (L, B, bow) => [[-L / 2, B * 0.95], [L / 2 - bow, B], [L / 2, 0.03], [L / 2, -0.03], [L / 2 - bow, -B], [-L / 2, -B * 0.95]];
+/* container feeder, ~120 m: containers forward, accommodation and funnel aft */
+function buildFeeder() {
+  const g = new THREE.Group(), RED = 0x6e2620, NAVY = 0x253445, DECK = 0x4a4f53, WH = 0xe6e6e0, WIN = M(0x14202c);
+  prism(g, hullPts(12, 1.0, 2.6), -0.6, 0.6, RED);
+  prism(g, hullPts(12.1, 1.05, 2.6), 0, 0.9, NAVY);
+  prism(g, hullPts(11.9, 1.0, 2.5), 0.9, 0.03, DECK);
+  const cols = [0x9a5b2e, 0x2f6b8a, 0x6f7f3a, 0xb8b8b0, 0x8a2f2f, 0x3c4f8a];
+  let n = 0;
+  for (let i = 0; i < 8; i++) for (const z of [-0.62, 0, 0.62]) {
+    const tiers = 1 + ((i * 7 + Math.round(z * 10) * 3) % 3 === 0 ? 0 : 1) + (i % 3 === 1 ? 1 : 0);
+    for (let k = 0; k < tiers; k++) box(g, 0.6, 0.27, 0.58, cols[(n++ * 5 + k) % cols.length], -3.0 + i * 0.72, 1.07 + k * 0.28, z);
+  }
+  taper(g, 1.5, 1.6, 1.8, WH, -4.7, 1.73, 0, 0.95, 0.9);                       // accommodation
+  box(g, 1.52, 0.14, 1.82, WIN, -4.6, 2.3, 0);
+  box(g, 1.7, 0.08, 2.2, WH, -4.5, 2.58, 0);                                     // bridge deck with wings
+  const f = taper(g, 0.6, 0.9, 0.6, NAVY, -5.45, 2.95, 0, 0.85, 0.85); f.rotation.z = 0.05;   // funnel
+  box(g, 0.62, 0.12, 0.62, 0xb83a2a, -5.45, 3.05, 0);
+  cyl(g, 0.03, 0.04, 1.0, 5, 0x50565d, 5.2, 1.4, 0);                             // foremast
+  mergeStatic(g, []); return g;
+}
+/* fishing trawler, ~35 m: wheelhouse forward, gantry and net drum aft */
+function buildTrawler() {
+  const g = new THREE.Group(), BLUE = 0x24507a, WH = 0xeeeeea, D = 0x2e3236, WIN = M(0x14202c);
+  prism(g, hullPts(3.6, 0.42, 0.8), -0.35, 0.85, BLUE);
+  prism(g, hullPts(3.62, 0.43, 0.8), -0.06, 0.1, 0xa83228);                       // red boot-top at the waterline
+  prism(g, hullPts(3.5, 0.4, 0.78), 0.5, 0.02, 0x6a5e52);
+  box(g, 3.5, 0.05, 0.87, WH, -0.05, 0.49, 0);                                   // white rail
+  taper(g, 0.8, 0.6, 0.62, WH, 0.65, 0.81, 0, 0.9, 0.9);                         // wheelhouse
+  box(g, 0.74, 0.12, 0.6, WIN, 0.7, 0.99, 0);
+  cyl(g, 0.02, 0.03, 1.2, 5, D, 0.55, 1.63, 0);                                  // mast
+  box(g, 0.04, 0.04, 0.5, D, 0.55, 1.88, 0);
+  for (const s of [-1, 1]) strut(g, new V3(-1.65, 0.5, s * 0.33), new V3(-1.45, 1.43, s * 0.1), 0.025, 0xd06a2a);   // A-frame
+  box(g, 0.05, 0.05, 0.3, 0xd06a2a, -1.45, 1.43, 0);
+  const drum = cyl(g, 0.15, 0.15, 0.5, 8, 0x3a6a3a, -0.85, 0.68, 0); drum.rotation.x = Math.PI / 2;   // net drum
+  mergeStatic(g, []); return g;
+}
+/* foreign corvette, ~90 m: grey hull, gun forward, superstructure and mast midships, helideck aft */
+function buildCorvette() {
+  const g = new THREE.Group(), HULL = 0x737d76, HULL2 = 0x5b645e, DECK = 0x454b47, D = 0x30353a, WIN = M(0x14202c);
+  prism(g, hullPts(9, 0.55, 2.4), -0.5, 0.8, HULL2);
+  prism(g, hullPts(9.1, 0.6, 2.4), 0.3, 0.45, HULL);
+  prism(g, hullPts(9, 0.58, 2.35), 0.75, 0.03, DECK);
+  taper(g, 2.6, 0.9, 1.0, HULL, 0.1, 1.23, 0, 0.92, 0.85);                     // superstructure
+  taper(g, 1.0, 0.5, 0.9, HULL, 0.9, 1.92, 0, 0.85, 0.85);                     // bridge
+  box(g, 0.86, 0.12, 0.8, WIN, 0.95, 2.05, 0);
+  const f = taper(g, 0.7, 0.6, 0.6, HULL, -0.8, 1.95, 0, 0.8, 0.8, -0.05);       // funnel
+  box(g, 0.5, 0.05, 0.4, D, -0.85, 2.28, 0);
+  strut(g, new V3(0.2, 1.7, -0.3), new V3(0.4, 3.0, 0), 0.03, D); strut(g, new V3(0.2, 1.7, 0.3), new V3(0.4, 3.0, 0), 0.03, D);   // mast
+  box(g, 0.1, 0.1, 0.6, 0x9aa1a8, 0.4, 3.05, 0);                                 // radar
+  cyl(g, 0.22, 0.26, 0.22, 8, HULL, 2.7, 0.88, 0);                               // gun mount
+  const bar = cyl(g, 0.03, 0.03, 0.7, 5, D, 3.1, 0.95, 0); bar.rotation.z = Math.PI / 2 - 0.08;
+  for (const s of [-1, 1]) { const c = cyl(g, 0.06, 0.06, 0.7, 6, 0x6b7279, -1.6, 1.0, s * 0.3); c.rotation.z = Math.PI / 2; }   // missile canisters
+  deckLine(g, -4.2, 0, -3.0, 0, 0.05, 0xe0e0d8, 0.785);                           // helideck line
+  mergeStatic(g, []); return g;
+}
+

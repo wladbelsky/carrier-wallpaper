@@ -4,7 +4,14 @@
    the wingmen may fly different legs. dispatchFlight (main.js) only picks the flight, pickMission() picks the type.
    New mission type: subclass Mission (or one of the types below), override what differs — legs(role), eligible(),
    weight, optIn, textKey(), dist / away — and registerMission() it; its texts go into MISSIONS (radio.js).
-   New step: subclass Leg with a static `state`, implement enter() / update(), and registerLeg() it (panel status). */
+   New step: subclass Leg with a static `state`, implement enter() / update(), and registerLeg() it (panel status).
+   Objects living in the world for a mission (containers, ships, ropes) registerMissionWorld() an { update, reset }. */
+
+/* ---- mission-world objects (containers, ships, ropes …): updated every step, reset when the air wing is rebuilt ---- */
+const MISSION_WORLD = [];
+function registerMissionWorld(o) { MISSION_WORLD.push(o); return o; }
+function missionWorldUpdate(dt) { for (const o of MISSION_WORLD) if (o.update) o.update(dt); }
+function missionWorldReset() { for (const o of MISSION_WORLD) if (o.reset) o.reset(); }
 
 /* ---- legs: one step of a mission for one aircraft ----
    c = the aircraft's mission context { m: Mission, slot, role: 'lead' | 'wing', far, legs, i, crate, L }.
@@ -48,7 +55,7 @@ class Return extends Leg {
     super.enter(a, c);
     const hidden = !a.mesh.visible, from = a.mesh.position.clone(), h = hidden ? c.m.heading + Math.PI : headingOf(a.fwd), P = new FlightPath();
     a.pickOrbit(true); a.pathToOrbit(P, from, h, 0.5);
-    a.fly(P, hidden ? a.orbit.v * 1.15 : 1.5, a.orbit.v);
+    a.fly(P, hidden ? a.orbit.v * 1.15 : clamp(a.v || 0, 1.5, a.orbit.v), a.orbit.v);   // from a hover / drift: carry on from its speed
     a.fwd.set(Math.cos(h), 0, Math.sin(h)); a.mesh.visible = true;
   }
   update(a, c, dt) { return a.followPath(dt); }
@@ -76,9 +83,10 @@ class Mission {
   }
   textKey() { const a = this.lead; return a.isAwacs ? 'awacs' : this.heli ? (a.spec.armed ? 'heli_attack' : 'heli_transport') : 'fighter'; }
   copyKey() { return this.textKey(); }        // acknowledgement pool (LINES.missionCopy)
+  textVars() { return null; }                 // extra placeholders for the order / done texts ({V} …)
   legs(role) { return [Depart, Away, Return]; }
   start() {
-    const { order, done } = makeMission(this.textKey()); this.done = done;
+    const { order, done } = makeMission(this.textKey(), this.textVars()); this.done = done;
     const h = this.heading, perp = new V3(-Math.sin(h), 0, Math.cos(h)), n = this.flight.length;
     this.flight.forEach((a, slot) => {
       const far = new V3(Math.cos(h) * this.dist, a.orbit.alt, Math.sin(h) * this.dist).addScaledVector(perp, (slot - (n - 1) / 2) * 6);
@@ -156,6 +164,7 @@ const CARGO = {
   }
 };
 const _cgH = new V3(), _cgT = new V3(), _cgD = new V3();
+registerMissionWorld(CARGO);
 
 /* lift side of a pickup: reserve elevator one, send it down, put the container on it, bring it up; true = load is up */
 function slingPickupLift(a, c) {
@@ -252,3 +261,187 @@ class SlingMission extends Mission {
   }
 }
 registerMission(SlingMission);
+
+/* ===== Ship missions (MH-60): rescue the crew of a damaged ship / inspect an intact one, ahead of the fleet =====
+   The ship drifts past the fleet (the sea flows by) with the helicopter hovering over it, a rope down to its deck;
+   the scene leaves the screen behind the carrier and the helicopters come back from the rear. */
+const VESSEL_KINDS = {
+  feeder: { name: 'a container feeder', build: buildFeeder, len: 12, deckY: 0.93, spot: [4.7, 0], fire: [0.5, 1.7, 0] },
+  trawler: { name: 'a fishing trawler', build: buildTrawler, len: 3.6, deckY: 0.51, spot: [-1.1, 0], fire: [0.65, 1.25, 0] },
+  corvette: { name: 'a foreign corvette', build: buildCorvette, len: 9, deckY: 0.78, spot: [-3.6, 0], fire: [0.3, 1.7, 0] }
+};
+const VESSEL_MODELS = {};                     // one template per kind; every vessel is a clone (shared geometry)
+let _figGeo = null, _ropeGeo = null;
+const figGeo = () => _figGeo || (_figGeo = new THREE.BoxGeometry(0.06, 0.13, 0.06).translate(0, 0.065, 0));
+const ropeGeo = () => _ropeGeo || (_ropeGeo = new THREE.CylinderGeometry(0.01, 0.01, 1, 4));
+const FIG_RESCUE = 0xff7a1a, FIG_TEAM = 0x2f3a2a;
+const _vs1 = new V3(), _vs2 = new V3(), _vs3 = new V3(), _vs4 = new V3();
+
+const VESSELS = {
+  list: [],
+  spawn(damaged) {
+    const kind = pick(Object.keys(VESSEL_KINDS)), K = VESSEL_KINDS[kind];
+    const g = (VESSEL_MODELS[kind] || (VESSEL_MODELS[kind] = K.build())).clone(); g.rotation.order = 'YXZ'; scene.add(g);
+    // a lane beside the fleet, outside the escorts: the side with fewer vessels, behind the last one in it
+    const n = s => this.list.filter(v => Math.sign(v.p.z) === s).length, side = n(1) === n(-1) ? pick([-1, 1]) : n(1) < n(-1) ? 1 : -1;
+    const x = Math.max(rand(85, 100), ...this.list.filter(v => Math.sign(v.p.z) === side).map(v => v.p.x + v.K.len / 2 + 22));
+    const v = { kind, K, g, damaged, p: new V3(x, 0, side * rand(30, 38)), vx: -1.2, yaw: damaged ? rand(0, TAU) : Math.PI,
+      own: damaged ? 0 : 1, t: rand(0, 9), fxT: 0, wakeT: 0, crew: [], active: true };
+    if (damaged) for (let i = 0; i < 3; i++) this.figure(v, FIG_RESCUE, i);   // survivors waiting on deck
+    this.place(v, 0); this.list.push(v); return v;
+  },
+  /* a crew figure standing on the deck around the rope spot */
+  figure(v, color, i) {
+    const f = new THREE.Mesh(figGeo(), M(color)); f.castShadow = true;
+    f.position.set(v.K.spot[0] + [-0.3, 0.25, -0.05][i % 3], v.K.deckY, v.K.spot[1] + [0.22, 0.15, -0.25][i % 3]);
+    v.g.add(f); v.crew.push(f); return f;
+  },
+  world(v, x, y, z, out) { return out.set(x, y, z).applyQuaternion(v.g.quaternion).add(v.g.position); },
+  fwd(v, out) { return out.set(1, 0, 0).applyQuaternion(v.g.quaternion).setY(0).normalize(); },
+  place(v, dt) {
+    // dead in the water it just drifts with the sea; under way it also steams past on an opposite course.
+    // Never slower than 1.2, so the scene always leaves the screen (even with the fleet stopped).
+    v.vx = -Math.max(1.2, WAVE.flow + v.own); v.p.x += v.vx * dt; v.t += dt;
+    const roll = v.damaged ? 0.15 + 0.03 * Math.sin(v.t * 0.7) : 0.03 * Math.sin(v.t * 0.9);
+    v.g.position.set(v.p.x, waveH(v.p.x, v.p.z) * 0.6 - (v.damaged ? 0.02 * v.K.len : 0), v.p.z);   // a damaged ship sits lower
+    v.g.rotation.set(roll, v.yaw, (v.damaged ? -0.04 : 0) + 0.02 * Math.sin(v.t * 0.6));
+    v.g.updateMatrixWorld();
+  },
+  update(dt) {
+    for (let i = this.list.length - 1; i >= 0; i--) {
+      const v = this.list[i], K = v.K;
+      this.place(v, dt);
+      if (v.damaged) {                         // fire and smoke from the burning ship
+        v.fxT += dt;
+        while (v.fxT > 0.12) {
+          v.fxT -= 0.12;
+          const p = this.world(v, K.fire[0] + rand(-0.3, 0.3), K.fire[1], K.fire[2] + rand(-0.2, 0.2), new V3());
+          FX.smoke.spawn(p, { s0: 0.9, s1: 3.8, life: 3.5, a0: 0.55, color: 0x1e1e1e, v: new V3(rand(-0.8, -0.3), rand(0.7, 1.1), rand(-0.2, 0.2)), drag: 0.3 });
+          if (Math.random() < 0.6) FX.flash.spawn(p, { s0: 0.7, s1: 1.1, life: 0.18, a0: 0.9, color: 0xff7a20 });
+        }
+      } else {                                  // wake off the stern while under way
+        v.wakeT += dt;
+        while (v.wakeT > 1 / 25) {
+          v.wakeT -= 1 / 25;
+          const s = this.world(v, -K.len / 2, 0, rand(-0.25, 0.25), _vs1), f = this.fwd(v, _vs2);
+          FX.foam.emit(s.x, s.z, -f.x * 0.6 + rand(-0.3, 0.3), -f.z * 0.6 + rand(-0.3, 0.3), rand(2, 4));
+        }
+      }
+      // gone once its mission is over and it is off-screen behind the fleet (or simply far behind)
+      if ((!v.active && v.p.x < -50 && !AIRWAR.onScreen(v.p, 0.15)) || v.p.x < -200) { scene.remove(v.g); this.list.splice(i, 1); }
+    }
+  },
+  reset() { for (const v of this.list) v.active = false; }   // a rebuilt air wing: they just sail off
+};
+
+/* hoist cable / fast rope from a hovering helicopter to a deck, with one figure riding it */
+const ROPES = {
+  items: [],
+  take(color) {
+    let it = this.items.find(i => !i.on);
+    if (!it) {
+      it = { line: new THREE.Mesh(ropeGeo(), M(0x1e1e1e)), fig: new THREE.Mesh(figGeo(), M(FIG_RESCUE)), on: false };
+      it.line.castShadow = true; scene.add(it.line); scene.add(it.fig); this.items.push(it);
+    }
+    it.on = true; it.line.visible = false; it.fig.visible = false; it.fig.material = M(color); return it;
+  },
+  release(it) { it.on = false; it.line.visible = it.fig.visible = false; },
+  reset() { for (const it of this.items) this.release(it); },
+  /* top = hook under the helicopter, bottom = deck point; u = figure position along it (0 deck … 1 hook), null = no figure */
+  set(it, top, bottom, u) {
+    const d = _vs3.subVectors(top, bottom), len = d.length();
+    it.line.position.copy(bottom).addScaledVector(d, 0.5); it.line.quaternion.setFromUnitVectors(WUP, d.divideScalar(len || 1)); it.line.scale.set(1, len, 1);
+    it.line.visible = true;
+    it.fig.visible = u != null;
+    if (u != null) { it.fig.position.copy(bottom).addScaledVector(d, len * u - 0.13 * u); it.fig.quaternion.identity(); }
+  }
+};
+registerMissionWorld(VESSELS); registerMissionWorld(ROPES);
+
+const SHIP_HOVER = 3.2;                       // hover height above the vessel's deck
+/* the scene has drifted off-screen behind the fleet (or it took too long) */
+const shipSceneOver = (a, c) => (c.m.vessel.p.x < -40 && !AIRWAR.onScreen(c.m.vessel.p, 0.12) && !AIRWAR.onScreen(a.mesh.position, 0.12)) || a.t > 150;
+/* where each helicopter goes: the lead over the rope spot, wingmen out to the side (overwatch) */
+function shipStation(c, out) {
+  const v = c.m.vessel, K = v.K;
+  return c.role === 'lead' ? VESSELS.world(v, K.spot[0], K.deckY + SHIP_HOVER, K.spot[1] + 0.25, out) : out.set(v.p.x, 8, v.p.z + (v.p.z > 0 ? -7 : 7));
+}
+/* fly out ahead to meet the vessel where it will be on arrival */
+class ToVessel extends Leg {
+  static state = 'ship_out';
+  enter(a, c) {
+    super.enter(a, c);
+    const v = c.m.vessel, p0 = a.mesh.position, st = shipStation(c, new V3());
+    const sp = a.orbit.v * 1.15, tt = Math.hypot(st.x - p0.x, st.z - p0.z) / (sp + Math.abs(v.vx));
+    st.x += v.vx * tt;
+    const hEnd = c.role === 'lead' ? headingOf(VESSELS.fwd(v, _vs1)) : Math.PI;
+    a.fly(new FlightPath().addDubins(p0, headingOf(a.fwd), st, hEnd, a.spec.turnR), a.orbit.v, Math.abs(v.vx) + 0.5);
+  }
+  update(a, c, dt) { return a.followPath(dt); }
+}
+/* lead: hover over the deck and work the rope — survivors up the hoist (rescue) or the team down the fast rope (inspect) */
+class OnScene extends Leg {
+  static state = 'ship_hover';
+  enter(a, c) {
+    super.enter(a, c);
+    const rescue = c.m.dir === 'rescue';
+    this.rope = ROPES.take(rescue ? FIG_RESCUE : FIG_TEAM); this.arrived = false; this.ct = 0; this.ride = null; this.team = 0; this.hoisted = 0;
+    a.say(radioLine(LINES.ship.onScene[c.m.dir]), { prio: 1 });
+  }
+  update(a, c, dt) {
+    const v = c.m.vessel, K = v.K, st = shipStation(c, _vs1);
+    a.mesh.position.x += v.vx * dt; a.mesh.position.lerp(st, Math.min(1, dt * 3));   // drift with the ship, close in on the station
+    a.fwd.lerp(VESSELS.fwd(v, _vs2), Math.min(1, dt * 1.2)).setY(0).normalize(); orientFrom(a.mesh, a.fwd, 0); a.v = Math.abs(v.vx);
+    if (!this.arrived && a.mesh.position.distanceTo(st) < 0.6) this.arrived = true;
+    if (this.arrived) {
+      const top = _vs2.copy(a.mesh.position); top.y += 0.05;
+      const deck = VESSELS.world(v, K.spot[0], K.deckY, K.spot[1] + 0.25, _vs4);
+      this.ct += dt;
+      if (c.m.dir === 'rescue') {                // one survivor at a time up the hoist cable
+        if (this.ride == null && v.crew.length && this.ct > 1.5) { v.g.remove(v.crew.pop()); this.ride = 0; }
+        if (this.ride != null) {
+          this.ride += dt / 3.5;
+          if (this.ride >= 1) { this.ride = null; this.ct = 0; if (++this.hoisted === 1) a.say(radioLine(LINES.ship.hoist), { prio: 0 }); }
+        }
+        ROPES.set(this.rope, top, deck, this.ride);
+      } else {                                   // the boarding team slides down one by one and stays on deck
+        if (this.ride == null && this.team < 3 && this.ct > 1.2) this.ride = 1;
+        if (this.ride != null) {
+          this.ride -= dt / 1.5;
+          if (this.ride <= 0) { this.ride = null; this.ct = 0; VESSELS.figure(v, FIG_TEAM, this.team++); }
+        }
+        ROPES.set(this.rope, top, deck, this.ride);
+      }
+    }
+    if (!shipSceneOver(a, c)) return false;
+    ROPES.release(this.rope); v.active = false;
+    if (c.m.done) a.say(c.m.done, { prio: 1 });
+    return true;
+  }
+}
+/* wingman: circle the ship and keep an eye on it */
+class Overwatch extends Leg {
+  static state = 'ship_watch';
+  enter(a, c) { super.enter(a, c); const v = c.m.vessel; this.ang = Math.atan2(a.mesh.position.z - v.p.z, a.mesh.position.x - v.p.x); }
+  update(a, c, dt) {
+    const v = c.m.vessel, R = 7, sp = 6;
+    this.ang += sp / R * dt;
+    const tgt = _vs1.set(v.p.x + R * Math.cos(this.ang), 8, v.p.z + R * Math.sin(this.ang));
+    a.mesh.position.x += v.vx * dt; a.mesh.position.lerp(tgt, Math.min(1, dt * 2));
+    a.v = sp; a.orientFlight(_vs2.set(-Math.sin(this.ang) * sp + v.vx, 0, Math.cos(this.ang) * sp), a.bankFor(sp, R), dt);
+    return shipSceneOver(a, c) || (!v.active && !AIRWAR.onScreen(a.mesh.position, 0.12));
+  }
+}
+registerLeg(ToVessel, 'MISSION ▶', 'air'); registerLeg(OnScene, 'ON SCENE', 'busy'); registerLeg(Overwatch, 'OVERWATCH', 'air');
+
+/* MH-60s only: 50/50 a damaged ship (rescue the crew) or an intact one (board and inspect); 3 kinds of ship */
+class ShipMission extends Mission {
+  static key = 'ship'; static weight = 0.35;
+  static eligible(a) { return a.spec.key === 'mh60'; }
+  constructor(flight, size) { super(flight, size); this.dir = Math.random() < 0.5 ? 'rescue' : 'inspect'; this.vessel = VESSELS.spawn(this.dir === 'rescue'); }
+  textKey() { return 'ship.' + this.dir; }
+  textVars() { return { V: this.vessel.K.name }; }
+  copyKey() { return 'heli_transport'; }
+  legs(role) { return role === 'lead' ? [ToVessel, OnScene, Return] : [ToVessel, Overwatch, Return]; }
+}
+registerMission(ShipMission);
