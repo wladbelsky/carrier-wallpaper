@@ -262,39 +262,51 @@ class SlingMission extends Mission {
 }
 registerMission(SlingMission);
 
-/* ===== Ship missions (MH-60): rescue the crew of a damaged ship / inspect an intact one, ahead of the fleet =====
-   The ship lies stopped at a random heading and drifts past the fleet (the sea flows by) with the helicopter hovering
-   over it, a rope down to its deck;
-   the scene leaves the screen behind the carrier and the helicopters come back from the rear. */
+/* ===== Scenes ahead of the fleet (MH-60): something lies in the sea ahead — a ship, a crashed jet — and drifts past
+   the fleet (the sea flows by) with the lead helicopter hovering over it, a rope down, and the wingman circling.
+   The scene leaves the screen behind the carrier and the helicopters come back from the rear.
+   A kind: { key, name, build, len, deckY (where people stand), spot [x, z] (rope end), fire [x, y, z] (smoke when
+   damaged), crew (people waiting when damaged, default 3), crewAt [[dx, dz]…] (around the spot), roll / sink (when
+   damaged; default a list of 0.15 and 0.02·len lower), bob (how much it rides the waves, default 0.6; small floating
+   things 1), smoke (size of the smoke, default 1), ropeDz (rope end beside the spot, default 0.25) }. ---- */
 const VESSEL_KINDS = {
-  feeder: { name: 'a container feeder', build: buildFeeder, len: 12, deckY: 0.93, spot: [4.7, 0], fire: [0.5, 1.7, 0] },
-  trawler: { name: 'a fishing trawler', build: buildTrawler, len: 3.6, deckY: 0.51, spot: [-1.1, 0], fire: [0.65, 1.25, 0] },
-  corvette: { name: 'a foreign corvette', build: buildCorvette, len: 9, deckY: 0.78, spot: [-3.6, 0], fire: [0.3, 1.7, 0] },
-  destroyer: { name: 'an allied destroyer', build: buildDestroyerTemplate, len: 15.5, deckY: 1.13, spot: [-6.7, 0], fire: [-1.4, 2.3, 0] }
+  feeder: { key: 'feeder', name: 'a container feeder', build: buildFeeder, len: 12, deckY: 0.93, spot: [4.7, 0], fire: [0.5, 1.7, 0] },
+  trawler: { key: 'trawler', name: 'a fishing trawler', build: buildTrawler, len: 3.6, deckY: 0.51, spot: [-1.1, 0], fire: [0.65, 1.25, 0] },
+  corvette: { key: 'corvette', name: 'a foreign corvette', build: buildCorvette, len: 9, deckY: 0.78, spot: [-3.6, 0], fire: [0.3, 1.7, 0] },
+  destroyer: { key: 'destroyer', name: 'an allied destroyer', build: buildDestroyerTemplate, len: 15.5, deckY: 1.13, spot: [-6.7, 0], fire: [-1.4, 2.3, 0] }
+};
+/* crashed jets (PilotMission): the wreck smokes, the pilot waits in the life raft beside it */
+const wreckKind = (key, name, side, build) => ({ key: 'wreck_' + key, name, side, build: () => buildWreck(build), len: 2.4, deckY: 0.1,
+  spot: [1.7, 0.9], fire: [0, 0.25, 0], crew: 1, crewAt: [[0, 0]], ropeDz: 0, roll: 0, sink: 0, bob: 1, smoke: 0.55 });
+const WRECK_KINDS = {
+  fa18: wreckKind('fa18', 'Hornet', 'friendly', buildFA18), f14: wreckKind('f14', 'Tomcat', 'friendly', buildF14), f35: wreckKind('f35', 'Lightning', 'friendly', buildF35),
+  su25: wreckKind('su25', 'Su-25 Frogfoot', 'enemy', buildSu25), su33: wreckKind('su33', 'Su-33 Flanker', 'enemy', buildSu33),
+  su47: wreckKind('su47', 'Su-47 Berkut', 'enemy', buildSu47), su57: wreckKind('su57', 'Su-57 Felon', 'enemy', buildSu57)
 };
 const VESSEL_MODELS = {};                     // one template per kind; every vessel is a clone (shared geometry)
 let _figGeo = null, _ropeGeo = null;
 const figGeo = () => _figGeo || (_figGeo = new THREE.BoxGeometry(0.06, 0.13, 0.06).translate(0, 0.065, 0));
 const ropeGeo = () => _ropeGeo || (_ropeGeo = new THREE.CylinderGeometry(0.01, 0.01, 1, 4));
-const FIG_RESCUE = 0xff7a1a, FIG_TEAM = 0x2f3a2a;
+const ropeDz = K => (K.ropeDz != null ? K.ropeDz : 0.25);   // the rope lands beside the people waiting on a deck
+const FIG_RESCUE = 0xff7a1a, FIG_TEAM = 0x2f3a2a, CREW_AT = [[-0.3, 0.22], [0.25, 0.15], [-0.05, -0.25]];
 const _vs1 = new V3(), _vs2 = new V3(), _vs3 = new V3(), _vs4 = new V3();
 
 const VESSELS = {
   list: [],
-  spawn(damaged) {
-    const kind = pick(Object.keys(VESSEL_KINDS)), K = VESSEL_KINDS[kind];
-    const g = (VESSEL_MODELS[kind] || (VESSEL_MODELS[kind] = K.build())).clone(); g.rotation.order = 'YXZ'; scene.add(g);
+  /* K = a kind (VESSEL_KINDS / WRECK_KINDS); damaged: fire and smoke, people waiting (in `color`) */
+  spawn(K, damaged, color) {
+    const kind = K.key, g = (VESSEL_MODELS[kind] || (VESSEL_MODELS[kind] = K.build())).clone(); g.rotation.order = 'YXZ'; scene.add(g);
     // a lane beside the fleet, outside the escorts: the side with fewer vessels, behind the last one in it
     const n = s => this.list.filter(v => Math.sign(v.p.z) === s).length, side = n(1) === n(-1) ? pick([-1, 1]) : n(1) < n(-1) ? 1 : -1;
     const x = Math.max(rand(85, 100), ...this.list.filter(v => Math.sign(v.p.z) === side).map(v => v.p.x + v.K.len / 2 + 22));
     const v = { kind, K, g, damaged, p: new V3(x, 0, side * rand(30, 38)), vx: -1.2, yaw: rand(0, TAU), t: rand(0, 9), fxT: 0, crew: [], active: true };
-    if (damaged) for (let i = 0; i < 3; i++) this.figure(v, FIG_RESCUE, i);   // survivors waiting on deck
+    if (damaged) for (let i = 0; i < (K.crew || 3); i++) this.figure(v, color || FIG_RESCUE, i);   // survivors waiting on deck
     this.place(v, 0); this.list.push(v); return v;
   },
   /* a crew figure standing on the deck around the rope spot */
   figure(v, color, i) {
-    const f = new THREE.Mesh(figGeo(), M(color)); f.castShadow = true;
-    f.position.set(v.K.spot[0] + [-0.3, 0.25, -0.05][i % 3], v.K.deckY, v.K.spot[1] + [0.22, 0.15, -0.25][i % 3]);
+    const f = new THREE.Mesh(figGeo(), M(color)), at = (v.K.crewAt || CREW_AT)[i % (v.K.crewAt || CREW_AT).length]; f.castShadow = true;
+    f.position.set(v.K.spot[0] + at[0], v.K.deckY, v.K.spot[1] + at[1]);
     v.g.add(f); v.crew.push(f); return f;
   },
   world(v, x, y, z, out) { return out.set(x, y, z).applyQuaternion(v.g.quaternion).add(v.g.position); },
@@ -303,8 +315,8 @@ const VESSELS = {
     // stopped in the water, it drifts past with the sea; never slower than 1.2, so the scene always leaves the screen
     // (even with the fleet stopped)
     v.vx = -Math.max(1.2, WAVE.flow); v.p.x += v.vx * dt; v.t += dt;
-    const roll = v.damaged ? 0.15 + 0.03 * Math.sin(v.t * 0.7) : 0.03 * Math.sin(v.t * 0.9);
-    v.g.position.set(v.p.x, waveH(v.p.x, v.p.z) * 0.6 - (v.damaged ? 0.02 * v.K.len : 0), v.p.z);   // a damaged ship sits lower
+    const K = v.K, roll = (v.damaged ? (K.roll != null ? K.roll : 0.15) : 0) + 0.03 * Math.sin(v.t * 0.8);
+    v.g.position.set(v.p.x, waveH(v.p.x, v.p.z) * (K.bob || 0.6) - (v.damaged ? (K.sink != null ? K.sink : 0.02 * K.len) : 0), v.p.z);   // a damaged ship sits lower
     v.g.rotation.set(roll, v.yaw, (v.damaged ? -0.04 : 0) + 0.02 * Math.sin(v.t * 0.6));
     v.g.updateMatrixWorld();
   },
@@ -317,8 +329,9 @@ const VESSELS = {
         while (v.fxT > 0.12) {
           v.fxT -= 0.12;
           const p = this.world(v, K.fire[0] + rand(-0.3, 0.3), K.fire[1], K.fire[2] + rand(-0.2, 0.2), new V3());
-          FX.smoke.spawn(p, { s0: 0.9, s1: 3.8, life: 3.5, a0: 0.55, color: 0x1e1e1e, v: new V3(rand(-0.8, -0.3), rand(0.7, 1.1), rand(-0.2, 0.2)), drag: 0.3 });
-          if (Math.random() < 0.6) FX.flash.spawn(p, { s0: 0.7, s1: 1.1, life: 0.18, a0: 0.9, color: 0xff7a20 });
+          const k = K.smoke || 1;
+          FX.smoke.spawn(p, { s0: 0.9 * k, s1: 3.8 * k, life: 3.5, a0: 0.55, color: 0x1e1e1e, v: new V3(rand(-0.8, -0.3), rand(0.7, 1.1), rand(-0.2, 0.2)), drag: 0.3 });
+          if (Math.random() < 0.6) FX.flash.spawn(p, { s0: 0.7 * k, s1: 1.1 * k, life: 0.18, a0: 0.9, color: 0xff7a20 });
         }
       }
       // gone once its mission is over and it is off-screen behind the fleet (or simply far behind)
@@ -358,7 +371,7 @@ const shipSceneOver = (a, c) => (c.m.vessel.p.x < -40 && !AIRWAR.onScreen(c.m.ve
 /* where each helicopter goes: the lead over the rope spot, wingmen out to the side (overwatch) */
 function shipStation(c, out) {
   const v = c.m.vessel, K = v.K;
-  return c.role === 'lead' ? VESSELS.world(v, K.spot[0], K.deckY + SHIP_HOVER, K.spot[1] + 0.25, out) : out.set(v.p.x, 8, v.p.z + (v.p.z > 0 ? -7 : 7));
+  return c.role === 'lead' ? VESSELS.world(v, K.spot[0], K.deckY + SHIP_HOVER, K.spot[1] + ropeDz(K), out) : out.set(v.p.x, 8, v.p.z + (v.p.z > 0 ? -7 : 7));
 }
 /* fly out ahead to meet the vessel where it will be on arrival */
 class ToVessel extends Leg {
@@ -373,14 +386,13 @@ class ToVessel extends Leg {
   }
   update(a, c, dt) { return a.followPath(dt); }
 }
-/* lead: hover over the deck and work the rope — survivors up the hoist (rescue) or the team down the fast rope (inspect) */
+/* lead: hover over the deck and work the rope — people up the hoist (work 'hoist') or a team down the fast rope ('board') */
 class OnScene extends Leg {
   static state = 'ship_hover';
   enter(a, c) {
     super.enter(a, c);
-    const rescue = c.m.dir === 'rescue';
-    this.rope = ROPES.take(rescue ? FIG_RESCUE : FIG_TEAM); this.arrived = false; this.ct = 0; this.ride = null; this.team = 0; this.hoisted = 0;
-    a.say(radioLine(LINES.ship.onScene[c.m.dir]), { prio: 1 });
+    this.rope = ROPES.take(c.m.rider()); this.arrived = false; this.ct = 0; this.ride = null; this.team = 0; this.hoisted = 0;
+    c.m.arrive(a);
   }
   update(a, c, dt) {
     const v = c.m.vessel, K = v.K, st = shipStation(c, _vs1);
@@ -389,13 +401,13 @@ class OnScene extends Leg {
     if (!this.arrived && a.mesh.position.distanceTo(st) < 0.6) this.arrived = true;
     if (this.arrived) {
       const top = _vs2.copy(a.mesh.position); top.y += 0.05;
-      const deck = VESSELS.world(v, K.spot[0], K.deckY, K.spot[1] + 0.25, _vs4);
+      const deck = VESSELS.world(v, K.spot[0], K.deckY, K.spot[1] + ropeDz(K), _vs4);
       this.ct += dt;
-      if (c.m.dir === 'rescue') {                // one survivor at a time up the hoist cable
+      if (c.m.work() === 'hoist') {              // one person at a time up the hoist cable
         if (this.ride == null && v.crew.length && this.ct > 1.5) { v.g.remove(v.crew.pop()); this.ride = 0; }
         if (this.ride != null) {
           this.ride += dt / 3.5;
-          if (this.ride >= 1) { this.ride = null; this.ct = 0; if (++this.hoisted === 1) a.say(radioLine(LINES.ship.hoist), { prio: 0 }); }
+          if (this.ride >= 1) { this.ride = null; this.ct = 0; c.m.hoisted(a, ++this.hoisted); }
         }
         ROPES.set(this.rope, top, deck, this.ride);
       } else {                                   // the boarding team slides down one by one and stays on deck
@@ -428,14 +440,58 @@ class Overwatch extends Leg {
 }
 registerLeg(ToVessel, 'MISSION ▶', 'air'); registerLeg(OnScene, 'ON SCENE', 'busy'); registerLeg(Overwatch, 'OVERWATCH', 'air');
 
-/* MH-60s only: 50/50 a damaged ship (rescue the crew) or an intact one (board and inspect); 3 kinds of ship */
-class ShipMission extends Mission {
-  static key = 'ship'; static weight = 0.35;
+/* base of the scene missions (not registered itself): MH-60s fly out to this.vessel (spawned by the subclass), the lead
+   works the rope, the wingman circles. Subclasses say what the crew does and what they report. */
+class SceneMission extends Mission {
   static eligible(a) { return a.spec.key === 'mh60'; }
-  constructor(flight, size) { super(flight, size); this.dir = Math.random() < 0.5 ? 'rescue' : 'inspect'; this.vessel = VESSELS.spawn(this.dir === 'rescue'); }
-  textKey() { return 'ship.' + this.dir; }
-  textVars() { return { V: this.vessel.K.name }; }
   copyKey() { return 'heli_transport'; }
   legs(role) { return role === 'lead' ? [ToVessel, OnScene, Return] : [ToVessel, Overwatch, Return]; }
+  work() { return 'hoist'; }                  // 'hoist' = the people waiting come up one by one; 'board' = a team goes down
+  rider() { return FIG_RESCUE; }              // colour of the figure on the rope
+  arrive(a) {}                                // the lead has reached the scene
+  hoisted(a, n) {}                            // the n-th person is up
+}
+
+/* ships: 50/50 a damaged one (rescue the crew) or an intact one (board and inspect); 4 kinds of ship */
+class ShipMission extends SceneMission {
+  static key = 'ship'; static weight = 0.35;
+  constructor(flight, size) {
+    super(flight, size); this.dir = Math.random() < 0.5 ? 'rescue' : 'inspect';
+    this.vessel = VESSELS.spawn(pick(Object.values(VESSEL_KINDS)), this.dir === 'rescue', FIG_RESCUE);
+  }
+  textKey() { return 'ship.' + this.dir; }
+  textVars() { return { V: this.vessel.K.name }; }
+  work() { return this.dir === 'rescue' ? 'hoist' : 'board'; }
+  rider() { return this.dir === 'rescue' ? FIG_RESCUE : FIG_TEAM; }
+  arrive(a) { a.say(radioLine(LINES.ship.onScene[this.dir]), { prio: 1 }); }
+  hoisted(a, n) { if (n === 1) a.say(radioLine(LINES.ship.hoist), { prio: 0 }); }
 }
 registerMission(ShipMission);
+
+/* a pilot in the water beside a crashed jet: one of ours or an enemy (a prisoner then). Known from the start, or
+   unidentified until the helicopter gets there and sees the wreck. (A pilot pick-up beyond the screen edge also stays
+   among the plain patrol missions.) */
+const PILOT_SUIT = { friendly: 0x56603e, enemy: 0x6a7480 };
+class PilotMission extends SceneMission {
+  static key = 'pilot'; static weight = 0.3;
+  constructor(flight, size) {
+    super(flight, size);
+    this.side = Math.random() < 0.5 ? 'friendly' : 'enemy';          // who really is out there
+    this.known = Math.random() < 0.65;                                // otherwise unidentified until on scene
+    this.vessel = VESSELS.spawn(pick(Object.values(WRECK_KINDS).filter(k => k.side === this.side)), true, PILOT_SUIT[this.side]);
+  }
+  textKey() { return 'pilot.' + (this.known ? this.side : 'unknown'); }
+  textVars() { return { T: this.vessel.K.name }; }
+  rider() { return PILOT_SUIT[this.side]; }
+  arrive(a) {
+    const T = this.vessel.K.name;
+    if (this.known) { a.say(radioLine(LINES.pilot.arrive[this.side], { T }), { prio: 1 }); return; }
+    // the wreck tells who it was; the AWACS (or the carrier) answers, and the report on the way back follows suit
+    a.say(radioLine(LINES.pilot.reveal[this.side], { T }), { prio: 2 });
+    const aw = AIRCRAFT.find(x => x.isAwacs && x.airborne);
+    RADIO.say(aw ? aw.callsign : RADIO_NAMES.carrier, radioLine(LINES.pilot.ack[this.side], { C: a.callsign }), { role: aw ? 'awacs' : 'ship', prio: 1, delay: 1.2 });
+    this.done = makeMission('pilot.' + this.side, { T }).done;
+  }
+  hoisted(a) { a.say(radioLine(LINES.pilot.hoisted[this.side]), { prio: 1 }); }
+}
+registerMission(PilotMission);

@@ -17,11 +17,11 @@ User-facing docs: `README.md` (keep it in sync when behaviour or properties chan
 | `js/core.js` | utils (`V3`, `rand`, `clamp`, `lerp`, `smoothstep`, `pick`…), `CFG` defaults, waves (JS + generated GLSL — keep in sync), sun position, sky palette, canvas textures `TEX` |
 | `js/flightpath.js` | `FlightPath`: Dubins CSC curves (turn-radius-limited flight) + lines |
 | `js/models.js` | mesh helpers (`M`, `box`, `cyl`, `taper`, `prism`…), `mergeStatic`, `disposeTree`, nav lights, searchlights, CIWS/gun mounts, `buildCarrier`, `buildDestroyer`, mission ships `buildFeeder` / `buildTrawler` / `buildCorvette` / `buildDestroyerTemplate` |
-| `js/airframes.js` | aircraft model builders → `{ group, setFold(f), tick(dt, st) }` |
+| `js/airframes.js` | aircraft model builders → `{ group, setFold(f), tick(dt, st) }`; `buildWreck` (crashed jet template for pilot rescues) |
 | `js/effects.js` | `Tracers` (InstancedMesh), `SpriteFX` (flash/smoke pools), `Splashes`, `Foam` (points), `FlashLights` |
 | `js/radio.js` | callsigns, `RADIO` subtitle queue, mission orders, `STRESS` + `THREAT_TIERS`, `radioLine()`, line pools `OPS` / `COMBAT` / `AIRWAR_LINES` / `LINES` (see "Radio lines & threat tiers") |
 | `js/aircraft.js` | `Aircraft` → `FixedWing` / `Helicopter` state machines, deck resources `FD` / `DECK`, types, `Flyby` |
-| `js/missions.js` | missions: `Leg` steps, `Mission` types (`patrol`, `cod`, `sling`, `ship`), `pickMission`, mission-world objects `CARGO` / `VESSELS` / `ROPES` — see "Missions" |
+| `js/missions.js` | missions: `Leg` steps, `Mission` types (`patrol`, `cod`, `sling`, `ship`, `pilot`), `pickMission`, mission-world objects `CARGO` / `VESSELS` / `ROPES` — see "Missions" |
 | `js/combat.js` | enemies: `ENEMY_TYPES` (Su-25/33/47/57 — model builders live in `airframes.js`; speed, altitude, hp, anti-ship missile chance, stress-based weight), vampires, boats, dogfight bandits (`duel`, flying a pass path), beat-synced hit resolution, ship damage |
 | `js/airwar.js` | `AIRWAR`: combat passes — armed aircraft wait off-screen (`cbt_wait`) and cross the screen chasing / chased by a dogfight bandit or hunting boats; screen helpers (`ndc`, `onScreen`, `groundAt`), pass weapons on the beat (`AIRWAR.onBeat`), pass radio |
 | `js/main.js` | WE property listener, scene init, audio analysis + `onBeat`, weapons, ships, missions, chatter, panel UI, main loop |
@@ -31,7 +31,7 @@ User-facing docs: `README.md` (keep it in sync when behaviour or properties chan
 
 ## Rules / conventions
 - **After changing any JS/CSS file, bump the cache-buster** `?v=N` on all `<script>`/`<link>` tags in
-  `index.html` (WE's CEF caches aggressively). Current: `v=32`.
+  `index.html` (WE's CEF caches aggressively). Current: `v=33`.
 - **New WE property**: add it to `project.json`, read it in `applyUserProperties` (`main.js`) into `CFG`,
   then run `python tools/gen_properties.py`. Property `order` decides the browser-drawer group
   (0–9 camera/time, 10–19 audio/combat, 20–29 sea, 30–39 panel, 40–49 air wing, 50–59 hull number).
@@ -69,10 +69,19 @@ Missions fly beyond the screen edge while there is no music. `dispatchFlight` (`
   `Mission` (`patrol`, generic), `CodMission` (`cod`, optIn — CMV-22B: farther, longer, lands after),
   `SlingMission` (`sling`, unarmed helicopters with a host that has lifts: 50/50 `out` = hook a container from
   elevator one and fly it out, `in` = bring one back and set it down on elevator one; wingmen fly plain legs),
-  `ShipMission` (`ship`, MH-60s only: a vessel spawns ahead of the fleet — `VESSEL_KINDS` feeder / trawler /
-  corvette / destroyer (the escort model minus its searchlight), builders in `models.js` — damaged → rescue (survivors up the hoist) or intact → inspect (team down the
-  fast rope); lead `[ToVessel, OnScene, Return]`, wingman `[ToVessel, Overwatch, Return]`; the vessel drifts past
-  at ≥ 1.2/s, the legs end when the scene is off-screen behind the fleet, so the helicopters come back from the rear).
+  and the **scene missions** (MH-60s only), built on `SceneMission` (not registered itself): something lies in the
+  sea ahead of the fleet (`this.vessel = VESSELS.spawn(kind, damaged, color)`), lead `[ToVessel, OnScene, Return]`,
+  wingman `[ToVessel, Overwatch, Return]`; it drifts past at ≥ 1.2/s, the legs end when the scene is off-screen behind
+  the fleet, so the helicopters come back from the rear. A subclass sets `work()` (`'hoist'` = the people waiting
+  come up one by one, `'board'` = a team goes down), `rider()` (figure colour), `arrive(a)` / `hoisted(a, n)` (radio).
+  - `ShipMission` (`ship`): `VESSEL_KINDS` feeder / trawler / corvette / destroyer (the escort model minus its
+    searchlight; builders in `models.js`) — damaged → rescue (survivors up the hoist), intact → inspect (team down).
+  - `PilotMission` (`pilot`): `WRECK_KINDS` — a crashed jet (`buildWreck(builder)` in `airframes.js`: any airframe,
+    gear / lights / glow stripped, half sunk, life raft beside it) of ours or an enemy's (a prisoner then); known from
+    the order (`pilot.friendly` / `pilot.enemy`) or `pilot.unknown` and revealed on arrival (`LINES.pilot.reveal`,
+    AWACS `ack`, the done text follows). The off-screen pilot pick-up stays among the patrol texts.
+  - A kind: `{ key, name, build, len, deckY, spot, fire, crew, crewAt, ropeDz, roll, sink, bob, smoke }` (see the
+    comment above `VESSEL_KINDS`) — a new scene object is a new kind, not new code.
 - **New mission type**: subclass `Mission` (or a type), override what differs — `legs(role)`, `static eligible`,
   `static weight` / `optIn`, `textKey()` (key into `MISSIONS`, dots for nesting: `'sling.out'`), `copyKey()`
   (acknowledgement pool), `textVars()` (extra placeholders, e.g. `{V}`), `dist` / `away` in the constructor,
@@ -84,7 +93,7 @@ Missions fly beyond the screen edge while there is no music. `dispatchFlight` (`
     platform; a delivered one is pooled at the bottom, then the lift goes up and is freed) and `heli` (hangs on a line
     under the helicopter, hidden with it). A lift is reserved by `L.busy = <mission context>`; aircraft using
     elevators already wait on `L.busy`.
-  - `VESSELS`: ships of `ShipMission` — clones of one template per kind, stopped at a random heading, drifting past, fire / smoke on time
+  - `VESSELS`: ships / wrecks of the scene missions — clones of one template per kind, stopped at a random heading, drifting past, fire / smoke on time
     accumulators, crew figures as children (shared geometry); removed off-screen once their mission is over
     (`reset` lets them sail off).
   - `ROPES`: pooled hoist cable / fast rope with one riding figure (`set(rope, top, bottom, u)`).

@@ -80,6 +80,11 @@ SAR, medevac, sonar searches…). Each mission has its own radio orders, and the
   corvette or an allied destroyer. If it is burning and listing, the helicopter hovers over it and hoists the survivors up one by one;
   if it is intact, a boarding team fast-ropes onto its deck while the wingman circles overhead. The carrier sails
   past, the scene drifts off-screen behind the fleet, and the helicopters come back from astern.
+- Pilot rescues (MH-60s), on screen the same way: a crashed jet floats half sunk and smoking, its pilot in a yellow
+  raft beside it, and the helicopter hoists him up. It is one of ours (Hornet, Tomcat, Lightning) or an enemy
+  (Su-25/33/47/57 — the pilot is taken prisoner, with its own radio lines). Sometimes the order only says
+  "unidentified aircraft down" and the crew finds out whose it is when they get there. The off-screen pilot
+  pick-up is still among the regular missions.
 - Destroyer helicopters have their own callsigns: SEAHORSE and PETREL.
 
 ## Heavy music

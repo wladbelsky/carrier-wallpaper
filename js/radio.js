@@ -104,6 +104,24 @@ const MISSIONS = {
       ['{V} is lying stopped ahead of the fleet. Put a team on her deck and check her out.', 'All clear on board. Team is back with us. Returning.']
     ]
   },
+  // PilotMission (missions.js): a crashed jet ahead of the fleet — {T} = 'Hornet' / 'Su-33 Flanker' …; unknown = identified on scene
+  pilot: {
+    friendly: [
+      ['a {T} went down ahead of the fleet. The pilot punched out and is in the water. Go get him.', 'Pilot recovered, cold but in one piece. Returning to Mother.'],
+      ['we lost a {T} dead ahead. Beacon in the water, pick up the pilot.', 'Got our pilot. He owes us a drink. RTB.'],
+      ['{T} pilot ejected ahead of the fleet. Swimmer up, go!', 'Pilot aboard and talking. Heading home.']
+    ],
+    enemy: [
+      ['an enemy {T} went down ahead of the fleet. The pilot is in a raft. Pick him up, he is a prisoner now.', 'Enemy pilot aboard and under guard. Returning.'],
+      ['enemy pilot in the water dead ahead, from a {T}. Fish him out before he drowns.', 'Prisoner aboard. He is not saying much. RTB.'],
+      ['a {T} pilot ejected ahead of us. Bring him in, and keep him covered.', 'Enemy pilot secured in the back. Coming home.']
+    ],
+    unknown: [
+      ['unidentified aircraft down ahead of the fleet. Beacon in the water. Find the pilot.', ''],
+      ['something went into the sea ahead of us. Possible pilot in the water, go take a look.', ''],
+      ['a contact dropped off the scope ahead of the fleet. Check the crash site for survivors.', '']
+    ]
+  },
   // SlingMission (missions.js): out = take a load from elevator one, in = bring one back to it
   sling: {
     out: [
@@ -143,6 +161,25 @@ LINES.sling = {
   hooked: ['Load hooked. Lifting.', 'Got the load. Taking it out.', 'Hook-up complete, climbing.'],
   dropClear: ['{c}, elevator one is clear. Set it down.', '{c}, cleared to lower the load onto elevator one.'],
   released: ['Load released. Clear of the deck.', 'Load is down. Pulling away.', 'Released. Thanks, deck.']
+};
+/* pilot rescue (missions.js): {T} = aircraft type, {C} = the helicopter */
+LINES.pilot = {
+  arrive: {     // the side was known from the start
+    friendly: ["On scene. I see him in the raft, he's waving. Hoist going down.", 'Pilot in the raft, looks okay. Lowering the hoist.', 'Over the {T} wreck now. Swimmer going down.'],
+    enemy: ['On scene. Enemy pilot in the raft, hands up. Hoist going down.', 'Got eyes on him. Crew chief, keep him covered.', "Over the {T} wreck. He's not resisting."]
+  },
+  reveal: {     // unidentified until the helicopter sees the wreck
+    friendly: ["On scene. It's a {T}! One of ours! He's waving.", "Visual on the wreck: that's our {T}. Friendly pilot in the raft!", "Good news, it's one of ours. Hoist going down."],
+    enemy: ["On scene. That's a {T}! Enemy pilot in the water.", "It's an enemy pilot! Hands up in the raft. Crew chief, weapon ready.", 'Wreck is a {T}. Hostile. Picking him up anyway.']
+  },
+  ack: {
+    friendly: ['{C}, copy. Bring our boy home.', '{C}, good news. Medical will meet you on deck.'],
+    enemy: ['{C}, copy. Treat him as a prisoner of war.', '{C}, understood. Security team will meet you on deck.']
+  },
+  hoisted: {
+    friendly: ['Pilot aboard! Welcome back, sir.', "Got him. He's shivering but okay."],
+    enemy: ['Enemy pilot aboard. Restrained and secured.', 'Prisoner on board, no weapons on him.']
+  }
 };
 /* ship missions (missions.js): the lead on arrival, and when the first survivor is up */
 LINES.ship = {
