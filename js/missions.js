@@ -263,12 +263,14 @@ class SlingMission extends Mission {
 registerMission(SlingMission);
 
 /* ===== Ship missions (MH-60): rescue the crew of a damaged ship / inspect an intact one, ahead of the fleet =====
-   The ship drifts past the fleet (the sea flows by) with the helicopter hovering over it, a rope down to its deck;
+   The ship lies stopped at a random heading and drifts past the fleet (the sea flows by) with the helicopter hovering
+   over it, a rope down to its deck;
    the scene leaves the screen behind the carrier and the helicopters come back from the rear. */
 const VESSEL_KINDS = {
   feeder: { name: 'a container feeder', build: buildFeeder, len: 12, deckY: 0.93, spot: [4.7, 0], fire: [0.5, 1.7, 0] },
   trawler: { name: 'a fishing trawler', build: buildTrawler, len: 3.6, deckY: 0.51, spot: [-1.1, 0], fire: [0.65, 1.25, 0] },
-  corvette: { name: 'a foreign corvette', build: buildCorvette, len: 9, deckY: 0.78, spot: [-3.6, 0], fire: [0.3, 1.7, 0] }
+  corvette: { name: 'a foreign corvette', build: buildCorvette, len: 9, deckY: 0.78, spot: [-3.6, 0], fire: [0.3, 1.7, 0] },
+  destroyer: { name: 'an allied destroyer', build: buildDestroyerTemplate, len: 15.5, deckY: 1.13, spot: [-6.7, 0], fire: [-1.4, 2.3, 0] }
 };
 const VESSEL_MODELS = {};                     // one template per kind; every vessel is a clone (shared geometry)
 let _figGeo = null, _ropeGeo = null;
@@ -285,8 +287,7 @@ const VESSELS = {
     // a lane beside the fleet, outside the escorts: the side with fewer vessels, behind the last one in it
     const n = s => this.list.filter(v => Math.sign(v.p.z) === s).length, side = n(1) === n(-1) ? pick([-1, 1]) : n(1) < n(-1) ? 1 : -1;
     const x = Math.max(rand(85, 100), ...this.list.filter(v => Math.sign(v.p.z) === side).map(v => v.p.x + v.K.len / 2 + 22));
-    const v = { kind, K, g, damaged, p: new V3(x, 0, side * rand(30, 38)), vx: -1.2, yaw: damaged ? rand(0, TAU) : Math.PI,
-      own: damaged ? 0 : 1, t: rand(0, 9), fxT: 0, wakeT: 0, crew: [], active: true };
+    const v = { kind, K, g, damaged, p: new V3(x, 0, side * rand(30, 38)), vx: -1.2, yaw: rand(0, TAU), t: rand(0, 9), fxT: 0, crew: [], active: true };
     if (damaged) for (let i = 0; i < 3; i++) this.figure(v, FIG_RESCUE, i);   // survivors waiting on deck
     this.place(v, 0); this.list.push(v); return v;
   },
@@ -299,9 +300,9 @@ const VESSELS = {
   world(v, x, y, z, out) { return out.set(x, y, z).applyQuaternion(v.g.quaternion).add(v.g.position); },
   fwd(v, out) { return out.set(1, 0, 0).applyQuaternion(v.g.quaternion).setY(0).normalize(); },
   place(v, dt) {
-    // dead in the water it just drifts with the sea; under way it also steams past on an opposite course.
-    // Never slower than 1.2, so the scene always leaves the screen (even with the fleet stopped).
-    v.vx = -Math.max(1.2, WAVE.flow + v.own); v.p.x += v.vx * dt; v.t += dt;
+    // stopped in the water, it drifts past with the sea; never slower than 1.2, so the scene always leaves the screen
+    // (even with the fleet stopped)
+    v.vx = -Math.max(1.2, WAVE.flow); v.p.x += v.vx * dt; v.t += dt;
     const roll = v.damaged ? 0.15 + 0.03 * Math.sin(v.t * 0.7) : 0.03 * Math.sin(v.t * 0.9);
     v.g.position.set(v.p.x, waveH(v.p.x, v.p.z) * 0.6 - (v.damaged ? 0.02 * v.K.len : 0), v.p.z);   // a damaged ship sits lower
     v.g.rotation.set(roll, v.yaw, (v.damaged ? -0.04 : 0) + 0.02 * Math.sin(v.t * 0.6));
@@ -318,13 +319,6 @@ const VESSELS = {
           const p = this.world(v, K.fire[0] + rand(-0.3, 0.3), K.fire[1], K.fire[2] + rand(-0.2, 0.2), new V3());
           FX.smoke.spawn(p, { s0: 0.9, s1: 3.8, life: 3.5, a0: 0.55, color: 0x1e1e1e, v: new V3(rand(-0.8, -0.3), rand(0.7, 1.1), rand(-0.2, 0.2)), drag: 0.3 });
           if (Math.random() < 0.6) FX.flash.spawn(p, { s0: 0.7, s1: 1.1, life: 0.18, a0: 0.9, color: 0xff7a20 });
-        }
-      } else {                                  // wake off the stern while under way
-        v.wakeT += dt;
-        while (v.wakeT > 1 / 25) {
-          v.wakeT -= 1 / 25;
-          const s = this.world(v, -K.len / 2, 0, rand(-0.25, 0.25), _vs1), f = this.fwd(v, _vs2);
-          FX.foam.emit(s.x, s.z, -f.x * 0.6 + rand(-0.3, 0.3), -f.z * 0.6 + rand(-0.3, 0.3), rand(2, 4));
         }
       }
       // gone once its mission is over and it is off-screen behind the fleet (or simply far behind)

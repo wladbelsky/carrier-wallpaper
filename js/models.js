@@ -466,6 +466,13 @@ function buildTrawler() {
   const drum = cyl(g, 0.15, 0.15, 0.5, 8, 0x3a6a3a, -0.85, 0.68, 0); drum.rotation.x = Math.PI / 2;   // net drum
   mergeStatic(g, []); return g;
 }
+/* allied destroyer: the escort model without its searchlight (an extra light on a mission ship would cost every lit
+   fragment and recompile the shaders whenever the ship comes and goes) */
+function buildDestroyerTemplate() {
+  const d = buildDestroyer(1);
+  for (const s of d.searchlights) { s.holder.removeFromParent(); SEARCHLIGHTS.splice(SEARCHLIGHTS.indexOf(s), 1); disposeTree(s.holder); }
+  return d.group;
+}
 /* foreign corvette, ~90 m: grey hull, gun forward, superstructure and mast midships, helideck aft */
 function buildCorvette() {
   const g = new THREE.Group(), HULL = 0x737d76, HULL2 = 0x5b645e, DECK = 0x454b47, D = 0x30353a, WIN = M(0x14202c);

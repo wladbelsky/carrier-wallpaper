@@ -16,7 +16,7 @@ User-facing docs: `README.md` (keep it in sync when behaviour or properties chan
 |---|---|
 | `js/core.js` | utils (`V3`, `rand`, `clamp`, `lerp`, `smoothstep`, `pick`…), `CFG` defaults, waves (JS + generated GLSL — keep in sync), sun position, sky palette, canvas textures `TEX` |
 | `js/flightpath.js` | `FlightPath`: Dubins CSC curves (turn-radius-limited flight) + lines |
-| `js/models.js` | mesh helpers (`M`, `box`, `cyl`, `taper`, `prism`…), `mergeStatic`, `disposeTree`, nav lights, searchlights, CIWS/gun mounts, `buildCarrier`, `buildDestroyer`, mission ships `buildFeeder` / `buildTrawler` / `buildCorvette` |
+| `js/models.js` | mesh helpers (`M`, `box`, `cyl`, `taper`, `prism`…), `mergeStatic`, `disposeTree`, nav lights, searchlights, CIWS/gun mounts, `buildCarrier`, `buildDestroyer`, mission ships `buildFeeder` / `buildTrawler` / `buildCorvette` / `buildDestroyerTemplate` |
 | `js/airframes.js` | aircraft model builders → `{ group, setFold(f), tick(dt, st) }` |
 | `js/effects.js` | `Tracers` (InstancedMesh), `SpriteFX` (flash/smoke pools), `Splashes`, `Foam` (points), `FlashLights` |
 | `js/radio.js` | callsigns, `RADIO` subtitle queue, mission orders, `STRESS` + `THREAT_TIERS`, `radioLine()`, line pools `OPS` / `COMBAT` / `AIRWAR_LINES` / `LINES` (see "Radio lines & threat tiers") |
@@ -31,7 +31,7 @@ User-facing docs: `README.md` (keep it in sync when behaviour or properties chan
 
 ## Rules / conventions
 - **After changing any JS/CSS file, bump the cache-buster** `?v=N` on all `<script>`/`<link>` tags in
-  `index.html` (WE's CEF caches aggressively). Current: `v=31`.
+  `index.html` (WE's CEF caches aggressively). Current: `v=32`.
 - **New WE property**: add it to `project.json`, read it in `applyUserProperties` (`main.js`) into `CFG`,
   then run `python tools/gen_properties.py`. Property `order` decides the browser-drawer group
   (0–9 camera/time, 10–19 audio/combat, 20–29 sea, 30–39 panel, 40–49 air wing, 50–59 hull number).
@@ -70,7 +70,7 @@ Missions fly beyond the screen edge while there is no music. `dispatchFlight` (`
   `SlingMission` (`sling`, unarmed helicopters with a host that has lifts: 50/50 `out` = hook a container from
   elevator one and fly it out, `in` = bring one back and set it down on elevator one; wingmen fly plain legs),
   `ShipMission` (`ship`, MH-60s only: a vessel spawns ahead of the fleet — `VESSEL_KINDS` feeder / trawler /
-  corvette, builders in `models.js` — damaged → rescue (survivors up the hoist) or intact → inspect (team down the
+  corvette / destroyer (the escort model minus its searchlight), builders in `models.js` — damaged → rescue (survivors up the hoist) or intact → inspect (team down the
   fast rope); lead `[ToVessel, OnScene, Return]`, wingman `[ToVessel, Overwatch, Return]`; the vessel drifts past
   at ≥ 1.2/s, the legs end when the scene is off-screen behind the fleet, so the helicopters come back from the rear).
 - **New mission type**: subclass `Mission` (or a type), override what differs — `legs(role)`, `static eligible`,
@@ -84,7 +84,7 @@ Missions fly beyond the screen edge while there is no music. `dispatchFlight` (`
     platform; a delivered one is pooled at the bottom, then the lift goes up and is freed) and `heli` (hangs on a line
     under the helicopter, hidden with it). A lift is reserved by `L.busy = <mission context>`; aircraft using
     elevators already wait on `L.busy`.
-  - `VESSELS`: ships of `ShipMission` — clones of one template per kind, drifting past, fire / smoke / wake on time
+  - `VESSELS`: ships of `ShipMission` — clones of one template per kind, stopped at a random heading, drifting past, fire / smoke on time
     accumulators, crew figures as children (shared geometry); removed off-screen once their mission is over
     (`reset` lets them sail off).
   - `ROPES`: pooled hoist cable / fast rope with one riding figure (`set(rope, top, bottom, u)`).

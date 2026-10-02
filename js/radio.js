@@ -101,7 +101,7 @@ const MISSIONS = {
     ],
     inspect: [
       ['{V} ahead of the fleet is not answering the radio. Board and inspect her.', 'Inspection complete, papers in order. Team recovered, RTB.'],
-      ['{V} is closing on the fleet from ahead. Put a team on her deck and check her out.', 'All clear on board. Team is back with us. Returning.']
+      ['{V} is lying stopped ahead of the fleet. Put a team on her deck and check her out.', 'All clear on board. Team is back with us. Returning.']
     ]
   },
   // SlingMission (missions.js): out = take a load from elevator one, in = bring one back to it
