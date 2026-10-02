@@ -1,9 +1,15 @@
 {
-	"title": "Carrier Strike Group — Audio Reactive",
-	"description": "Isometric carrier strike group: carrier, two escorting destroyers, a configurable air wing (F/A-18, F-14, F-35C, E-2D, MH-60, CH-53, AH-1Z) with folding wings, deck-edge elevators and a flight-deck control panel. Guns, CIWS and aircraft fire to the beat, Ace Combat style radio subtitles, time of day follows your PC clock.",
+	"title": "Carrier Strike Group",
+	"description": "Isometric carrier strike group: carrier, two escorting destroyers, a configurable air wing (F/A-18, F-14, F-35C, E-2D, MH-60, CH-53, AH-1Z, CMV-22B) with folding wings, deck-edge elevators and a flight-deck control panel. Guns, CIWS and aircraft fire to the beat, Ace Combat style radio subtitles, time of day follows your PC clock.",
 	"file": "index.html",
 	"preview": "preview.jpg",
+	"ratingsex": "none",
+	"ratingviolence": "included",
 	"type": "web",
+	"version": 1,
+	"visibility": "public",
+	"workshopid": "3811917786",
+	"workshopurl": "steam://url/CommunityFilePage/3811917786",
 	"tags": [
 		"Vehicle"
 	],

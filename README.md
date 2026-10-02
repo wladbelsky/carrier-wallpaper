@@ -6,7 +6,13 @@ subtitles run at the top of the screen, and the time of day follows your PC cloc
 
 ![preview](preview.jpg)
 
+- **Live demo** (runs in the browser): https://wladbelsky.github.io/carrier-wallpaper/
+- **Steam Workshop:** https://steamcommunity.com/sharedfiles/filedetails/?id=3811917786
+
 ## Install
+
+The easiest way: subscribe on the [Steam Workshop](https://steamcommunity.com/sharedfiles/filedetails/?id=3811917786).
+From source:
 
 1. Copy the `CarrierWallpaper` folder into
    `...\Steam\steamapps\common\wallpaper_engine\projects\myprojects\`,
