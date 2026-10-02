@@ -64,7 +64,10 @@ registerLeg(Depart, 'MISSION ▶', 'air'); registerLeg(Away, 'ON MISSION', 'air'
 
 /* ---- mission types ---- */
 const MISSION_TYPES = {};
-function registerMission(M) { MISSION_TYPES[M.key] = M; return M; }
+function registerMission(M) {
+  if (!M.key || (MISSION_TYPES[M.key] && MISSION_TYPES[M.key] !== M)) throw new Error(`mission type needs its own static key (got '${M.key}')`);
+  MISSION_TYPES[M.key] = M; return M;
+}
 /* spec.missions (optional) is an allow-list of mission keys; otherwise every eligible type that isn't optIn */
 function pickMission(lead) {
   const allow = lead.spec.missions;
@@ -117,6 +120,15 @@ class CodMission extends Mission {
 }
 registerMission(CodMission);
 
+/* a unit-height cylinder (ropeGeo) stretched between two points: sling lines, hoist cables, fast ropes */
+let _ropeGeo = null;
+const ropeGeo = () => _ropeGeo || (_ropeGeo = new THREE.CylinderGeometry(0.011, 0.011, 1, 4));
+const _slD = new V3();
+function stretchLine(mesh, a, b) {
+  const d = _slD.subVectors(b, a), len = d.length();
+  mesh.position.copy(a).addScaledVector(d, 0.5); mesh.quaternion.setFromUnitVectors(WUP, d.divideScalar(len || 1)); mesh.scale.set(1, len, 1);
+}
+
 /* ===== Sling loads: a container on a line under a transport helicopter, handed over on elevator one ===== */
 const SLING_HOVER = 5, SLING_HOOK = 2.35;     // hover / hook-up heights above the deck (crate bottom on the platform)
 const CARGO = {
@@ -131,7 +143,7 @@ const CARGO = {
     for (const x of [-0.22, 0, 0.22]) box(g, 0.02, 0.27, 0.3, C2, x, 0.155, 0);        // corrugation ribs
     for (const x of [-0.33, 0.33]) for (const z of [-0.13, 0.13]) strut(g, new V3(x, 0.31, z), new V3(0, this.APEX, 0), 0.008, D);   // bridle
     mergeStatic(g, []);
-    const line = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 1, 4), M(0x1e1e1e)); line.castShadow = true;
+    const line = new THREE.Mesh(ropeGeo(), M(0x1e1e1e)); line.castShadow = true;
     g.visible = line.visible = false; scene.add(g); scene.add(line);
     return { g, line, mode: 'off', a: null, host: null, L: null, token: null, down: false };
   },
@@ -156,14 +168,13 @@ const CARGO = {
         it.g.position.lerp(_cgT, Math.min(1, dt * 4));
         orientFrom(it.g, a.fwd, 0);
         const apex = _cgT.copy(it.g.position); apex.y += this.APEX;
-        const d = _cgD.subVectors(hook, apex), len = d.length();
-        it.line.position.copy(apex).addScaledVector(d, 0.5); it.line.quaternion.setFromUnitVectors(WUP, d.divideScalar(len || 1)); it.line.scale.set(1, len, 1);
+        stretchLine(it.line, apex, hook);
         it.g.visible = it.line.visible = a.mesh.visible;
       }
     }
   }
 };
-const _cgH = new V3(), _cgT = new V3(), _cgD = new V3();
+const _cgH = new V3(), _cgT = new V3();
 registerMissionWorld(CARGO);
 
 /* lift side of a pickup: reserve elevator one, send it down, put the container on it, bring it up; true = load is up */
@@ -284,12 +295,11 @@ const WRECK_KINDS = {
   su47: wreckKind('su47', 'Su-47 Berkut', 'enemy', buildSu47), su57: wreckKind('su57', 'Su-57 Felon', 'enemy', buildSu57)
 };
 const VESSEL_MODELS = {};                     // one template per kind; every vessel is a clone (shared geometry)
-let _figGeo = null, _ropeGeo = null;
+let _figGeo = null;
 const figGeo = () => _figGeo || (_figGeo = new THREE.BoxGeometry(0.06, 0.13, 0.06).translate(0, 0.065, 0));
-const ropeGeo = () => _ropeGeo || (_ropeGeo = new THREE.CylinderGeometry(0.01, 0.01, 1, 4));
 const ropeDz = K => (K.ropeDz != null ? K.ropeDz : 0.25);   // the rope lands beside the people waiting on a deck
 const FIG_RESCUE = 0xff7a1a, FIG_TEAM = 0x2f3a2a, CREW_AT = [[-0.3, 0.22], [0.25, 0.15], [-0.05, -0.25]];
-const _vs1 = new V3(), _vs2 = new V3(), _vs3 = new V3(), _vs4 = new V3();
+const _vs1 = new V3(), _vs2 = new V3(), _vs4 = new V3(), _vsP = new V3(), _vsV = new V3();
 
 const VESSELS = {
   list: [],
@@ -328,14 +338,13 @@ const VESSELS = {
         v.fxT += dt;
         while (v.fxT > 0.12) {
           v.fxT -= 0.12;
-          const p = this.world(v, K.fire[0] + rand(-0.3, 0.3), K.fire[1], K.fire[2] + rand(-0.2, 0.2), new V3());
-          const k = K.smoke || 1;
-          FX.smoke.spawn(p, { s0: 0.9 * k, s1: 3.8 * k, life: 3.5, a0: 0.55, color: 0x1e1e1e, v: new V3(rand(-0.8, -0.3), rand(0.7, 1.1), rand(-0.2, 0.2)), drag: 0.3 });
+          const p = this.world(v, K.fire[0] + rand(-0.3, 0.3), K.fire[1], K.fire[2] + rand(-0.2, 0.2), _vsP), k = K.smoke || 1;
+          FX.smoke.spawn(p, { s0: 0.9 * k, s1: 3.8 * k, life: 3.5, a0: 0.55, color: 0x1e1e1e, v: _vsV.set(rand(-0.8, -0.3), rand(0.7, 1.1), rand(-0.2, 0.2)), drag: 0.3 });
           if (Math.random() < 0.6) FX.flash.spawn(p, { s0: 0.7 * k, s1: 1.1 * k, life: 0.18, a0: 0.9, color: 0xff7a20 });
         }
       }
-      // gone once its mission is over and it is off-screen behind the fleet (or simply far behind)
-      if ((!v.active && v.p.x < -50 && !AIRWAR.onScreen(v.p, 0.15)) || v.p.x < -200) { scene.remove(v.g); this.list.splice(i, 1); }
+      // gone once its mission is over and it is off-screen behind the fleet (never while the crew is still at work)
+      if ((!v.active && (v.p.x < -200 || (v.p.x < -50 && !AIRWAR.onScreen(v.p, 0.15)))) || v.p.x < -600) { scene.remove(v.g); this.list.splice(i, 1); }
     }
   },
   reset() { for (const v of this.list) v.active = false; }   // a rebuilt air wing: they just sail off
@@ -356,11 +365,9 @@ const ROPES = {
   reset() { for (const it of this.items) this.release(it); },
   /* top = hook under the helicopter, bottom = deck point; u = figure position along it (0 deck … 1 hook), null = no figure */
   set(it, top, bottom, u) {
-    const d = _vs3.subVectors(top, bottom), len = d.length();
-    it.line.position.copy(bottom).addScaledVector(d, 0.5); it.line.quaternion.setFromUnitVectors(WUP, d.divideScalar(len || 1)); it.line.scale.set(1, len, 1);
-    it.line.visible = true;
+    stretchLine(it.line, bottom, top); it.line.visible = true;
     it.fig.visible = u != null;
-    if (u != null) { it.fig.position.copy(bottom).addScaledVector(d, len * u - 0.13 * u); it.fig.quaternion.identity(); }
+    if (u != null) { it.fig.position.lerpVectors(bottom, top, u); it.fig.position.y -= 0.13 * u; it.fig.quaternion.identity(); }   // hangs below the hook
   }
 };
 registerMissionWorld(VESSELS); registerMissionWorld(ROPES);
@@ -373,18 +380,27 @@ function shipStation(c, out) {
   const v = c.m.vessel, K = v.K;
   return c.role === 'lead' ? VESSELS.world(v, K.spot[0], K.deckY + SHIP_HOVER, K.spot[1] + ropeDz(K), out) : out.set(v.p.x, 8, v.p.z + (v.p.z > 0 ? -7 : 7));
 }
-/* fly out ahead to meet the vessel where it will be on arrival */
+/* fly out to the vessel. The path is planned in the frame drifting with it (it lies stopped, the sea carries it past):
+   world position = path point + the drift so far, so the helicopter meets it exactly however long the flight takes
+   (a predicted meeting point overshot it whenever the turns made the flight longer, then snapped back on scene).
+   In that frame it flies at its speed plus the drift, so over the screen it keeps its usual speed even with a fast
+   fleet (else it would crawl and meet the ship far astern). */
 class ToVessel extends Leg {
   static state = 'ship_out';
   enter(a, c) {
     super.enter(a, c);
-    const v = c.m.vessel, p0 = a.mesh.position, st = shipStation(c, new V3());
-    const sp = a.orbit.v * 1.15, tt = Math.hypot(st.x - p0.x, st.z - p0.z) / (sp + Math.abs(v.vx));
-    st.x += v.vx * tt;
+    const v = c.m.vessel, st = shipStation(c, new V3());
     const hEnd = c.role === 'lead' ? headingOf(VESSELS.fwd(v, _vs1)) : Math.PI;
-    a.fly(new FlightPath().addDubins(p0, headingOf(a.fwd), st, hEnd, a.spec.turnR), a.orbit.v, Math.abs(v.vx) + 0.5);
+    a.fly(new FlightPath().addDubins(a.mesh.position, headingOf(a.fwd), st, hEnd, a.spec.turnR), a.orbit.v, a.orbit.v);
+    this.drift = 0;
   }
-  update(a, c, dt) { return a.followPath(dt); }
+  update(a, c, dt) {
+    const v = c.m.vessel, left = a.path.length - a.ps, cruise = a.orbit.v + Math.abs(v.vx);
+    a.pv0 = a.pv1 = left > 12 ? cruise : lerp(0.7, cruise, left / 12);   // full speed, slowing down over the last stretch only
+    this.drift += v.vx * dt;
+    const done = a.followPath(dt); a.mesh.position.x += this.drift;
+    return done;
+  }
 }
 /* lead: hover over the deck and work the rope — people up the hoist (work 'hoist') or a team down the fast rope ('board') */
 class OnScene extends Leg {
@@ -419,7 +435,9 @@ class OnScene extends Leg {
         ROPES.set(this.rope, top, deck, this.ride);
       }
     }
-    if (!shipSceneOver(a, c)) return false;
+    // leave once the scene is off-screen behind the fleet, but not with people still waiting or the team not down
+    const working = this.ride != null || (c.m.work() === 'hoist' ? v.crew.length > 0 : this.team < 3);
+    if (!shipSceneOver(a, c) || (working && a.t <= 150)) return false;
     ROPES.release(this.rope); v.active = false;
     if (c.m.done) a.say(c.m.done, { prio: 1 });
     return true;
@@ -443,6 +461,7 @@ registerLeg(ToVessel, 'MISSION ▶', 'air'); registerLeg(OnScene, 'ON SCENE', 'b
 /* base of the scene missions (not registered itself): MH-60s fly out to this.vessel (spawned by the subclass), the lead
    works the rope, the wingman circles. Subclasses say what the crew does and what they report. */
 class SceneMission extends Mission {
+  static key = '';                            // abstract: subclasses set their own key
   static eligible(a) { return a.spec.key === 'mh60'; }
   copyKey() { return 'heli_transport'; }
   legs(role) { return role === 'lead' ? [ToVessel, OnScene, Return] : [ToVessel, Overwatch, Return]; }

@@ -470,7 +470,7 @@ function buildTrawler() {
    fragment and recompile the shaders whenever the ship comes and goes) */
 function buildDestroyerTemplate() {
   const d = buildDestroyer(1);
-  for (const s of d.searchlights) { s.holder.removeFromParent(); SEARCHLIGHTS.splice(SEARCHLIGHTS.indexOf(s), 1); disposeTree(s.holder); }
+  for (const s of d.searchlights) { const i = SEARCHLIGHTS.indexOf(s); if (i >= 0) SEARCHLIGHTS.splice(i, 1); s.holder.removeFromParent(); disposeTree(s.holder); }
   return d.group;
 }
 /* foreign corvette, ~90 m: grey hull, gun forward, superstructure and mast midships, helideck aft */

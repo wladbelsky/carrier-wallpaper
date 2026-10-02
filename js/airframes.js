@@ -242,7 +242,7 @@ function buildWreck(build) {
   const g = new THREE.Group(), m = build(), ac = m.isObject3D ? m : m.group;
   if (m.tick) { m.setFold(0); m.tick(1, { gearDown: false, glow: 0, sweepTarget: 20 }); }
   const drop = []; ac.traverse(o => { if (!o.visible || o.isPoints || o.isSprite) drop.push(o); });
-  for (const o of drop) { if (o.isPoints) NAV_MATS.splice(NAV_MATS.indexOf(o.material), 1); o.removeFromParent(); }
+  for (const o of drop) { const i = o.isPoints ? NAV_MATS.indexOf(o.material) : -1; if (i >= 0) NAV_MATS.splice(i, 1); o.removeFromParent(); }
   ac.scale.setScalar(1.25); ac.position.y = -0.22; ac.rotation.set(0.3, 0, -0.1);   // half sunk, rolled, nose down
   g.add(ac);
   cyl(g, 0.27, 0.3, 0.08, 12, 0xf2c21a, 1.7, 0.06, 0.9);                           // life raft
