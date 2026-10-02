@@ -73,6 +73,9 @@ SAR, medevac, sonar searches…). Each mission has its own radio orders, and the
 - The CMV-22B flies its own COD runs (mail, cargo, engine modules, passengers, medevac): it stays away longer
   and lands on the carrier when it comes back, reporting what it brought.
 - The **Missions off-screen** property controls how often this happens (0 = off).
+- Sling loads: now and then an MH-60 or CH-53 gets a sling-load job. Half the time a container comes up on
+  elevator one, the helicopter hovers over it, hooks it and flies off with it on a line; otherwise it comes back
+  with a container, sets it down on elevator one and the elevator takes it below.
 - Destroyer helicopters have their own callsigns: SEAHORSE and PETREL.
 
 ## Heavy music

@@ -91,9 +91,19 @@ const MISSIONS = {
     ['pilot down at grid {G}. Search and rescue, go!', 'Pilot recovered, alive and well. RTB.'],
     ['ferry personnel to the island outpost.', 'Passengers dropped off. Returning.'],
     ['medevac from the supply ship, bearing {B}.', 'Casualty aboard. Coming home.'],
-    ['possible submarine in sector {S}. Start a sonar search.', 'Sector clear, no contacts. RTB.'],
-    ['sling-load the spare parts to the destroyer group, grid {G}.', 'Load delivered. Returning.']
+    ['possible submarine in sector {S}. Start a sonar search.', 'Sector clear, no contacts. RTB.']
   ],
+  // SlingMission (missions.js): out = take a load from elevator one, in = bring one back to it
+  sling: {
+    out: [
+      ['sling-load the spare parts from elevator one out to the destroyer group, grid {G}.', 'Load delivered. Returning.'],
+      ['take the ammunition pallet on elevator one out to the supply ship, bearing {B}.', 'Pallet delivered. Coming home.']
+    ],
+    in: [
+      ['pick up a sling load from the supply ship, bearing {B}, and bring it to elevator one.', 'Inbound with the load for elevator one.'],
+      ['the frigate at grid {G} has a container of spares for us. Sling it back to elevator one.', 'Container on the hook. Inbound for elevator one.']
+    ]
+  },
   heli_attack: [
     ['small boats spotted near the coast, sector {S}. Go take a look.', 'Just fishermen. Returning.'],
     ['escort the transports to the landing zone.', 'Transports delivered safely. Coming home.'],
@@ -116,6 +126,13 @@ const MISSIONS = {
   ]
 };
 /* replies to a mission order: common lines plus a few per kind; never the same line twice in a row */
+/* sling-load hand-over on elevator one (missions.js): deck crew and helicopter; {c} = helicopter callsign */
+LINES.sling = {
+  liftReady: ['{c}, your load is up on elevator one. Cleared to hook up.', '{c}, load is on the elevator, come and get it.'],
+  hooked: ['Load hooked. Lifting.', 'Got the load. Taking it out.', 'Hook-up complete, climbing.'],
+  dropClear: ['{c}, elevator one is clear. Set it down.', '{c}, cleared to lower the load onto elevator one.'],
+  released: ['Load released. Clear of the deck.', 'Load is down. Pulling away.', 'Released. Thanks, deck.']
+};
 LINES.missionCopy = {
   any: ['Copy, en route.', 'Roger that, on our way.', 'Copy. Heading out now.', 'Understood.', 'Wilco.', "Copy that. We're on it.",
     'Roger. Leaving the pattern.', 'Acknowledged. Moving out.', 'Copy, will report on arrival.', 'On our way. Keep the coffee warm.',
@@ -133,8 +150,9 @@ function missionCopy(kind) {
   let line; do line = radioLine(pool); while (line === lastMissionCopy);
   return lastMissionCopy = line;
 }
+/* order / done texts for a MISSIONS key; nested keys use a dot ('sling.out') */
 function makeMission(kind) {
-  const [order, done] = pick(MISSIONS[kind]);
+  const [order, done] = pick(kind.split('.').reduce((o, k) => o[k], MISSIONS));
   const sectors = ['Alpha', 'Bravo', 'Charlie', 'Delta', 'Echo', 'Foxtrot', 'Kilo', 'Sierra'];
   const bearing = bearingWords(rand(0, TAU));
   const vars = { S: pick(sectors), B: bearing, G: `${randi(1, 9)}-${randi(1, 9)}`, P: randi(4, 24), W: (randi(4, 24) * 500).toLocaleString('en-US') };

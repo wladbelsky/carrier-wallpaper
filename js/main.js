@@ -114,7 +114,7 @@ function init() {
 /* ---- air wing from the per-type counts ---- */
 function buildAirWing() {
   airWingDirty = false;
-  AIRCRAFT.forEach(a => a.dispose()); AIRCRAFT = []; AIRWAR.passes.length = 0;
+  AIRCRAFT.forEach(a => a.dispose()); AIRCRAFT = []; AIRWAR.passes.length = 0; CARGO.reset();
   HELI_LIGHTS.n = 0;
   resetDeck();
   const fixedSpots = DECK.fixedSpots.slice(0, DECK.INITIAL_DECK), heliSpots = DECK.heliSpots.slice();
@@ -609,20 +609,9 @@ function dispatchFlight() {
   const full = cands.filter(c => c.full), g = pick(full.length ? full : cands);
   // a four-ship flight goes as all four or as one of its pairs (lead or second section)
   if (g.ready.length > 2 && flightSize(g.ready.length) === 2) { const sec = Math.random() < 0.5 ? 2 : 0; g.ready = g.ready.slice(sec, sec + 2); }
-  const lead = g.ready[0], isHeli = lead instanceof Helicopter;
-  const kind = lead.isAwacs ? 'awacs' : lead.spec.missions ? pick(lead.spec.missions) : isHeli ? (lead.spec.armed ? 'heli_attack' : 'heli_transport') : 'fighter';
-  const task = makeMission(kind);
-  const S = lead.spec, h = rand(0, TAU), dist = S.missionDist || (isHeli ? 120 : 175), perp = new V3(-Math.sin(h), 0, Math.cos(h));
-  const away = S.missionAway ? rand(S.missionAway[0], S.missionAway[1]) : rand(50, 110);
-  g.ready.forEach((a, i) => {
-    const far = new V3(Math.cos(h) * dist, a.orbit.alt, Math.sin(h) * dist).addScaledVector(perp, (i - (g.ready.length - 1) / 2) * 6);
-    a.startMission({ far, heading: h, delay: i * 1.6, away: away + i * 1.6, lead: i === 0, done: task.done });
-  });
-  const awacs = AIRCRAFT.find(a => a.isAwacs && a.airborne && a !== lead);
-  // the whole flight is addressed through its lead; part of a flight by each aircraft (WARDOG 3, WARDOG 4)
-  const who = g.ready.length === g.size ? lead.callsign : g.ready.map(a => a.callsign).join(', ');
-  RADIO.say(awacs ? awacs.callsign : RADIO_NAMES.carrier, `${who}, ${task.order}`, { role: awacs ? 'awacs' : 'ship', prio: 1 });
-  lead.say(missionCopy(kind), { prio: 1, delay: 0.3 });
+  // the mission itself (type, legs, radio) lives in js/missions.js
+  const Type = pickMission(g.ready[0]); if (!Type) return false;
+  new Type(g.ready, g.size).start();
   return true;
 }
 
@@ -794,6 +783,7 @@ function step(dt) {
   updateMounts(dt);
   updateDeckMachinery(dt);
   for (const a of AIRCRAFT) a.update(dt);
+  CARGO.update(dt);
   updateFlak(dt);
   camShake = Math.max(0, camShake - dt * 3);
   if (CFG.camRotate || camShake > 0) { if (CFG.camRotate) camAz += CFG.camDir * CFG.camSpeed * DEG * dt; updateCameraPose(); }

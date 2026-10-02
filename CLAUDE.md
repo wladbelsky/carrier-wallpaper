@@ -8,7 +8,7 @@ User-facing docs: `README.md` (keep it in sync when behaviour or properties chan
 - Plain JS, no build step, no npm. `'use strict'` classic scripts sharing **global** scope
   (no modules). three.js **r149** is vendored as `js/three.min.js` — never edit it.
 - `index.html` loads scripts in dependency order (later files use globals of earlier ones):
-  `core → flightpath → models → airframes → effects → radio → aircraft → combat → airwar → main → properties → settings`,
+  `core → flightpath → models → airframes → effects → radio → aircraft → missions → combat → airwar → main → properties → settings`,
   then an inline script registers the WE audio listener (or starts the browser demo beat).
   `main.js` calls `init()` at its end, so anything `init()` needs must be defined before `main.js`.
 
@@ -21,6 +21,7 @@ User-facing docs: `README.md` (keep it in sync when behaviour or properties chan
 | `js/effects.js` | `Tracers` (InstancedMesh), `SpriteFX` (flash/smoke pools), `Splashes`, `Foam` (points), `FlashLights` |
 | `js/radio.js` | callsigns, `RADIO` subtitle queue, mission orders, `STRESS` + `THREAT_TIERS`, `radioLine()`, line pools `OPS` / `COMBAT` / `AIRWAR_LINES` / `LINES` (see "Radio lines & threat tiers") |
 | `js/aircraft.js` | `Aircraft` → `FixedWing` / `Helicopter` state machines, deck resources `FD` / `DECK`, types, `Flyby` |
+| `js/missions.js` | missions: `Leg` steps, `Mission` types (`patrol`, `cod`, `sling`), `pickMission`, `CARGO` (sling-load containers) — see "Missions" |
 | `js/combat.js` | enemies: `ENEMY_TYPES` (Su-25/33/47/57 — model builders live in `airframes.js`; speed, altitude, hp, anti-ship missile chance, stress-based weight), vampires, boats, dogfight bandits (`duel`, flying a pass path), beat-synced hit resolution, ship damage |
 | `js/airwar.js` | `AIRWAR`: combat passes — armed aircraft wait off-screen (`cbt_wait`) and cross the screen chasing / chased by a dogfight bandit or hunting boats; screen helpers (`ndc`, `onScreen`, `groundAt`), pass weapons on the beat (`AIRWAR.onBeat`), pass radio |
 | `js/main.js` | WE property listener, scene init, audio analysis + `onBeat`, weapons, ships, missions, chatter, panel UI, main loop |
@@ -30,7 +31,7 @@ User-facing docs: `README.md` (keep it in sync when behaviour or properties chan
 
 ## Rules / conventions
 - **After changing any JS/CSS file, bump the cache-buster** `?v=N` on all `<script>`/`<link>` tags in
-  `index.html` (WE's CEF caches aggressively). Current: `v=29`.
+  `index.html` (WE's CEF caches aggressively). Current: `v=30`.
 - **New WE property**: add it to `project.json`, read it in `applyUserProperties` (`main.js`) into `CFG`,
   then run `python tools/gen_properties.py`. Property `order` decides the browser-drawer group
   (0–9 camera/time, 10–19 audio/combat, 20–29 sea, 30–39 panel, 40–49 air wing, 50–59 hull number).
@@ -38,9 +39,9 @@ User-facing docs: `README.md` (keep it in sync when behaviour or properties chan
 - **New aircraft type**: builder in `airframes.js`, subclass with static `spec` + `buildModel()` in
   `aircraft.js`, register in `AIRCRAFT_TYPES` and `FIXED_ORDER`/`HELI_ORDER`, callsign pool in `radio.js`,
   `<key>count` slider in `project.json`.
-  Optional `spec` keys: `farOrbit` (orbit range for unarmed types during combat; `armed` types fly combat passes instead), `missions` (mission kinds to pick from, see `MISSIONS` in `radio.js`), `missionAway`,
-  `missionDist`, `landAfterMission`, `blades` (rotor blade count, for the stop-index snap), `noseDown` (helicopter cruise pitch),
-  `callsignGroup`.
+  Optional `spec` keys: `farOrbit` (orbit range for unarmed types during combat; `armed` types fly combat passes instead),
+  `missions` (allow-list of mission type keys, e.g. `['cod']` — see "Missions"), `blades` (rotor blade count, for the
+  stop-index snap), `noseDown` (helicopter cruise pitch), `callsignGroup`.
   The CMV-22B tiltrotor is a `Helicopter` with `conv` (0 = VTOL, 1 = airplane mode) and `gearDown` getters read by its model.
 - Match the existing style: dense one-liners, short comments, `const` scratch vectors at module level.
 - Sim time is `T` (advances only in `step(dt)`); real time is `RT()` (audio arming, beat gaps).
@@ -50,6 +51,32 @@ User-facing docs: `README.md` (keep it in sync when behaviour or properties chan
   weapons on the beat or chatter, and inbound vampires are intercepted / boats turn away. Radio `COMBAT.lull`, then
   `COMBAT.end` on stand-down, or `COMBAT.resume` if sound keeps going for `RESUME_DELAY` s.
   Use `AUD.fighting` for anything that should only happen while the fight is on; `AUD.armed` for "combat mode".
+
+## Missions (`js/missions.js`)
+Missions fly beyond the screen edge while there is no music. `dispatchFlight` (`main.js`) only chooses the flight
+(assembled flights first, a four-ship may go as a pair); everything else is in `missions.js`.
+- **`Mission`** = one dispatched flight. `start()` gives every aircraft a context `a.mission = { m, slot, role:
+  'lead' | 'wing', far, legs, i, … }`, enters its first leg and sends the radio order (whole flight → lead; a pair →
+  each callsign) and the acknowledgement. `update(a, dt)` runs the current leg; after the last one `finish(a)`
+  (back to `orbit`). `Aircraft.missionFlow` just forwards to it; `onMission` = `!!this.mission`.
+- **`Leg`** = one step for one aircraft: static `state` (the `aircraft.state` while in it), `enter(a, c)`,
+  `update(a, c, dt)` → `true` when done. Register with `registerLeg(L, label, cls)` — that adds the panel `STATUS`.
+  Generic legs: `Depart` (`mission_out`; wingmen wait for `m.leadOut`, then trail), `Away` (`mission`, hidden;
+  a carried load is delivered here; the lead reports `m.done` when it ends), `Return` (`mission_back`; to a new
+  orbit from the far point or from wherever the aircraft is).
+- **Types**: `registerMission(C)`; `pickMission(lead)` picks by `static weight` among types that are
+  `eligible(lead)` — all non-`optIn` types, or exactly the keys in `spec.missions` (allow-list).
+  `Mission` (`patrol`, generic), `CodMission` (`cod`, optIn — CMV-22B: farther, longer, lands after),
+  `SlingMission` (`sling`, unarmed helicopters with a host that has lifts: 50/50 `out` = hook a container from
+  elevator one and fly it out, `in` = bring one back and set it down on elevator one; wingmen fly plain legs).
+- **New mission type**: subclass `Mission` (or a type), override what differs — `legs(role)`, `static eligible`,
+  `static weight` / `optIn`, `textKey()` (key into `MISSIONS`, dots for nesting: `'sling.out'`), `copyKey()`
+  (acknowledgement pool), `dist` / `away` in the constructor, `finish(a)` — then `registerMission()`. Texts go into
+  `MISSIONS` (order / done pairs, `{S} {B} {G} {P} {W}` placeholders) and line pools into `LINES` (radio.js).
+- **`CARGO`**: pool of container models (built on demand, reused, never disposed); modes `lift` (rides the
+  elevator platform; a delivered one is pooled at the bottom, then the lift goes up and is freed) and `heli` (hangs
+  on a line under the helicopter, hidden with it). A lift is reserved by `L.busy = <mission context>`; aircraft
+  using elevators already wait on `L.busy`. `CARGO.update` runs in `step`, `CARGO.reset()` in `buildAirWing`.
 
 ## Radio lines & threat tiers (`js/radio.js`)
 - **Every radio line goes through `radioLine(pool, vars)`** — never `pick()` a line pool directly, never build

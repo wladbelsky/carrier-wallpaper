@@ -47,7 +47,6 @@ const STATUS = {
   lift_down: ['ELEVATOR ▼', 'busy'], roll_in: ['STOWING', 'busy'], turn: ['PARKING', 'busy'],
   unfold: ['BLADES SPREAD', 'busy'], fold: ['BLADES FOLD', 'busy'], spinup: ['SPOOL UP', 'busy'], lift: ['LIFTOFF', 'busy'],
   depart: ['CLIMB', 'air'], ret: ['RETURN', 'busy'], pad_wait: ['HOLDING', 'wait'], hover: ['HOVER', 'busy'], descend: ['LANDING', 'busy'],
-  mission_out: ['MISSION ▶', 'air'], mission: ['ON MISSION', 'air'], mission_back: ['RTB', 'air'],
   spindown: ['SHUTDOWN', 'busy'], tow_pad: ['TOWING', 'busy'], tow_lift: ['TOWING', 'busy'],
   cbt_out: ['ENGAGED ▶', 'air'], cbt_wait: ['ENGAGED', 'air'], cbt_pass: ['DOGFIGHT', 'air'], cbt_rtb: ['RTB', 'air']
 };
@@ -86,7 +85,7 @@ class Aircraft {
   get airborne() { return this.state === 'orbit' || this.state === 'climb' || this.state === 'depart'; }
   get isAwacs() { return !!this.spec.awacs; }
   canLaunch() { return this.state === 'parked' || this.state === 'hangar'; }
-  get onMission() { return this.state.startsWith('mission'); }
+  get onMission() { return !!this.mission; }
   get inCombat() { return this.state.startsWith('cbt_'); }
   canLand() { return (this.airborne || this.onMission || this.inCombat) && !this.landReq; }
   requestLaunch() { if (this.state === 'hangar') { this.state = 'lift_wait'; this.t = 0; } else if (this.state === 'parked') this.beginLaunch(); }
@@ -159,32 +158,8 @@ class Aircraft {
     return path.addDubins(from, heading, this.orbitPos(th0, new V3()), th0 + Math.PI / 2, this.spec.turnR);
   }
 
-  /* --- missions: fly off-screen, stay away, come back to the orbit --- */
-  startMission(m) { this.mission = Object.assign({ stage: 0 }, m); this.state = 'mission_out'; this.t = 0; }
-  missionFlow(dt) {
-    const m = this.mission; if (!m || !this.onMission) return false;
-    const S = this.spec;
-    if (this.state === 'mission_out') {
-      if (m.stage === 0) {
-        if (m.delay > 0) { m.delay -= dt; this.orbitStep(dt); return true; }   // wingmen follow the lead in trail
-        this.fly(new FlightPath().addDubins(this.mesh.position, headingOf(this.fwd), m.far, m.heading, S.turnR), this.orbit.v, this.orbit.v * 1.15);
-        m.stage = 1;
-      }
-      if (this.followPath(dt)) { this.state = 'mission'; this.t = 0; this.mesh.visible = false; }
-    } else if (this.state === 'mission') {
-      if (this.t > m.away) {
-        const P = new FlightPath(); this.pickOrbit(true); this.pathToOrbit(P, m.far, m.heading + Math.PI, 0.5);
-        this.fly(P, this.orbit.v * 1.15, this.orbit.v);
-        this.fwd.set(Math.cos(m.heading + Math.PI), 0, Math.sin(m.heading + Math.PI));
-        this.mesh.visible = true; this.state = 'mission_back';
-        if (m.lead && m.done) this.say(m.done, { prio: 1 });
-      }
-    } else if (this.state === 'mission_back') {
-      // COD runs end on deck: the cargo goes straight down to the hangar
-      if (this.followPath(dt)) { this.state = 'orbit'; this.mission = null; this.airT = 0; if (S.landAfterMission) this.landReq = true; }
-    }
-    return true;
-  }
+  /* --- missions (js/missions.js): this.mission is the flight's mission context, its legs drive the state --- */
+  missionFlow(dt) { if (!this.mission) return false; this.mission.m.update(this, dt); return true; }
 
   /* --- combat: armed aircraft leave the orbit, wait off-screen and cross the screen on passes (js/airwar.js) --- */
   combatFlow(dt) {
@@ -578,7 +553,7 @@ class AH1 extends Helicopter {
 }
 /* Tiltrotor: takes off and lands like a helicopter, converts to airplane mode (nacelles forward, gear up) in cruise */
 class CMV22 extends Helicopter {
-  static spec = Object.assign({}, Helicopter.spec, { key: 'cmv22', tag: 'CMV-22B', speed: 11, turnR: 12, orbitR: [30, 60], farOrbit: [58, 70], alt: [11, 14], bankMax: 0.55, foldRate: 0.12, blades: 3, noseDown: 0.02, missions: ['cod'], missionAway: [100, 160], missionDist: 160, landAfterMission: true });
+  static spec = Object.assign({}, Helicopter.spec, { key: 'cmv22', tag: 'CMV-22B', speed: 11, turnR: 12, orbitR: [30, 60], farOrbit: [58, 70], alt: [11, 14], bankMax: 0.55, foldRate: 0.12, blades: 3, noseDown: 0.02, missions: ['cod'] });
   get conv() { return this.state === 'orbit' || this.onMission ? 1 : this.state === 'depart' || this.state === 'ret' ? smoothstep(0.3, 0.85, this.v / this.spec.speed) : 0; }
   get gearDown() { return this.conv < 0.5; }
   buildModel() { return buildCMV22(); }
