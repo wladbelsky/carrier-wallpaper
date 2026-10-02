@@ -30,6 +30,8 @@ Aircraft counts are set in the wallpaper properties.
 Each destroyer can also carry one MH-60 (optional).
 
 - Three jets and one helicopter park on deck. Everything else lives in the hangar and uses the deck-edge elevators.
+- Changing a count doesn't reset the air wing: new aircraft join in the hangar, and aircraft over the new count
+  (the last callsigns) land first and then leave (RETIRING on the panel).
 - Automatic flight ops work by flights (aircraft sharing a callsign): a four-ship flight launches as
   all four or as its lead pair (chosen at random), the second pair usually follows soon to join it,
   and flights are recovered together. About half of the air wing is airborne on average.

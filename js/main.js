@@ -111,9 +111,10 @@ function init() {
   requestAnimationFrame(frame);
 }
 
-/* ---- air wing from the per-type counts ---- */
+/* ---- air wing from the per-type counts (a fresh build: everything starts on deck / in the hangar) ---- */
+let airWingBuiltAt = 0;
 function buildAirWing() {
-  airWingDirty = false;
+  airWingDirty = false; airWingBuiltAt = T;
   AIRCRAFT.forEach(a => a.dispose()); AIRCRAFT = []; AIRWAR.passes.length = 0; missionWorldReset();
   HELI_LIGHTS.n = 0;
   resetDeck();
@@ -140,6 +141,35 @@ function buildAirWing() {
   buildList();
   // part of the air wing goes up right away: two flights (or lead sections)
   if (CFG.auto) { autoLaunch(); autoLaunch(); autoTimer = rand(8, 14); }
+}
+/* A count changed: the air wing adapts in place. New aircraft join in the hangar (callsigns continue the flights);
+   aircraft over the new count retire — they land first and leave once on deck / in the hangar (retireAircraft).
+   Right after a fresh build (settings applied at start-up) it simply rebuilds. */
+function syncAirWing() {
+  if (T - airWingBuiltAt < 3) { buildAirWing(); return; }
+  airWingDirty = false;
+  for (const k of [...FIXED_ORDER, ...HELI_ORDER]) {
+    const cs = callsignsFor(k, CFG.counts[k] || 0), mine = AIRCRAFT.filter(a => a.spec.key === k && a.host === CARRIER);
+    for (const a of mine) a.retiring = !cs.includes(a.callsign);                 // back in if it was retiring
+    for (const c of cs) if (!mine.some(a => a.callsign === c))
+      AIRCRAFT.push(new AIRCRAFT_TYPES[k]({ callsign: c, host: CARRIER, home: 'hangar', spot: AIRCRAFT_TYPES[k].prototype instanceof Helicopter ? DECK.heliPad : null }));
+  }
+  SHIPS.slice(1).forEach((d, i) => {                                             // the destroyers' helicopters
+    const a = AIRCRAFT.find(x => x.host === d);
+    if (a) a.retiring = !CFG.ddHelis;
+    else if (CFG.ddHelis) AIRCRAFT.push(new MH60({ callsign: CALLSIGNS.ddheli[i], host: d, home: 'deck', spot: d.pad }));
+  });
+  buildList();
+}
+/* retiring aircraft come back and leave the air wing once they are down (no lift, catapult or pass is held then) */
+function retireAircraft() {
+  let gone = false;
+  for (let i = AIRCRAFT.length - 1; i >= 0; i--) {
+    const a = AIRCRAFT[i]; if (!a.retiring) continue;
+    if (isDown(a)) { a.dispose(); AIRCRAFT.splice(i, 1); gone = true; }
+    else if (a.canLand()) a.requestLand();
+  }
+  if (gone) buildList();
 }
 
 /* Faceted water. The facet normal is computed in the vertex shader from the three
@@ -714,7 +744,7 @@ function updateUI() {
   if (th) { const n = Math.round(STRESS.level * 10); th.textContent = '▮'.repeat(n) + '▯'.repeat(10 - n) + '  ' + STRESS.label; th.className = 'lv' + Math.min(3, Math.floor(STRESS.level * 4)); }
   let airN = 0;
   for (const a of AIRCRAFT) {
-    const [txt, cls] = a.status; a.ui.st.textContent = txt; a.ui.st.className = 'st ' + cls;
+    const [txt, cls] = a.retiring ? ['RETIRING', 'wait'] : a.status; a.ui.st.textContent = txt; a.ui.st.className = 'st ' + cls;
     if (a.state !== 'parked' && a.state !== 'hangar') airN++;
     const b = a.ui.btn;
     if (a.canLaunch()) { b.textContent = 'LAUNCH'; b.disabled = false; b.className = 'act up'; }
@@ -783,6 +813,7 @@ function step(dt) {
   updateMounts(dt);
   updateDeckMachinery(dt);
   for (const a of AIRCRAFT) a.update(dt);
+  retireAircraft();
   missionWorldUpdate(dt);
   updateFlak(dt);
   camShake = Math.max(0, camShake - dt * 3);
@@ -801,7 +832,7 @@ function step(dt) {
   updateChatter(dt);
   updateMissions(dt);
   RADIO.update(dt);
-  if (airWingDirty && ready) buildAirWing();
+  if (airWingDirty && ready) syncAirWing();
   updateLights();
 
   envTimer -= dt; if (envTimer <= 0) { envTimer = 2; updateEnvironment(); }
