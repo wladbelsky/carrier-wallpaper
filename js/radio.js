@@ -14,7 +14,9 @@ const CALLSIGNS = {
   ddheli: ['SEAHORSE', 'PETREL']      // one per destroyer, each with its own callsign
 };
 const RADIO_NAMES = { carrier: 'KESTREL', lso: 'PADDLES', escorts: ['BUCCANEER', 'CUTLASS'] };
-const ROLE_COLOR = { pilot: '#8fd3ff', awacs: '#9dffb0', ship: '#ffd27a', heli: '#b8e0ff', ace: '#ff9a7a' };
+const ROLE_COLOR = { pilot: '#8fd3ff', awacs: '#9dffb0', ship: '#ffd27a', heli: '#b8e0ff', ace: '#ff9a7a', enemy: '#ff5a50' };
+// intercepted enemy traffic (ENEMY_LINES): attack waves are squadrons, numbered per aircraft; boats; their command
+const ENEMY_NAMES = { hq: 'CITADEL', squadrons: ['STRIGON', 'VOLK', 'ZMEY', 'SHRIKE', 'GRIFFON', 'RAVEN'], boats: ['MORAY', 'BARRACUDA', 'SCORPION'] };
 
 const RADIO = {
   q: [], cur: null, t: 0, gap: 0,
@@ -315,10 +317,16 @@ function opsLine(key, c) { return [radioLine(OPS[key], { c: c || '' }), AUD.arme
 const COMBAT = {
   start: {
     calm: ['All units, bandits inbound! Weapons free!', 'Multiple bogeys closing on the fleet. Engage!', 'Enemy aircraft approaching. All units, intercept!'],
-    tense: ['Here they come again! All units, engage!', 'Another wave inbound! Weapons free!'],
-    panic: ['They just keep coming! Every gun, open fire!', 'Massive enemy wave! Defend the carrier at all costs!']
+    tense: ['Here they come again! All units, engage!', 'Another wave inbound! Weapons free!', 'Hostiles back on the scope. Everybody up, weapons free!'],
+    panic: ['They just keep coming! Every gun, open fire!', 'Massive enemy wave! Defend the carrier at all costs!', "Scope's full of hostiles! All units, engage, engage!",
+      'This is the big one! Everything they have is coming at us!', 'All hands, general quarters! Enemy attack in force!']
   },
-  end: ['Airspace is clear. Good work, everyone.', 'No more contacts on radar. Stand down.', 'Enemy has withdrawn. Nice work out there.'],
+  end: {
+    calm: ['Airspace is clear. Good work, everyone.', 'No more contacts on radar. Stand down.', 'Enemy has withdrawn. Nice work out there.'],
+    tense: ['Contacts gone. That was too close. Stand down.', "They've pulled out. Check your fuel and damage.", 'Scope is clear. Stand down, but stay ready.'],
+    panic: ["It's over. They're gone. All stations, report damage.", "Airspace clear. I don't believe it. We held.", 'No more contacts. We made it. Count your people.',
+      "They're gone... Stand down. Damage control, keep at it."]
+  },
   // the music stopped: hold DISARM_DELAY s, then `end` — or `resume` if it starts again
   lull: {
     calm: ['No more contacts on the scope. Stand by.', "Scope's clearing. Hold your fire, stay sharp.", "Last bandit's off the scope. Holding."],
@@ -335,23 +343,50 @@ const COMBAT = {
       'Hostiles turning toward the carrier. Cut them off.', 'Nice shooting. Stay on your targets.'],
     tense: ['Multiple groups inbound. All flights, weapons free.', 'More hostiles joining the fight. Hold your ground.', 'Vampires in the air! Escorts, stand by.',
       'Leakers getting through. Tighten up around the fleet.'],
-    panic: ['Scope is full of hostiles! Hold the line!', 'All flights, defend the carrier. Nothing gets through!', "I've lost count of the tracks. Just keep shooting!"]
+    panic: ['Scope is full of hostiles! Hold the line!', 'All flights, defend the carrier. Nothing gets through!', "I've lost count of the tracks. Just keep shooting!",
+      'Another wave behind this one! Do not let up!', 'Hostiles from every direction! Pick a target and shoot!', 'They are throwing everything at the carrier. Stop them!',
+      "Enemy squadrons regrouping for another run. Don't give them the chance!"]
   },
   ship: {
     calm: ['CIWS engaging!', 'Shells away!', 'Air contact inbound, guns tracking.', 'Splash! Target down.'],
     tense: ['Vampires inbound, brace!', 'CIWS reloading, cover us!', 'Taking fire, returning fire!'],
-    panic: ['We are taking heavy fire!', 'Damage control parties to the flight deck!', 'Fires on deck three!', "We can't take much more of this!"]
+    panic: ['We are taking heavy fire!', 'Damage control parties to the flight deck!', 'Fires on deck three!', "We can't take much more of this!",
+      'All guns, independent fire! Shoot anything that moves!', 'Magazines running low! Make every round count!']
   },
   splash: {
     calm: ['Splash one!', 'Target destroyed.', 'Good kill!', 'Bandit down.', 'Splash, splash!'],
     tense: ["Splash! Who's next?", "Got him! That's another one!", 'Bandit down! More inbound!'],
-    panic: ["Splash! But there's more coming!", 'Got one! Still too many!', 'Down! Next one, quick!']
+    panic: ["Splash! But there's more coming!", 'Got one! Still too many!', 'Down! Next one, quick!', "Splash! That one won't hurt the carrier!", 'Got him! Who else wants some?!']
   },
-  vampireDown: ['Vampire splashed!', 'Missile intercepted!', 'CIWS kill!', 'Got the vampire!'],
-  shipHit: ["We've been hit! Damage control!", 'Missile impact! Fires on deck!', 'Hit, starboard side! Still fighting!'],
-  newBandits: ['New contacts, bearing {B}, {N}! Identified as {T}.', 'Bogeys inbound from the {D}, {N}! Type: {T}.', '{T}, bearing {B}, closing fast!', '{T}s inbound from the {D}, {N}!'],
-  vampires: ['Vampire, vampire! Bearing {B}!', 'Inbound anti-ship missiles, bearing {B}!', 'Missile launch detected! Vampires inbound!'],
-  vampLaunch: ['Vampire launch! Bandit fired on us!', 'Missile off the rail, inbound!'],
+  vampireDown: {
+    calm: ['Vampire splashed!', 'Missile intercepted!', 'CIWS kill!', 'Got the vampire!'],
+    tense: ['Vampire down! Watch for the next one!', 'Intercepted! That was close.', 'Missile splashed short of the ship!'],
+    panic: ['Got it! Got it! Next one!', 'Vampire splashed, another one right behind it!', "Missile down! We can't keep this up!", 'Killed it! Close enough to feel the heat!']
+  },
+  shipHit: {
+    calm: ["We've been hit! Damage control!", 'Missile impact! Fires on deck!', 'Hit, starboard side! Still fighting!'],
+    tense: ['Hit amidships! Damage control, go!', "Impact! We're still in the fight!", 'Took a hit aft! Fire teams responding!'],
+    panic: ["We're hit again! Fires spreading!", 'Massive damage! Flooding below decks!', "Another hit! We can't take much more!", 'Hull breach! All hands, damage control!',
+      "Direct hit! We're still afloat, keep firing!"]
+  },
+  newBandits: {
+    calm: ['New contacts, bearing {B}, {N}! Identified as {T}.', 'Bogeys inbound from the {D}, {N}! Type: {T}.', '{T}, bearing {B}, closing fast!', '{T}s inbound from the {D}, {N}!'],
+    tense: ['More bandits, bearing {B}, {N}! Type: {T}.', 'Another group from the {D}, {N}. Identified as {T}.', 'Fresh contacts, bearing {B}, {N}. They keep sending them.'],
+    panic: ['New group from the {D}, {N}, and more behind them! Type: {T}!', 'New contacts, bearing {B}, {N}! Will this ever end?!',
+      'Bearing {B}, {N}! {T}! Where are they all coming from?!', 'Inbound from the {D}, {N}! Type: {T}! Somebody get on them!',
+      'More hostiles, bearing {B}, {N}! The scope is full of them!']
+  },
+  vampires: {
+    calm: ['Vampire, vampire! Bearing {B}!', 'Inbound anti-ship missiles, bearing {B}!', 'Missile launch detected! Vampires inbound!'],
+    tense: ['Vampires, bearing {B}! CIWS, stand by!', 'Missile salvo inbound from the {D}! Brace!'],
+    panic: ['Multiple vampires, bearing {B}! All ships, brace for impact!', 'Vampires! Vampires! Too many to track!', 'Missile wave from the {D}! Shoot them down!',
+      'Salvo inbound, bearing {B}! Everything into the air!']
+  },
+  vampLaunch: {
+    calm: ['Vampire launch! Bandit fired on us!', 'Missile off the rail, inbound!'],
+    tense: ['Bandit released a missile! Tracking!', 'Missile launch, close in!'],
+    panic: ["He fired! It's coming straight at us!", 'Vampire off the rail, short range!', 'Launch! Launch! Point defense, now!']
+  },
   vls: ['Birds away!', 'Standard missile away!', 'Launching SM-2!'],
   flybyIn: { calm: ['Engaging!', 'Beginning attack run.', 'Rolling in, cover me.'], tense: ['Coming in hot!', 'Rolling in, hold on, fleet!'], panic: ['Coming in hot! Hang on down there!'] }
 };
@@ -365,9 +400,15 @@ const AIRWAR_LINES = {
     panic: ['Everyone with me, now! Engage!', "No time, they're on top of the fleet! Engaging!", 'Break off and fight! Go, go!']
   },
   rtb: {
-    calm: ['Bandits cleared. Rejoining the orbit.', "Fight's over. Heading back to station.", 'Returning to the orbit. Good hunting, everyone.'],
-    tense: ['Winchester on missiles. Coming back to station.', 'That was close. Rejoining the orbit.'],
-    panic: ['We made it. Barely. Returning to station.', 'Low on everything. Heading back to the orbit.', 'Is it really over? Rejoining.']
+    calm: ['Bandits cleared. Rejoining the orbit.', "Fight's over. Heading back to station.", 'Returning to the orbit. Good hunting, everyone.',
+      'Area clear. Back to the CAP.', 'Weapons safe. Rejoining station overhead.', 'All bandits accounted for. Taking up the orbit again.',
+      'Clean sweep. Back on station.', 'Resuming the patrol. Nice work, flight.', 'Scope is quiet. Flight, rejoin on me, back to station.'],
+    tense: ['Winchester on missiles. Coming back to station.', 'That was close. Rejoining the orbit.', 'Fuel is getting low. Rejoining the orbit.',
+      'Checking for battle damage on the way back to station.', 'Weapons safe, back to the orbit. Keep your eyes open.',
+      'Rejoining. They might come back, stay sharp.', "Back to station. That was a tough one.", 'Flight, rejoin. Count your missiles and check in.'],
+    panic: ['We made it. Barely. Returning to station.', 'Low on everything. Heading back to the orbit.', 'Is it really over? Rejoining.',
+      'Holes in my wings, but still flying. Rejoining.', "Rejoining the orbit. I'm not sure how we're still alive.", 'Running on fumes. Heading back to the orbit.',
+      "It's quiet... too quiet. Rejoining.", "Back to station. I'm not landing until I stop shaking.", 'Flight, check in... Everybody made it? Rejoining.']
   },
   chaseIntro: {
     calm: ["{T} at my twelve, I'm on him!", 'Tally one {T}, engaging!', 'Got him in my sights!', "On his six. He's not getting away."],
@@ -466,6 +507,82 @@ const AIRWAR_LINES = {
   },
   hellfire: { calm: ['Hellfire away.'], tense: ['Hellfire away!', 'Hellfire, rifle!'], panic: ['Hellfire away! Sink it!'] },
   rockets: { calm: ['Rockets away.', 'Firing rockets.'], tense: ['Rockets away!', 'Rippling rockets!'], panic: ['Rockets! Everything we have!'] }
+};
+
+/* ---- intercepted enemy transmissions (enemySay in combat.js; red subtitles, ENEMY_NAMES callsigns) ----
+   {Q} squadron, {K} the callsign of the one just shot down. The higher the threat, the more desperate they get. */
+const ENEMY_LINES = {
+  attack: {      // a new wave commits on the fleet (its lead)
+    calm: ['{Q} flight, target in sight. Begin the attack run.', 'Carrier group dead ahead. Weapons free, {Q}.', "They haven't seen us yet. {Q}, go in low.",
+      '{Q} lead to all: the carrier is the priority.'],
+    tense: ['{Q}, push through their fighters. The carrier, nothing else!', 'They are waiting for us. Spread out and go in!', 'Second attack, {Q}. Do not turn back this time.'],
+    panic: ['All squadrons, everything we have! Sink that carrier!', '{Q}, full afterburner! Break through at any cost!', 'Command wants that carrier gone tonight. No one turns back!',
+      'They cannot stop all of us. Attack, attack!', '{Q}, this is our moment. Follow me in!', 'Last reserves committed. {Q}, make it count!']
+  },
+  missile: {     // a bandit looses an anti-ship missile
+    calm: ['Missile away. Target: the carrier.', 'Launch! Anti-ship missile on its way.', 'Weapon released. Breaking off.'],
+    tense: ['Missile away! Pray it gets through!', 'Fire! Then get out of here!', "Launch complete. Their guns won't stop this one."],
+    panic: ['All missiles away! Overwhelm their defenses!', 'Launching everything! One of them will get through!', 'Missile away! For the homeland!', 'Ripple fire! Saturate their guns!']
+  },
+  salvo: {       // their command, with a vampire salvo from beyond the horizon
+    calm: ['Shore battery, fire the salvo.', 'Missile boats, launch on the carrier.'],
+    tense: ['All batteries, fire! Saturate their defenses!', 'Launch the second salvo. Do not let them breathe.'],
+    panic: ['Fire everything! Every launcher, now!', 'Empty the magazines! Sink that carrier!', 'All launchers, ripple fire! No holding back!']
+  },
+  damaged: {
+    calm: ["I'm hit! Still flying.", 'Damage to my left wing. Continuing.'],
+    tense: ["I'm hit! Losing fuel!", 'Hydraulics gone! I can barely hold her!'],
+    panic: ["I'm burning! I'm burning!", 'Engine fire! I can still make my run!', "Hit! I won't make it home... going for the carrier!"]
+  },
+  lost: {        // a wingman of the one just shot down
+    calm: ['{K} is down! Watch their fighters!', 'We lost {K}. Stay in formation.'],
+    tense: ['{K}! No! Damn them!', '{K} is gone. Who are these pilots?', "Another one down! They're too good!"],
+    panic: ['{K} is down! That is half the squadron!', "We're being slaughtered out here!", "{K}! ...Keep going, don't look back!", "They're cutting us to pieces!"]
+  },
+  eject: {       // the one shot down, when nobody of his flight is left to say it
+    calm: ['Ejecting!', "I'm going down! Ejecting!"],
+    tense: ['Mayday, mayday! Ejecting!', "Controls gone! I'm out!"],
+    panic: ["I can't get out! I can't...", 'Mayday! Mayday! Tell my family...', 'Eject! Eject! Eject!']
+  },
+  chasing: {     // a dogfight bandit on one of ours
+    calm: ['I have one on my nose. Closing.', 'Target locked. You are mine.'],
+    tense: ['Hold still, American... almost.', "He's good, but I'm better."],
+    panic: ['I have him! I have him!', "You won't escape this time!", "You're mine! Nobody's coming to save you!"]
+  },
+  chased: {      // a dogfight bandit with ours on its tail
+    calm: ['Bandit on my six. Evading.', 'Hostile behind me, breaking.'],
+    tense: ["I can't shake him!", 'Get him off me! Anyone!'],
+    panic: ["He's right behind me! Help!", "I can't lose him! I can't...", 'Somebody, anybody, get him off me!']
+  },
+  escape: ['Disengaging. You were lucky, American.', 'Low on fuel, breaking off. Next time.', "I'm clear. Returning to base."],
+  boats: {       // fast attack craft running in during a gunship pass
+    calm: ['Boats, full speed. Close on the fleet.', 'Patrol boats in position. Begin the run.'],
+    tense: ['Helicopters overhead! Guns, fire at will!', 'Keep going, use the waves for cover!'],
+    panic: ['Ram them if you have to! Full speed!', 'Every boat, charge! Ignore the helicopters!', 'Full ahead! Nobody stops!']
+  },
+  boatLost: ['{K} is burning!', 'We lost {K}! Keep going!', '{K} is sinking! Scatter!'],
+  shipHit: {
+    calm: ['Direct hit on the carrier!', 'Impact confirmed. Their ship is burning.'],
+    tense: ['Hit! We hit them! Keep up the pressure!', 'The carrier is burning! Again!'],
+    panic: ['Another hit! They are breaking!', "We've got them now! Finish the carrier!", 'Their deck is on fire! Send everything!']
+  },
+  withdraw: {    // the music stopped: their command calls the attack off
+    calm: ['All units, break off. Regroup at the rally point.', 'Abort the attack. Return to base.'],
+    tense: ['Pull back! Too many losses!', 'Withdraw! Regroup and wait for orders.'],
+    panic: ['Retreat! Retreat! Get out of there!', 'Break off, all units! We cannot take any more!', 'Fall back! They are slaughtering us!']
+  },
+  again: {       // ... and it starts again
+    calm: ['Second wave, begin your attack.', 'Turn around. We go again.'],
+    tense: ['Reinforcements arriving. Attack again!', "Don't let them rest. Go back in!"],
+    panic: ['Everyone back in! This ends now!', 'No retreat! Turn around and fight!', 'It was a feint. Now hit them with everything!']
+  },
+  chatter: {     // background traffic during the fight
+    calm: ['Formation, tighten up. Stay below their radar.', 'Their AWACS is watching. Stay low.', 'Fuel check, all flights.', 'Their air cover is thinner than we were told.'],
+    tense: ["Their fighters are everywhere. Where's our escort?", 'This was supposed to be easy...', 'Command, we need more aircraft out here!', 'They knew we were coming!'],
+    panic: ['Command, we are losing too many! Request permission to withdraw!', 'Command says hold. Hold?! We are being slaughtered!', 'Who are these people? Demons?',
+      'Everything in the air, now! This is our last chance!', "I've lost my wingman. I'm alone out here!", 'Their carrier is still afloat! How?!',
+      'Jamming is useless! They see everything!', "Don't look at the fires. Fly!"]
+  }
 };
 
 /* ---- a restored session (js/persist.js): the HQ is back on the air, a lead answers ({C} = HQ callsign) ---- */

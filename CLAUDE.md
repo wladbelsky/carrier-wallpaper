@@ -19,7 +19,7 @@ User-facing docs: `README.md` (keep it in sync when behaviour or properties chan
 | `js/models.js` | mesh helpers (`M`, `box`, `cyl`, `taper`, `prism`…), `mergeStatic`, `disposeTree`, nav lights, searchlights, CIWS/gun mounts, `buildCarrier`, `buildDestroyer`, mission ships `buildFeeder` / `buildTrawler` / `buildCorvette` / `buildDestroyerTemplate` |
 | `js/airframes.js` | aircraft model builders → `{ group, setFold(f), tick(dt, st) }`; `buildWreck` (crashed jet template for pilot rescues) |
 | `js/effects.js` | `Tracers` (InstancedMesh), `SpriteFX` (flash/smoke pools), `Splashes`, `Foam` (points), `FlashLights` |
-| `js/radio.js` | callsigns, `RADIO` subtitle queue, mission orders, `STRESS` + `THREAT_TIERS`, `radioLine()`, line pools `OPS` / `COMBAT` / `AIRWAR_LINES` / `LINES` (see "Radio lines & threat tiers") |
+| `js/radio.js` | callsigns (+ `ENEMY_NAMES`), `RADIO` subtitle queue, mission orders, `STRESS` + `THREAT_TIERS`, `radioLine()`, line pools `OPS` / `COMBAT` / `AIRWAR_LINES` / `ENEMY_LINES` / `LINES` (see "Radio lines & threat tiers") |
 | `js/aircraft.js` | `Aircraft` → `FixedWing` / `Helicopter` state machines, deck resources `FD` / `DECK`, types, `Flyby` |
 | `js/persist.js` | `PERSIST`: remembers who is in the air / on a mission (`localStorage`, `CFG.saveState`), restores it after a fresh `buildAirWing()` (orbit / `Mission.resume`), radio `LINES.restore` |
 | `js/missions.js` | missions: `Leg` steps, `Mission` types (`patrol`, `cod`, `sling`, `ship`, `pilot`), `pickMission`, mission-world objects `CARGO` / `VESSELS` / `ROPES` — see "Missions" |
@@ -32,7 +32,7 @@ User-facing docs: `README.md` (keep it in sync when behaviour or properties chan
 
 ## Rules / conventions
 - **After changing any JS/CSS file, bump the cache-buster** `?v=N` on all `<script>`/`<link>` tags in
-  `index.html` (WE's CEF caches aggressively). Current: `v=37`.
+  `index.html` (WE's CEF caches aggressively). Current: `v=42`.
 - **New WE property**: add it to `project.json`, read it in `applyUserProperties` (`main.js`) into `CFG`,
   then run `python tools/gen_properties.py`. Property `order` decides the browser-drawer group
   (0–9 camera/time, 10–19 audio/combat, 20–29 sea, 30–39 panel, 40–49 air wing, 50–59 hull number).
@@ -48,7 +48,8 @@ User-facing docs: `README.md` (keep it in sync when behaviour or properties chan
 - Sim time is `T` (advances only in `step(dt)`); real time is `RT()` (audio arming, beat gaps).
 - **Session state** (`js/persist.js`): saved every 10 s and on pagehide / WE pause; only *who* is up (`AIR_STATES`,
   `cbt_*`) or on a mission, never positions. A new airborne state must go into `AIR_STATES`. The start-up splash
-  (`#splash`, hidden in `step` at `T > 3.2`) covers the build / restore / start-up rebuild.
+  (`#splash`, hidden in `step` at `T > 3.2`) covers the build / restore / start-up rebuild. The threat level
+  (`STRESS.level`, in 0.05 steps) is saved too and restored once per page load.
 - **Combat state** is latched in `updateArming()` (`main.js`, first thing in `step`): `AUD.hot` = sound for
   `ARM_DELAY` s → `AUD.combat` (read everywhere as `AUD.armed`). When the sound stops, `AUD.holding` is true for
   `DISARM_DELAY` s: still `armed` (aircraft stay engaged, no missions), but not `AUD.fighting` — no new waves, passes,
@@ -106,7 +107,7 @@ Missions fly beyond the screen edge while there is no music. `dispatchFlight` (`
 - **Every radio line goes through `radioLine(pool, vars)`** — never `pick()` a line pool directly, never build
   lines with `.replace('{X}', …)`. `opsLine(key, c)` (flight-deck calls) is a thin wrapper returning `[text, hot]`.
 - **Pools** live in `radio.js`: `OPS` (deck routine), `COMBAT` (fleet/combat chatter), `AIRWAR_LINES` (combat passes),
-  `LINES` (alerts, mission acknowledgements), `MISSIONS` (order/done pairs). A pool is either
+  `ENEMY_LINES` (intercepted enemy traffic), `LINES` (alerts, mission acknowledgements), `MISSIONS` (order/done pairs). A pool is either
   - an array — the same lines at any time, or
   - an object keyed by threat tier (`calm`, `tense`, `panic`, …) plus optional `peace` (used outside combat).
 - **Tiers** are defined once in `THREAT_TIERS` (calmest first, `upTo` = upper bound of `STRESS.level`).
@@ -118,7 +119,11 @@ Missions fly beyond the screen edge while there is no music. `dispatchFlight` (`
   So a pool may define only some tiers (e.g. `{ calm, panic }`).
 - **Placeholders** `{name}` are filled from `vars` (`radioLine(pool, { C: callsign, T: type })`); unknown ones stay as
   they are. In use: `{c}` deck-call callsign, `{C}` callsign, `{T}` enemy type, `{B}` bearing words, `{D}` compass
-  direction, `{N}` bandit count; missions also use `{S}` sector, `{G}` grid, `{P}` passengers, `{W}` pounds.
+  direction, `{N}` bandit count, `{Q}` enemy squadron, `{K}` enemy callsign just lost; missions also use `{S}` sector,
+  `{G}` grid, `{P}` passengers, `{W}` pounds.
+- **Enemy lines** go through `enemySay(who, pool, vars, o)` (`combat.js`): role `enemy` (red), one at most every
+  4–8 s (shorter as stress builds). Speakers are enemy callsigns: `e.cs` on every bandit / boat (a wave shares its
+  squadron `e.sq`: `STRIGON 1`, `STRIGON 2`…), `ENEMY_NAMES.hq` for their command.
 - **New line set:** add the pool (tiered when it is said in combat) and call `radioLine`. Combat lines are sent with
   `cat: 'combat'`; the queue drops stale ones (prio < 3 after 4 s), so speak them when the event is on screen.
 

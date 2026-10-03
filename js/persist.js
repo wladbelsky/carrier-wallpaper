@@ -1,18 +1,19 @@
 'use strict';
 /* ===== Air wing state between sessions (browser reloads, Wallpaper Engine restarts) =====
-   Remembers who is in the air and who is away on a mission — not positions. On the next start buildAirWing()
+   Remembers who is in the air and who is away on a mission — not positions — and the threat level (STRESS). On the next start buildAirWing()
    calls PERSIST.restore(): aircraft that were up go straight into an orbit, mission flights are put back out of
    sight already away (Mission.resume). localStorage (WE keeps it per wallpaper); off with CFG.saveState.
    A new airborne aircraft state must be added to AIR_STATES (or start with cbt_) to be remembered. */
 const AIR_STATES = new Set(['orbit', 'climb', 'depart', 'approach', 'final', 'ret']);
 const PERSIST = {
-  KEY: 'csg.airwing.v1', timer: 10, announced: false, last: null,   // last: the JSON last written
+  KEY: 'csg.airwing.v1', timer: 10, announced: false, stressBack: false, last: null,   // last: the JSON last written
   state(a) { return a.mission ? 'mission' : AIR_STATES.has(a.state) || a.inCombat ? 'air' : null; },
   save() {
     if (!CFG.saveState || !ready) return;
     const air = [];
     for (const a of AIRCRAFT) { const s = this.state(a); if (s && !a.retiring) air.push({ key: a.spec.key, cs: a.callsign, host: SHIPS.indexOf(a.host), mission: s === 'mission' }); }
-    const json = JSON.stringify({ v: 1, air }); if (json === this.last) return;   // only when someone's status changed
+    // stress in 0.05 steps: a change is written about every 10-30 s while it builds or eases, then not at all
+    const json = JSON.stringify({ v: 1, air, stress: Math.round(STRESS.level * 20) / 20 }); if (json === this.last) return;   // only when something changed
     try { localStorage.setItem(this.KEY, json); this.last = json; } catch (e) {}
   },
   clear() { this.last = null; try { localStorage.removeItem(this.KEY); } catch (e) {} },
@@ -23,6 +24,7 @@ const PERSIST = {
   /* after a fresh build: put back the aircraft that were up / away; true if any was */
   restore() {
     const d = CFG.saveState && this.load(); if (!d) return false;
+    if (!this.stressBack && typeof d.stress === 'number') { this.stressBack = true; STRESS.level = clamp(d.stress, 0, 1); }   // once per page load
     const find = e => AIRCRAFT.find(a => a.spec.key === e.key && a.callsign === e.cs && SHIPS.indexOf(a.host) === e.host);
     const air = [], away = new Map();
     for (const e of d.air) {

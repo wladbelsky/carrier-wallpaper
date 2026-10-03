@@ -265,10 +265,16 @@ function updateArming() {
   if (!AUD.combat) { AUD.combat = AUD.hot; return; }
   // during the hold only sound that keeps going for RESUME_DELAY s brings the fight back
   if (AUD.active && (!AUD.holding || AUD.lastActive - AUD.soundStart >= RESUME_DELAY)) {
-    if (AUD.holding) { AUD.holdUntil = 0; const [w, role] = hq(); RADIO.say(w, radioLine(COMBAT.resume), { role, cat: 'combat', prio: 3 }); }
+    if (AUD.holding) {
+      AUD.holdUntil = 0; const [w, role] = hq(); RADIO.say(w, radioLine(COMBAT.resume), { role, cat: 'combat', prio: 3 });
+      if (enemyOnAir() && Math.random() < 0.6) enemySay(ENEMY_NAMES.hq, ENEMY_LINES.again, null, { delay: 1.5 });
+    }
     return;
   }
-  if (!AUD.holding) { AUD.holdUntil = RT() + DISARM_DELAY; const [w, role] = hq(); RADIO.say(w, radioLine(COMBAT.lull), { role, cat: 'combat', prio: 3 }); }
+  if (!AUD.holding) {
+    AUD.holdUntil = RT() + DISARM_DELAY; const [w, role] = hq(); RADIO.say(w, radioLine(COMBAT.lull), { role, cat: 'combat', prio: 3 });
+    if (enemyOnAir() && Math.random() < 0.6) enemySay(ENEMY_NAMES.hq, ENEMY_LINES.withdraw, null, { delay: 1.5 });
+  }
   else if (RT() >= AUD.holdUntil) { AUD.holdUntil = 0; AUD.combat = false; }   // updateChatter says COMBAT.end
 }
 function RT() { return performance.now() / 1000; }   // real-time clock (independent of FPS limits)
@@ -677,8 +683,10 @@ function updateChatter(dt) {
   chatterTimer -= dt; if (chatterTimer > 0) return;
   chatterTimer = rand(3.5, 7) * (1 - 0.45 * STRESS.level);       // more radio traffic as stress builds
   if (RADIO.q.filter(m => m.cat === 'combat').length > 1) return;
-  // fighters and helicopters talk about their own passes (js/airwar.js); here only the AWACS and the ships
-  if (awacs && Math.random() < 0.45) awacs.say(radioLine(COMBAT.awacs), C);
+  // fighters and helicopters talk about their own passes (js/airwar.js); here the AWACS, the ships and the enemy
+  const foes = CFG.enemies ? ENEMIES.filter(e => e.cs && enemyAlive(e)) : [];
+  if (foes.length && Math.random() < 0.15 + 0.25 * STRESS.level) enemySay(pick(foes).cs, ENEMY_LINES.chatter);
+  else if (awacs && Math.random() < 0.45) awacs.say(radioLine(COMBAT.awacs), C);
   else RADIO.say(pick(RADIO_NAMES.escorts), radioLine(COMBAT.ship), { role: 'ship', cat: 'combat', prio: 0 });
 }
 

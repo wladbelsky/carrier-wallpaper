@@ -122,7 +122,10 @@ const AIRWAR = {
     if (!p.intro && (live.some(a => this.onScreen(a.mesh.position, -0.1)) || (enemyAlive(b) && this.onScreen(b.p, -0.1)))) { p.intro = true; this.introLines(p); }
     if (b && !p.outcome) {
       if (b.falling) { p.outcome = 'kill'; if (p.kind === 'chased' && Math.random() < 0.7) p.crew[0].say(radioLine(AIRWAR_LINES.thanks), Object.assign({ delay: 1.8 }, CBT0)); }
-      else if (b.escaped) { p.outcome = 'escaped'; if (p.kind === 'chase' && p.intro && Math.random() < 0.6) p.crew[0].say(radioLine(AIRWAR_LINES.chaseEscape), CBT0); }
+      else if (b.escaped) {
+        p.outcome = 'escaped'; if (p.kind === 'chase' && p.intro && Math.random() < 0.6) p.crew[0].say(radioLine(AIRWAR_LINES.chaseEscape), CBT0);
+        if (p.intro && Math.random() < 0.4) enemySay(b.cs, ENEMY_LINES.escape, null, { delay: 1.2 });
+      }
     }
     if (enemyAlive(b) && b.gunT > 0) this.enemyGuns(b, b.cbtTgt, dt);
     for (const e of p.boats) if (enemyAlive(e) && e.gunT > 0) this.enemyGuns(e, e.gunAt, dt);
@@ -131,13 +134,14 @@ const AIRWAR = {
   introLines(p) {
     const [a, w] = p.crew, L = AIRWAR_LINES;
     switch (p.kind) {
-      case 'chase': a.say(radioLine(L.chaseIntro, { T: shortType(p.bandit) }), CBT); break;
+      case 'chase': a.say(radioLine(L.chaseIntro, { T: shortType(p.bandit) }), CBT); if (Math.random() < 0.5) enemySay(p.bandit.cs, ENEMY_LINES.chased, null, { delay: 1.4 }); break;
       case 'chased':
         if (w) { a.say(radioLine(L.chasedIntro, { T: shortType(p.bandit) }), CBT); w.say(radioLine(L.saveIntro, { C: a.callsign }), Object.assign({ delay: 0.8 }, CBT)); }
         else { const [who, role] = hq(); RADIO.say(who, radioLine(L.sixWarning, { C: a.callsign }), { role, cat: 'combat', prio: 2 }); a.say(radioLine(L.chasedIntro, { T: shortType(p.bandit) }), Object.assign({ delay: 0.8 }, CBT)); }
+        if (Math.random() < 0.5) enemySay(p.bandit.cs, ENEMY_LINES.chasing, null, { delay: 1.8 });
         break;
       case 'sweep': if (Math.random() < 0.35) a.say(radioLine(L.sweep), CBT0); break;
-      case 'boats': a.say(radioLine(L.boatsIntro), CBT); break;
+      case 'boats': a.say(radioLine(L.boatsIntro), CBT); { const bt = p.boats.find(enemyAlive); if (bt && Math.random() < 0.5) enemySay(bt.cs, ENEMY_LINES.boats, null, { delay: 1.4 }); } break;
       case 'cover': if (Math.random() < 0.4) a.say(radioLine(L.cover), CBT0); break;
     }
   },

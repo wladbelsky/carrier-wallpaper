@@ -36,8 +36,8 @@ Aircraft counts are set in the wallpaper properties.
 Each destroyer can also carry one MH-60 (optional).
 
 - Three jets and one helicopter park on deck. Everything else lives in the hangar and uses the deck-edge elevators.
-- The wallpaper remembers who was in the air or out on a mission (not where): after a restart they are back up, and
-  the radio reports comms restored after the interference. Property **Remember aircraft in the air between
+- The wallpaper remembers who was in the air or out on a mission (not where) and the threat level: after a restart
+  they are back up, and the radio reports comms restored after the interference. Property **Remember aircraft in the air between
   sessions** (on by default) turns it off.
 - Changing a count doesn't reset the air wing: new aircraft join in the hangar, and aircraft over the new count
   (the last callsigns) land first and then leave (RETIRING on the panel).
@@ -66,7 +66,12 @@ helicopter departures and landings, and combat chatter while music is playing.
     lists them with their status (on station / engaging / damaged).
 - Jets are grouped 4 per callsign, helicopters 2.
 - As in Ace Combat, the speaker's callsign is shown on its own line above the line, colored by role
-  (pilots, AWACS, ships, helicopters, aces).
+  (pilots, AWACS, ships, helicopters, aces, enemy).
+- **Intercepted enemy transmissions** (in red): each attack wave is a squadron (STRIGON, VOLK, ZMEY, SHRIKE,
+  GRIFFON, RAVEN — `STRIGON 1`, `STRIGON 2`…), boats are MORAY / BARRACUDA / SCORPION, their command is CITADEL.
+  They commit on the carrier, call missile launches, cry out when hit or shot down (or a wingman reports the loss),
+  shout in the dogfights, cheer hits on the ships, and pull back when the music stops. The higher the threat,
+  the more often they talk and the more desperate they sound.
 
 ## Missions
 
@@ -162,7 +167,7 @@ skim in toward the ships.
 Stress builds over ~10 minutes of continuous music and falls off in silence. The panel shows it as **THREAT**.
 
 It changes:
-- the radio tone (calm → tense → panic) — every combat call, from the deck crew to the dogfights, has lines for each level;
+- the radio tone (calm → tense → panic) — every combat call, from the deck crew to the dogfights and the enemy, has lines for each level;
 - the radio frequency;
 - enemy wave size and spawn rate.
 

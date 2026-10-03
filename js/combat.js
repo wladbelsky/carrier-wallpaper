@@ -6,6 +6,17 @@ const ENEMIES = [], PENDING = [], SHIP_FIRES = [];
 let banditTimer = 6, vampTimer = 14;
 const SAY_CD = {};
 function sayOnce(key, cd, fn) { if ((SAY_CD[key] || -99) > T) return; SAY_CD[key] = T + cd; fn(); }
+/* intercepted enemy transmission (ENEMY_LINES): one every few seconds at most, more often as stress builds */
+function enemySay(who, pool, vars, o) {
+  if (who) sayOnce('enemy', rand(4, 8) * (1 - 0.5 * STRESS.level), () => RADIO.say(who, radioLine(pool, vars), Object.assign({ role: 'enemy', cat: 'combat', prio: 1 }, o)));
+}
+let lastWaveT = -99;                                              // sim time of the last attack wave
+const enemyOnAir = () => CFG.enemies && T - lastWaveT < 60;         // their command only talks while it has a fight going
+/* a squadron name no enemy in the air is using (waves and dogfight bandits alike) */
+function freeSquadron() {
+  const busy = new Set(ENEMIES.map(e => enemyAlive(e) && e.cs && e.cs.split(' ')[0])), free = ENEMY_NAMES.squadrons.filter(s => !busy.has(s));
+  return pick(free.length ? free : ENEMY_NAMES.squadrons);
+}
 
 /* Bandit types (models in airframes.js). A wave is one flight of one type; the newer, stealthier
    fighters show up more often as stress builds. vamp = chance to loose an anti-ship missile on the run in. */
@@ -44,6 +55,7 @@ function hq() { const aw = AIRCRAFT.find(a => a.isAwacs && a.airborne); return a
 const pickEnemyType = () => wpick(Object.keys(ENEMY_TYPES).map(k => ({ k, w: Math.max(0.05, ENEMY_TYPES[k].w(STRESS.level)) }))).k;
 function spawnBandits(n) {
   const type = pickEnemyType(), ty = ENEMY_TYPES[type];
+  const sq = freeSquadron(); lastWaveT = T;
   const h = rand(0, TAU), perp = new V3(-Math.sin(h), 0, Math.cos(h));
   const pass = new V3(rand(-22, 22), 0, rand(-22, 22)), alt = rand(ty.alt[0], ty.alt[1]), speed = rand(ty.speed[0], ty.speed[1]);
   for (let i = 0; i < n; i++) {
@@ -52,23 +64,24 @@ function spawnBandits(n) {
     const target = pass.clone().addScaledVector(perp, (i - (n - 1) / 2) * 6); target.y = p.y;
     const v = target.sub(p).normalize().multiplyScalar(speed);
     const mesh = enemyMesh(type); mesh.scale.setScalar(1.25); scene.add(mesh);
-    ENEMIES.push({ kind: 'bandit', type, mesh, p, v, hp: ty.hp, age: 0, fired: false, smokeT: 0 });
+    ENEMIES.push({ kind: 'bandit', type, mesh, p, v, hp: ty.hp, age: 0, fired: false, smokeT: 0, sq, cs: `${sq} ${i + 1}` });
   }
   const [who, role] = hq();
   RADIO.say(who, radioLine(COMBAT.newBandits, { B: bearingWords(h), D: compassWord(h), T: ty.name, N: n === 1 ? 'a single bandit' : n === 2 ? 'two bandits' : n === 3 ? 'three bandits' : 'multiple bandits' }), { role, cat: 'combat', prio: 2 });
+  if (Math.random() < 0.55) enemySay(`${sq} 1`, ENEMY_LINES.attack, { Q: sq }, { delay: 1.5 });
 }
 /* dogfight bandit: flies a screen pass (js/airwar.js) ahead of or behind our fighters; never fires at the ships */
 function spawnDuelBandit(type, path, ps, speed) {
   const mesh = enemyMesh(type); mesh.scale.setScalar(1.25); scene.add(mesh);
   const s = path.sample(ps);
-  const e = { kind: 'bandit', duel: true, type, mesh, p: s.pos, v: s.dir.clone().multiplyScalar(speed), hp: ENEMY_TYPES[type].hp, age: 0, fired: true, smokeT: 0, path, ps, speed, smp: { pos: new V3(), dir: new V3(), turn: 0, R: 1 } };
+  const e = { kind: 'bandit', duel: true, type, mesh, p: s.pos, v: s.dir.clone().multiplyScalar(speed), hp: ENEMY_TYPES[type].hp, age: 0, fired: true, smokeT: 0, cs: `${freeSquadron()} ${randi(1, 4)}`, path, ps, speed, smp: { pos: new V3(), dir: new V3(), turn: 0, R: 1 } };
   mesh.position.copy(e.p); orientFrom(mesh, s.dir, 0);   // placed now: it spawns after this step's updateCombat
   ENEMIES.push(e); return e;
 }
 /* fast attack craft: runs across the water; attack helicopters hunt them */
 function spawnBoat(p, dir, speed) {
   const mesh = enemyMesh('boat'); mesh.scale.setScalar(1.25); scene.add(mesh);
-  const e = { kind: 'boat', mesh, p: p.clone(), dir: dir.clone().setY(0).normalize(), speed, v: new V3(), hp: 2, age: 0, smokeT: 0, wakeT: 0 };
+  const e = { kind: 'boat', mesh, p: p.clone(), dir: dir.clone().setY(0).normalize(), speed, v: new V3(), hp: 2, age: 0, smokeT: 0, wakeT: 0, cs: `${pick(ENEMY_NAMES.boats)} ${randi(1, 6)}` };
   mesh.position.copy(e.p); orientFrom(mesh, e.dir, 0);
   ENEMIES.push(e); return e;
 }
@@ -85,7 +98,8 @@ function spawnVampire(from) {
 function spawnVampireSalvo(n) {
   const h = rand(0, TAU);
   for (let i = 0; i < n; i++) spawnVampire(new V3(Math.cos(h) * 130 + rand(-6, 6), 1.4, Math.sin(h) * 130 + rand(-6, 6)));
-  sayOnce('vamp', 6, () => { const sh = pick(SHIPS.slice(1)); RADIO.say(sh.radio, radioLine(COMBAT.vampires, { B: bearingWords(h) }), { role: 'ship', cat: 'combat', prio: 3 }); });
+  sayOnce('vamp', 6, () => { const sh = pick(SHIPS.slice(1)); RADIO.say(sh.radio, radioLine(COMBAT.vampires, { B: bearingWords(h), D: compassWord(h) }), { role: 'ship', cat: 'combat', prio: 3 }); });
+  if (Math.random() < 0.4) enemySay(ENEMY_NAMES.hq, ENEMY_LINES.salvo);
 }
 
 /* ---- targeting helpers ---- */
@@ -142,14 +156,18 @@ function sayKill(src, line) {
 function damageEnemy(e, dmg, src) {
   FX.flash.spawn(e.p, { s0: 1.5, s1: 2.2, life: 0.1, a0: 1 });
   e.hp -= dmg;
-  if (e.hp > 0) { e.smoking = true; return; }
+  if (e.hp > 0) { if (e.kind === 'bandit' && !e.smoking && Math.random() < 0.35) enemySay(e.cs, ENEMY_LINES.damaged); e.smoking = true; return; }
+  // the enemy side: a wingman reports the loss, or the pilot himself goes out
+  const mate = e.kind !== 'vampire' && Math.random() < 0.5 && ENEMIES.find(o => o !== e && o.kind === e.kind && enemyAlive(o) && o.cs !== e.cs && (e.kind === 'boat' || (e.sq && o.sq === e.sq)));
   if (e.kind === 'bandit') {
     explosion(e.p, 1.3); e.falling = true; e.spin = rand(3, 6) * (Math.random() < 0.5 ? -1 : 1);
     sayKill(src, radioLine(COMBAT.splash));
+    if (mate) enemySay(mate.cs, ENEMY_LINES.lost, { K: e.cs }, { delay: 1.2 }); else if (Math.random() < 0.4) enemySay(e.cs, ENEMY_LINES.eject, null, { delay: 0.6 });
     if (CFG.shake) camShake = Math.min(1, camShake + 0.25);
   } else if (e.kind === 'boat') {
     explosion(e.p, 0.9); e.falling = true; e.sinkT = 0;
     sayKill(src, radioLine(AIRWAR_LINES.boatKill));
+    if (mate) enemySay(mate.cs, ENEMY_LINES.boatLost, { K: e.cs }, { delay: 1 });
   } else {
     explosion(e.p, 0.8); e.dead = true; scene.remove(e.mesh);
     if (Math.random() < 0.6) sayKill(src, radioLine(COMBAT.vampireDown));
@@ -160,6 +178,7 @@ function shipImpact(e) {
   explosion(w, 1.4);
   SHIP_FIRES.push({ ship: s, local: e.tgt.local.clone(), t: 14 });
   sayOnce('hit', 5, () => RADIO.say(s.radio || RADIO_NAMES.carrier, radioLine(COMBAT.shipHit), { role: 'ship', cat: 'combat', prio: 4 }));
+  if (Math.random() < 0.6) { const b = ENEMIES.find(o => o.kind === 'bandit' && !o.duel && enemyAlive(o)); enemySay(b ? b.cs : ENEMY_NAMES.hq, ENEMY_LINES.shipHit, null, { delay: 1.4 }); }
   STRESS.bump(0.03);
   if (CFG.shake) camShake = 1;
 }
@@ -207,7 +226,10 @@ function updateCombat(dt) {
       if (e.smoking) { e.smokeT += dt; while (e.smokeT > 0.06) { e.smokeT -= 0.06; FX.smoke.spawn(e.p.clone(), { s0: 0.5, s1: 2, life: 1.8, a0: 0.5, color: 0x333333, v: new V3(-WAVE.flow, 0.3, 0) }); } }
       // bandits loose anti-ship missiles on their run in
       const dc = Math.hypot(e.p.x, e.p.z);
-      if (armed && !e.fired && dc < 85 && dc > 50) { e.fired = true; if (Math.random() < ENEMY_TYPES[e.type].vamp + st * 0.25) { spawnVampire(e.p.clone()); sayOnce('vamp', 6, () => { const sh = pick(SHIPS.slice(1)); RADIO.say(sh.radio, radioLine(COMBAT.vampLaunch), { role: 'ship', cat: 'combat', prio: 3 }); }); } }
+      if (armed && !e.fired && dc < 85 && dc > 50) { e.fired = true; if (Math.random() < ENEMY_TYPES[e.type].vamp + st * 0.25) {
+        spawnVampire(e.p.clone()); if (Math.random() < 0.5) enemySay(e.cs, ENEMY_LINES.missile);
+        sayOnce('vamp', 6, () => { const sh = pick(SHIPS.slice(1)); RADIO.say(sh.radio, radioLine(COMBAT.vampLaunch), { role: 'ship', cat: 'combat', prio: 3 }); });
+      } }
       if (dc > 175 && e.age > 3) { e.dead = true; scene.remove(e.mesh); }
     } else if (e.kind === 'boat') {
       if (e.falling) {                         // burning, then down by the stern
