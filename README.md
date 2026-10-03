@@ -56,19 +56,21 @@ Each destroyer can also carry one MH-60 (optional).
 Ace Combat style lines appear at the top of the screen: catapult clearances, "call the ball", trap calls,
 helicopter departures and landings, and combat chatter while music is playing.
 
-- Callsigns come from Ace Combat 04 / 5 / Zero / 7 / 8:
-  - **Squadrons:** Wardog, Razgriz, Mage, Spare, Strider (F/A-18), Mobius, Galm, Crow, Indigo, Wizard (F-14),
-    Garuda, Scarface, Antares, Ogre, Saber (F-35C).
+- Callsigns come from Ace Combat 2 / 04 / 5 / Zero / X / 6 / Infinity / 7 / 8:
+  - **Squadrons:** Joker, Queen, Mage, Spare, Strider (F/A-18), Wardog, Swordsman, Crow (F-14),
+    Garuda, Scarface, Gryphus, Ogre, Saber (F-35C).
   - **Helicopters / COD:** Sea Goblin, Osprey, Halo (MH-60), Atlas, Hercules, Titan (CH-53), Viper, Cobra,
     Sweeper (AH-1Z), Sunhawk, Greyhound, Pelican (CMV-22B).
   - **AWACS:** SkyEye, Thunderhead, Eagle Eye, Long Caster, Bandog, Sky Keeper, Dealer.
+  - **Fly-by aces:** Reaper, Avalanche, Sohei.
   - **Ships:** carrier KESTREL, escorts BUCCANEER (port) and CUTLASS (starboard). The control panel
     lists them with their status (on station / engaging / damaged).
 - Jets are grouped 4 per callsign, helicopters 2.
 - As in Ace Combat, the speaker's callsign is shown on its own line above the line, colored by role
   (pilots, AWACS, ships, helicopters, aces, enemy).
-- **Intercepted enemy transmissions** (in red): each attack wave is a squadron (STRIGON, VOLK, ZMEY, SHRIKE,
-  GRIFFON, RAVEN — `STRIGON 1`, `STRIGON 2`…), boats are MORAY / BARRACUDA / SCORPION, their command is CITADEL.
+- **Intercepted enemy transmissions** (in red): each attack wave is an Ace Combat enemy squadron (Yellow, Sol,
+  Grabacr, Ofnir, Schnee, Gelb, Strigon, Rot, Grün, Silber, Espada, Sorcerer — `YELLOW 1`, `YELLOW 2`…), boats are
+  Svafnir / Goin / Moin, their command is HRESVELGR.
   They commit on the carrier, call missile launches, cry out when hit or shot down (or a wingman reports the loss),
   shout in the dogfights, cheer hits on the ships, and pull back when the music stops. The higher the threat,
   the more often they talk and the more desperate they sound.
@@ -82,8 +84,8 @@ SAR, medevac, sonar searches…). Each mission has its own radio orders, and the
   no flight is complete. A four-ship flight goes as all four or as one of its pairs, chosen at random;
   wingmen fly in trail.
 - A pair left behind waits for the other pair to come back before the flight is sent again.
-- The order addresses a whole flight through its lead (`WARDOG 1, proceed to…`) and part of a flight
-  by each aircraft (`WARDOG 3, WARDOG 4, …`); the lead answers with one of many acknowledgements
+- The order addresses a whole flight through its lead (`JOKER 1, proceed to…`) and part of a flight
+  by each aircraft (`JOKER 3, JOKER 4, …`); the lead answers with one of many acknowledgements
   (common ones plus fighter / AWACS / helicopter flavoured), never the same twice in a row.
 - Several flights can be away at once, but one flight always stays on station.
 - The CMV-22B flies its own COD runs (mail, cargo, engine modules, passengers, medevac): it stays away longer

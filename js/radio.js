@@ -1,22 +1,25 @@
 'use strict';
 /* ===== Radio chatter subtitles (Ace Combat style) ===== */
 const CALLSIGNS = {
-  // Squadron names from Ace Combat 04 / 5 / Zero / 7 / 8 — groups of 4 for jets, 2 for helicopters
-  fa18: ['WARDOG', 'RAZGRIZ', 'MAGE', 'SPARE', 'STRIDER'],
-  f14: ['MOBIUS', 'GALM', 'CROW', 'INDIGO', 'WIZARD'],
-  f35: ['GARUDA', 'SCARFACE', 'ANTARES', 'OGRE', 'SABER'],
+  // Squadron names from Ace Combat 2 / 04 / 5 / Zero / X / 6 / Infinity / 7 / 8 — groups of 4 for jets, 2 for helicopters
+  fa18: ['JOKER', 'QUEEN', 'MAGE', 'SPARE', 'STRIDER'],    // Joker / Queen: carrier-based (AC8)
+  f14: ['WARDOG', 'SWORDSMAN', 'CROW'],                    // Wardog / Swordsman: flew from the carrier Kestrel (AC5)
+  f35: ['GARUDA', 'SCARFACE', 'GRYPHUS', 'OGRE', 'SABER'],
   e2d: ['SKYEYE', 'THUNDERHEAD', 'EAGLE EYE', 'LONG CASTER', 'BANDOG', 'SKY KEEPER', 'DEALER'],
   mh60: ['SEA GOBLIN', 'OSPREY', 'HALO'],
   ch53: ['ATLAS', 'HERCULES', 'TITAN'],
   ah1: ['VIPER', 'COBRA', 'SWEEPER'],
   cmv22: ['SUNHAWK', 'GREYHOUND', 'PELICAN'],
-  flyby: ['YELLOW', 'SOL', 'GRABACR', 'OFNIR', 'SCHNEE', 'GELB'],
+  flyby: ['REAPER', 'AVALANCHE', 'SOHEI'],   // allied Strangereal aces (AC Infinity / 6)
   ddheli: ['SEAHORSE', 'PETREL']      // one per destroyer, each with its own callsign
 };
 const RADIO_NAMES = { carrier: 'KESTREL', lso: 'PADDLES', escorts: ['BUCCANEER', 'CUTLASS'] };
 const ROLE_COLOR = { pilot: '#8fd3ff', awacs: '#9dffb0', ship: '#ffd27a', heli: '#b8e0ff', ace: '#ff9a7a', enemy: '#ff5a50' };
-// intercepted enemy traffic (ENEMY_LINES): attack waves are squadrons, numbered per aircraft; boats; their command
-const ENEMY_NAMES = { hq: 'CITADEL', squadrons: ['STRIGON', 'VOLK', 'ZMEY', 'SHRIKE', 'GRIFFON', 'RAVEN'], boats: ['MORAY', 'BARRACUDA', 'SCORPION'] };
+// intercepted enemy traffic (ENEMY_LINES): attack waves are squadrons, numbered per aircraft; boats; their command.
+// Enemy aces of Ace Combat 04 / 5 / 6 / Zero / 7; boats are named after the serpents under Yggdrasil like Grabacr
+// and Ofnir; the command after the Belkan flying fortress.
+const ENEMY_NAMES = { hq: 'HRESVELGR', squadrons: ['YELLOW', 'SOL', 'GRABACR', 'OFNIR', 'SCHNEE', 'GELB', 'STRIGON', 'ROT', 'GRÜN', 'SILBER', 'ESPADA', 'SORCERER'],
+  boats: ['SVAFNIR', 'GOIN', 'MOIN'] };
 
 const VARIETY_T = 6;
 const RADIO = {

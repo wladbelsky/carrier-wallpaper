@@ -32,7 +32,7 @@ User-facing docs: `README.md` (keep it in sync when behaviour or properties chan
 
 ## Rules / conventions
 - **After changing any JS/CSS file, bump the cache-buster** `?v=N` on all `<script>`/`<link>` tags in
-  `index.html` (WE's CEF caches aggressively). Current: `v=43`.
+  `index.html` (WE's CEF caches aggressively). Current: `v=47`.
 - **New WE property**: add it to `project.json`, read it in `applyUserProperties` (`main.js`) into `CFG`,
   then run `python tools/gen_properties.py`. Property `order` decides the browser-drawer group
   (0–9 camera/time, 10–19 audio/combat, 20–29 sea, 30–39 panel, 40–49 air wing, 50–59 hull number).
@@ -123,7 +123,7 @@ Missions fly beyond the screen edge while there is no music. `dispatchFlight` (`
   `{G}` grid, `{P}` passengers, `{W}` pounds.
 - **Enemy lines** go through `enemySay(who, pool, vars, o)` (`combat.js`): role `enemy` (red), one at most every
   4–8 s (shorter as stress builds). Speakers are enemy callsigns: `e.cs` on every bandit / boat (a wave shares its
-  squadron `e.sq`: `STRIGON 1`, `STRIGON 2`…), `ENEMY_NAMES.hq` for their command.
+  squadron `e.sq`: `YELLOW 1`, `YELLOW 2`…), `ENEMY_NAMES.hq` for their command.
 - **New line set:** add the pool (tiered when it is said in combat) and call `radioLine`. Combat lines are sent with
   `cat: 'combat'`; the queue drops stale ones (prio < 3 after 4 s), so speak them when the event is on screen.
   Among combat lines a role (`pilot`, `ship`, `enemy`, …) silent for `VARIETY_T` s gets +0.5 when the next line is

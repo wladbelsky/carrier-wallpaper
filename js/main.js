@@ -694,7 +694,7 @@ function updateChatter(dt) {
 let uiTimer = 0, meterTimer = 0, envTimer = 0;
 function buildList() {
   const list = document.getElementById('list'); list.innerHTML = '';
-  // group flights together: by type, then callsign (WARDOG 1, WARDOG 2, … RAZGRIZ 1 …)
+  // group flights together: by type, then callsign (JOKER 1, JOKER 2, … QUEEN 1 …)
   const typeOrder = [...FIXED_ORDER, ...HELI_ORDER];
   const csKey = cs => { const m = /^(.*?)(?:\s+(\d+))?$/.exec(cs); return [m[1], +(m[2] || 0)]; };
   const sorted = AIRCRAFT.slice().sort((a, b) => {
