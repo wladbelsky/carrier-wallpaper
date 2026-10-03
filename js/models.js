@@ -78,11 +78,13 @@ function strut(p, a, b, r, c) {
   const m = shade(new THREE.Mesh(new THREE.CylinderGeometry(r, r, L, 4), mm(c)));
   m.position.copy(a).addScaledVector(d, 0.5); m.quaternion.setFromUnitVectors(new V3(0, 1, 0), d.normalize()); p.add(m); return m;
 }
-/* Octagonal phased-array face: normal along azimuth ang (0 = +X), tilted back */
-function arrayFace(p, x, y, z, ang, r, c) {
+/* Octagonal phased-array face: normal along azimuth ang (0 = +X), tilted back, on an angled housing of colour mount
+   behind it: set at a deckhouse corner, the face sits flush on that bevel instead of half inside the walls. */
+function arrayFace(p, x, y, z, ang, r, c, mount) {
   const g = new THREE.Group(); g.position.set(x, y, z); g.rotation.y = ang; p.add(g);
   const t = new THREE.Group(); t.rotation.z = 0.25; g.add(t);
   const m = cyl(t, r, r, 0.05, 8, c, 0, 0, 0); m.rotation.z = Math.PI / 2; m.rotation.x = Math.PI / 8;
+  box(t, 0.4, r * 2.1, r * 2.1, mount, -0.225, 0, 0);
   return g;
 }
 const DECK_MARK_MATS = {};
@@ -225,20 +227,21 @@ function buildCarrier() {
   prism(g, [[-15.4, 2.5], [9, 2.7], [15.3, 0.2], [15.3, -0.2], [9, -2.7], [-15.4, -2.5]], -1.4, 1.6, HULL2);
   prism(g, [[-15.6, 2.85], [9, 3.05], [15.6, 0.3], [15.6, -0.3], [9, -3.05], [-15.6, -2.85]], 0.2, 0.8, HULL);
   prism(g, [[-16, 3.25], [9, 3.4], [14.2, 2.1], [16.5, 0.45], [16.5, -0.7], [14, -2.5], [4, -3.4], [-16, -3.3]], 1.0, 1.0, HULL);
-  prism(g, [[4.5, -3.3], [0, -4.3], [-9, -5.3], [-13.5, -5.1], [-15.6, -3.3]], 1.55, 0.45, HULL);
+  prism(g, [[4.5, -3.3], [2.0, -4.05], [1.75, -5.25], [0, -5.3], [-9, -5.3], [-13.5, -5.1], [-15.6, -3.3]], 1.55, 0.45, HULL);   // angled-deck sponson
   prism(g, [[-15.45, 2.55], [9, 2.75], [15.35, 0.22], [15.35, -0.22], [9, -2.75], [-15.45, -2.55]], -0.05, 0.14, 0x2a2d31);
   // angled-deck sponson supports
-  for (const [x, z] of [[-2, -4.1], [-7, -4.8], [-11.5, -4.9]]) taper(g, 0.5, 0.9, 1.2, HULL2, x, 1.1, z, 1, 1.5);
-  // flight deck with notches for the deck-edge elevators
+  for (const [x, z] of [[0.8, -4.55], [-2, -4.6], [-7, -4.8], [-11.5, -4.9]]) taper(g, 0.5, 0.9, 1.2, HULL2, x, 1.1, z, 1, 1.5);
+  // flight deck with notches for the deck-edge elevators; to port it reaches out under the whole angled deck
+  // (its forward end is cut square to the landing area)
   const deckPts = [[-16.3, 3.6], [-5.5, 3.75], [-5.5, 3.45], [-2.7, 3.45], [-2.7, 3.78], [4.1, 3.83], [4.1, 3.45], [6.9, 3.45], [6.9, 3.86], [9, 3.9],
-    [14.5, 2.6], [16.8, 0.9], [16.8, -1.2], [14, -3.2], [6, -3.8], [0, -4.6], [-9, -5.6], [-13.5, -5.4], [-16.3, -3.6]];
+    [14.5, 2.6], [16.8, 0.9], [16.8, -1.2], [14, -3.2], [6, -3.8], [2.0, -4.35], [1.75, -5.55], [0, -5.62], [-9, -5.6], [-13.5, -5.4], [-16.3, -3.6]];
   prism(g, deckPts, 2.0, 0.3, DECK);
   // stern: hangar-bay transom openings + fantail
   box(g, 0.06, 0.5, 3.4, 0x1d2024, -16.02, 1.45, 0);
   box(g, 0.8, 0.08, 5.8, HULL, -16.2, 1.02, 0);
   // catwalks / galleries below deck edge
   box(g, 9.8, 0.08, 0.4, TRIM, -10.7, 2.0, 3.72); box(g, 7.4, 0.08, 0.4, TRIM, 0.6, 2.0, 3.72);
-  box(g, 10, 0.08, 0.35, TRIM, -3, 2.0, -5.1); box(g, 8, 0.08, 0.35, TRIM, 9.5, 2.0, -3.5);
+  box(g, 10, 0.08, 0.35, TRIM, -3.5, 2.0, -5.78); box(g, 8, 0.08, 0.35, TRIM, 9.5, 2.0, -3.5);
   // boats / life rafts along the hull
   for (let i = 0; i < 5; i++) { cyl(g, 0.12, 0.12, 0.35, 6, 0xd8d8d0, -14 + i * 0.5, 1.72, -3.45).rotation.x = Math.PI / 2; }
   for (let i = 0; i < 3; i++) box(g, 0.9, 0.28, 0.35, 0x6a7078, 8.5 + i * 1.3, 1.45, 3.45);
@@ -306,17 +309,18 @@ function buildCarrier() {
   // tripod mast
   const mt = new V3(0.1, 6.3, 0);
   strut(I, new V3(-0.5, 3.15, -0.35), mt, 0.05, 0x50565d); strut(I, new V3(-0.5, 3.15, 0.35), mt, 0.05, 0x50565d); strut(I, new V3(0.7, 3.15, 0), mt, 0.05, 0x50565d);
-  cyl(I, 0.05, 0.07, 1.3, 5, 0x50565d, 0.1, 6.9, 0);
+  cyl(I, 0.05, 0.07, 1.75, 5, 0x50565d, 0.1, 7.125, 0);   // pole up through the radar: the masthead lights sit on top
   box(I, 0.9, 0.05, 0.9, TRIM, 0.1, 4.4, 0); box(I, 0.7, 0.05, 0.7, TRIM, 0.1, 5.4, 0);
   box(I, 0.06, 0.06, 2.0, 0x50565d, 0.1, 5.9, 0); box(I, 0.06, 0.06, 1.4, 0x50565d, 0.1, 6.5, 0);
   for (const s of [-1, 1]) { cyl(I, 0.012, 0.012, 0.8, 3, 0x333, 0.1, 6.35, s * 0.95); cyl(I, 0.012, 0.012, 0.6, 3, 0x333, 0.1, 6.8, s * 0.65); }
-  const radar1 = new THREE.Group(); radar1.position.set(0.1, 5.55, 0); I.add(radar1);        // 3D air-search slab
-  const slab = box(radar1, 0.1, 0.75, 0.75, 0x9aa1a8, 0.12, 0.35, 0); slab.rotation.z = 0.25; box(radar1, 0.18, 0.12, 0.18, 0x444, 0, 0.05, 0);
+  // 3D air-search slab at the masthead, above the strut apex and the yards: its sweep (r ≈ 0.46) clears the whips
+  const radar1 = new THREE.Group(); radar1.position.set(0.1, 7.0, 0); I.add(radar1);
+  const slab = box(radar1, 0.1, 0.75, 0.75, 0x9aa1a8, 0.22, 0.35, 0); slab.rotation.z = 0.25; box(radar1, 0.18, 0.12, 0.18, 0x444, 0, 0.05, 0);
   const radar2 = new THREE.Group(); radar2.position.set(-1.6, 3.2, 0); I.add(radar2);          // 2D mesh antenna
   cyl(radar2, 0.06, 0.08, 0.5, 6, 0x555, 0, 0.25, 0);
   const mesh2 = box(radar2, 0.06, 0.45, 1.3, 0x8d949b, 0.12, 0.62, 0); mesh2.rotation.z = 0.2;
   for (const [x, y, r] of [[1.3, 3.35, 0.24], [-0.9, 3.35, 0.2], [0.6, 4.6, 0.16]]) { const d = shade(new THREE.Mesh(new THREE.SphereGeometry(r, 8, 6), M(0xdcdee0))); d.position.set(x, y, 0.35); I.add(d); }
-  for (const [x, z, h] of [[1.7, -0.4, 0.9], [-1.9, 0.4, 0.7], [1.9, 0.4, 0.6]]) cyl(I, 0.015, 0.02, h, 3, 0x333, x, 3.15 + h / 2, z);
+  for (const [x, z, h] of [[1.7, -0.4, 0.9], [-1.9, 0.4, 0.42], [1.9, 0.4, 0.6]]) cyl(I, 0.015, 0.02, h, 3, 0x333, x, 3.15 + h / 2, z);   // whips (the aft one stays under the mesh antenna's sweep)
 
   // --- CIWS & RAM sponsons
   const ciws = [];
@@ -328,8 +332,8 @@ function buildCarrier() {
 
   // --- navigation lights
   const lights = [];
-  lights.push(navLights(g, [[1.6, Y + 7.6, 3.05, 0xffffff], [2.35, Y + 2.6, 2.35, 0xff2a1a], [2.35, Y + 2.6, 3.75, 0x22ff66], [-16.3, 2.1, 0, 0xffffff], [16.7, 2.4, 0, 0xffffff]], null, 1.5));
-  lights.push(navLights(g, [[1.6, Y + 7.75, 3.05, 0xff2020]], { period: 1.2, duty: 0.25 }, 1.5));
+  lights.push(navLights(g, [[1.6, Y + 8.05, 3.05, 0xffffff], [2.35, Y + 2.6, 2.35, 0xff2a1a], [2.35, Y + 2.6, 3.75, 0x22ff66], [-16.3, 2.1, 0, 0xffffff], [16.7, 2.4, 0, 0xffffff]], null, 1.5));
+  lights.push(navLights(g, [[1.6, Y + 8.2, 3.05, 0xff2020]], { period: 1.2, duty: 0.25 }, 1.5));
   const edge = [];
   for (let s = 0; s <= 17; s += 1.4) for (const off of [-1.35, 1.35]) { const p = A0.clone().addScaledVector(AD, s).addScaledVector(AP, off); edge.push([p.x, Y + 0.05, p.z, 0xffd27a]); }
   for (let s = 0; s <= 17; s += 1.4) { const p = A0.clone().addScaledVector(AD, s); edge.push([p.x, Y + 0.05, p.z, 0xffffff]); }
@@ -372,8 +376,9 @@ function buildDestroyer(side) { // side: -1 = port of the carrier, +1 = starboar
   for (const s of [-1, 1]) box(g, 0.5, 0.08, 0.5, TRIM, 2.0, 2.55, s * 1.05); // bridge wings
   taper(g, 1.2, 0.35, 1.3, HULL, 1.5, 3.02, 0, 0.85, 0.8);
   // SPY array faces (forward pair)
-  arrayFace(g, 2.3, 2.2, 0.93, -45 * DEG, 0.42, 0x7c848c);
-  arrayFace(g, 2.3, 2.2, -0.93, 45 * DEG, 0.42, 0x7c848c);
+  // on the bridge block's forward corners (just outside them, on their angled housings)
+  arrayFace(g, 2.57, 2.2, 0.87, -45 * DEG, 0.42, 0x7c848c, HULL);
+  arrayFace(g, 2.57, 2.2, -0.87, 45 * DEG, 0.42, 0x7c848c, HULL);
   // midship deckhouse
   taper(g, 4.0, 1.0, 1.8, HULL, -1.4, 1.62, 0, 0.95, 0.84);
   // funnels (raked, tapered)
@@ -384,8 +389,8 @@ function buildDestroyer(side) { // side: -1 = port of the carrier, +1 = starboar
   }
   // aft superstructure with aft SPY faces
   taper(g, 1.4, 0.9, 1.6, HULL, -3.6, 2.5, 0, 0.9, 0.85);
-  arrayFace(g, -4.1, 2.6, 0.74, -135 * DEG, 0.36, 0x7c848c);
-  arrayFace(g, -4.1, 2.6, -0.74, 135 * DEG, 0.36, 0x7c848c);
+  arrayFace(g, -4.28, 2.6, 0.75, -135 * DEG, 0.36, 0x7c848c, HULL);   // on the aft corners, same way
+  arrayFace(g, -4.28, 2.6, -0.75, 135 * DEG, 0.36, 0x7c848c, HULL);
   cyl(g, 0.04, 0.06, 1.2, 5, 0x50565d, -3.6, 3.5, 0); box(g, 0.05, 0.05, 0.8, 0x50565d, -3.6, 3.8, 0);
   // hangar + flight deck
   taper(g, 1.8, 1.05, 1.9, HULL, -5.1, 1.63, 0, 0.95, 0.9);
