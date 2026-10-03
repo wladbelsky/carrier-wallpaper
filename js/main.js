@@ -685,7 +685,7 @@ function updateChatter(dt) {
   if (RADIO.q.filter(m => m.cat === 'combat').length > 1) return;
   // fighters and helicopters talk about their own passes (js/airwar.js); here the AWACS, the ships and the enemy
   const foes = CFG.enemies ? ENEMIES.filter(e => e.cs && enemyAlive(e)) : [];
-  if (foes.length && Math.random() < 0.15 + 0.25 * STRESS.level) enemySay(pick(foes).cs, ENEMY_LINES.chatter);
+  if (foes.length && Math.random() < 0.15 + 0.25 * STRESS.level) enemySay(pick(foes).cs, ENEMY_LINES.chatter, null, { prio: 1 });
   else if (awacs && Math.random() < 0.45) awacs.say(radioLine(COMBAT.awacs), C);
   else RADIO.say(pick(RADIO_NAMES.escorts), radioLine(COMBAT.ship), { role: 'ship', cat: 'combat', prio: 0 });
 }

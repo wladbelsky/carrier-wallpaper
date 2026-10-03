@@ -32,7 +32,7 @@ User-facing docs: `README.md` (keep it in sync when behaviour or properties chan
 
 ## Rules / conventions
 - **After changing any JS/CSS file, bump the cache-buster** `?v=N` on all `<script>`/`<link>` tags in
-  `index.html` (WE's CEF caches aggressively). Current: `v=42`.
+  `index.html` (WE's CEF caches aggressively). Current: `v=43`.
 - **New WE property**: add it to `project.json`, read it in `applyUserProperties` (`main.js`) into `CFG`,
   then run `python tools/gen_properties.py`. Property `order` decides the browser-drawer group
   (0–9 camera/time, 10–19 audio/combat, 20–29 sea, 30–39 panel, 40–49 air wing, 50–59 hull number).
@@ -126,6 +126,8 @@ Missions fly beyond the screen edge while there is no music. `dispatchFlight` (`
   squadron `e.sq`: `STRIGON 1`, `STRIGON 2`…), `ENEMY_NAMES.hq` for their command.
 - **New line set:** add the pool (tiered when it is said in combat) and call `radioLine`. Combat lines are sent with
   `cat: 'combat'`; the queue drops stale ones (prio < 3 after 4 s), so speak them when the event is on screen.
+  Among combat lines a role (`pilot`, `ship`, `enemy`, …) silent for `VARIETY_T` s gets +0.5 when the next line is
+  picked (`RADIO.onAir`), so no side drowns out the others; enemy event lines are prio 2, their chatter prio 1.
 
 ## Performance & memory invariants (the wallpaper never restarts — leaks accumulate for days)
 - **Never create geometry per spawn and drop it.** Enemies are clones of one template (`enemyMesh()`

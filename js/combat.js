@@ -6,9 +6,10 @@ const ENEMIES = [], PENDING = [], SHIP_FIRES = [];
 let banditTimer = 6, vampTimer = 14;
 const SAY_CD = {};
 function sayOnce(key, cd, fn) { if ((SAY_CD[key] || -99) > T) return; SAY_CD[key] = T + cd; fn(); }
-/* intercepted enemy transmission (ENEMY_LINES): one every few seconds at most, more often as stress builds */
+/* intercepted enemy transmission (ENEMY_LINES): one every few seconds at most, more often as stress builds;
+   prio 2 like our own combat calls (background chatter passes prio 1) */
 function enemySay(who, pool, vars, o) {
-  if (who) sayOnce('enemy', rand(4, 8) * (1 - 0.5 * STRESS.level), () => RADIO.say(who, radioLine(pool, vars), Object.assign({ role: 'enemy', cat: 'combat', prio: 1 }, o)));
+  if (who) sayOnce('enemy', rand(4, 8) * (1 - 0.5 * STRESS.level), () => RADIO.say(who, radioLine(pool, vars), Object.assign({ role: 'enemy', cat: 'combat', prio: 2 }, o)));
 }
 let lastWaveT = -99;                                              // sim time of the last attack wave
 const enemyOnAir = () => CFG.enemies && T - lastWaveT < 60;         // their command only talks while it has a fight going

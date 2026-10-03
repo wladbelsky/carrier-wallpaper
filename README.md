@@ -178,6 +178,8 @@ combat versions ("hot deck, launch, launch!") or are dropped if they get stale.
 
 Urgent calls (unknown contacts, combat start, vampires, hits) cut in over a less important line, and
 lines are shortened when others are waiting, so the radio keeps up with what happens on screen.
+In combat, a side that hasn't been on the air for a few seconds (pilots, AWACS, ships, the enemy) goes ahead of
+one that just spoke, so the ships calling every kill and hit don't drown out everyone else.
 
 ## Notification safeguard
 

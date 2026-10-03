@@ -18,8 +18,9 @@ const ROLE_COLOR = { pilot: '#8fd3ff', awacs: '#9dffb0', ship: '#ffd27a', heli: 
 // intercepted enemy traffic (ENEMY_LINES): attack waves are squadrons, numbered per aircraft; boats; their command
 const ENEMY_NAMES = { hq: 'CITADEL', squadrons: ['STRIGON', 'VOLK', 'ZMEY', 'SHRIKE', 'GRIFFON', 'RAVEN'], boats: ['MORAY', 'BARRACUDA', 'SCORPION'] };
 
+const VARIETY_T = 6;
 const RADIO = {
-  q: [], cur: null, t: 0, gap: 0,
+  q: [], cur: null, t: 0, gap: 0, onAir: {},   // onAir: role -> T its last line ended
   say(who, text, o) {
     o = o || {};
     if (!CFG.subtitles) return;
@@ -51,14 +52,16 @@ const RADIO = {
       let waiting = false, urgent = false;
       for (const m of this.q) if (m.at <= T) { waiting = true; if (m.prio >= 3 && this.eff(m) > this.eff(this.cur)) urgent = true; }
       const end = urgent ? 0.4 : waiting ? Math.max(1.4, this.cur.dur * 0.7) : this.cur.dur;
-      if (this.t > end) { box.classList.remove('on'); this.cur = null; this.gap = urgent ? 0.05 : 0.2; }
+      if (this.t > end) { this.onAir[this.cur.role] = T; box.classList.remove('on'); this.cur = null; this.gap = urgent ? 0.05 : 0.2; }
       return;
     }
     if (this.gap > 0) { this.gap -= dt; return; }
     // stale lines are dropped: combat calls after 4 s, routine calls during combat after 5 s
     this.q = this.q.filter(m => !((m.cat === 'combat' && m.prio < 3 && T - m.born > 4) || (AUD.armed && m.cat === 'ops' && !m.hot && T - m.born > 5) || (m.prio <= 0 && T - m.born > 6)));
     let i = -1, best = -1e9;
-    this.q.forEach((m, k) => { if (m.at <= T) { const e = this.eff(m); if (e > best) { best = e; i = k; } } });
+    // variety: in combat a role silent for VARIETY_T s gets half a step up, so one side (the ships calling every kill
+    // and hit) can't drown out the others, the enemy included; half, so it never ties the next priority
+    this.q.forEach((m, k) => { if (m.at <= T) { const e = this.eff(m) + (m.cat === 'combat' && T - (this.onAir[m.role] ?? -99) > VARIETY_T ? 0.5 : 0); if (e > best) { best = e; i = k; } } });
     if (i < 0) return;
     const m = this.q.splice(i, 1)[0];
     m.dur = clamp(1.0 + m.text.length * 0.042, 1.6, 4.6); this.cur = m; this.t = 0;
