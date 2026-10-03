@@ -196,6 +196,12 @@ const WE_PROPERTIES = {
   "type": "bool",
   "value": true
  },
+ "savestate": {
+  "order": 49,
+  "text": "Remember aircraft in the air between sessions",
+  "type": "bool",
+  "value": true
+ },
  "subtitles": {
   "order": 49,
   "text": "Radio subtitles",

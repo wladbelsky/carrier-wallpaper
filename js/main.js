@@ -35,6 +35,7 @@ window.wallpaperPropertyListener = {
     if (has('shipspeed')) CFG.speed = p.shipspeed.value;
     if (has('uicolor')) CFG.uiColor = rgbFromWE(p.uicolor.value);
     if (has('subtitles')) CFG.subtitles = p.subtitles.value;
+    if (has('savestate')) { CFG.saveState = p.savestate.value; if (!CFG.saveState) PERSIST.clear(); }
     if (has('missionfrequency')) CFG.missions = p.missionfrequency.value;
     if (has('camerashake')) CFG.shake = p.camerashake.value;
     if (has('enemies')) CFG.enemies = p.enemies.value;
@@ -44,7 +45,7 @@ window.wallpaperPropertyListener = {
     applySettings();
   },
   applyGeneralProperties(p) { if (p.fps !== undefined) fpsLimit = p.fps; },
-  setPaused(v) { paused = v; }
+  setPaused(v) { paused = v; if (v) PERSIST.save(); }
 };
 
 function applySettings() {
@@ -139,8 +140,11 @@ function buildAirWing() {
     }
   }
   buildList();
-  // part of the air wing goes up right away: two flights (or lead sections)
-  if (CFG.auto) { autoLaunch(); autoLaunch(); autoTimer = rand(8, 14); }
+  // the last session's aircraft in the air / on missions come back (js/persist.js); otherwise part of the air wing
+  // goes up right away: two flights (or lead sections)
+  const restored = PERSIST.restore();
+  if (CFG.auto && !restored) { autoLaunch(); autoLaunch(); }
+  autoTimer = rand(8, 14);
 }
 /* A count changed: the air wing adapts in place. New aircraft join in the hangar (callsigns continue the flights);
    aircraft over the new count retire — they land first and leave once on deck / in the hangar (retireAircraft).
@@ -800,8 +804,11 @@ function frame(ms) {
 }
 const TIME_SCALE = Math.max(1, Math.round(parseFloat(QS.get('ts') || '1')));
 let wcAcc = 0;
+/* start-up splash: covers the first seconds, when settings / WE properties may rebuild and restore the air wing */
+let splash = document.getElementById('splash');
 function step(dt) {
   T += dt;
+  if (splash && T > 3.2) { const s = splash; splash = null; s.classList.add('off'); setTimeout(() => s.remove(), 700); }
   updateArming();
   WAVE.flow = 2.2 * CFG.speed / 100; WAVE.amp = CFG.waves / 100;
   waveAdvance(dt);
@@ -815,6 +822,7 @@ function step(dt) {
   for (const a of AIRCRAFT) a.update(dt);
   retireAircraft();
   missionWorldUpdate(dt);
+  PERSIST.update(dt);
   updateFlak(dt);
   camShake = Math.max(0, camShake - dt * 3);
   if (CFG.camRotate || camShake > 0) { if (CFG.camRotate) camAz += CFG.camDir * CFG.camSpeed * DEG * dt; updateCameraPose(); }

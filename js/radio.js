@@ -468,6 +468,18 @@ const AIRWAR_LINES = {
   rockets: { calm: ['Rockets away.', 'Firing rockets.'], tense: ['Rockets away!', 'Rippling rockets!'], panic: ['Rockets! Everything we have!'] }
 };
 
+/* ---- a restored session (js/persist.js): the HQ is back on the air, a lead answers ({C} = HQ callsign) ---- */
+LINES.restore = [
+  'Comms restored after heavy interference. All flights, report status.',
+  "Signal's back. Sorry for the static, all stations. Resuming operations.",
+  'Link is back up. That was some jamming. Everyone still with us?',
+  'Radio check, radio check. Interference cleared, datalink restored.',
+  'All stations, comms are back. Picking up where we left off.',
+  "Static's gone, link restored. Stand by for the picture."
+];
+LINES.restoreReply = ['Loud and clear, {C}. Still on station.', 'Reading you five by five, {C}. Nothing changed up here.',
+  'Good to hear you, {C}. All aircraft accounted for.', '{C}, loud and clear. We never left.'];
+
 /* ---- the 5-second check before combat ---- */
 LINES.unknownContacts = [
   'Unidentified contacts on radar, bearing {B}. All stations, stand by.',

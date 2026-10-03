@@ -88,19 +88,33 @@ class Mission {
   copyKey() { return this.textKey(); }        // acknowledgement pool (LINES.missionCopy)
   textVars() { return null; }                 // extra placeholders for the order / done texts ({V} …)
   legs(role) { return [Depart, Away, Return]; }
+  /* this aircraft's point beyond the screen edge: the flight spread abreast across the mission heading */
+  farPoint(a, slot) {
+    const h = this.heading, n = this.flight.length;
+    return new V3(Math.cos(h) * this.dist, a.orbit.alt, Math.sin(h) * this.dist).addScaledVector(new V3(-Math.sin(h), 0, Math.cos(h)), (slot - (n - 1) / 2) * 6);
+  }
+  board(a, slot, legs) {
+    const role = slot ? 'wing' : 'lead', c = a.mission = { m: this, slot, role, far: this.farPoint(a, slot), legs: legs(role).map(L => new L()), i: 0 };
+    c.legs[0].enter(a, c);
+  }
   start() {
     const { order, done } = makeMission(this.textKey(), this.textVars()); this.done = done;
-    const h = this.heading, perp = new V3(-Math.sin(h), 0, Math.cos(h)), n = this.flight.length;
-    this.flight.forEach((a, slot) => {
-      const far = new V3(Math.cos(h) * this.dist, a.orbit.alt, Math.sin(h) * this.dist).addScaledVector(perp, (slot - (n - 1) / 2) * 6);
-      const role = slot ? 'wing' : 'lead', c = a.mission = { m: this, slot, role, far, legs: this.legs(role).map(L => new L()), i: 0 };
-      c.legs[0].enter(a, c);
-    });
+    const n = this.flight.length;
+    this.flight.forEach((a, slot) => this.board(a, slot, r => this.legs(r)));
     // the whole flight is addressed through its lead; part of a flight by each aircraft (WARDOG 3, WARDOG 4)
     const lead = this.lead, awacs = AIRCRAFT.find(a => a.isAwacs && a.airborne && a !== lead);
     const who = n === this.size ? lead.callsign : this.flight.map(a => a.callsign).join(', ');
     RADIO.say(awacs ? awacs.callsign : RADIO_NAMES.carrier, `${who}, ${order}`, { role: awacs ? 'awacs' : 'ship', prio: 1 });
     lead.say(missionCopy(this.copyKey()), { prio: 1, delay: 0.3 });
+  }
+  /* a flight restored from a saved session (js/persist.js): already out there — away a little longer, then back */
+  resume() {
+    this.done = makeMission(this.textKey(), this.textVars()).done; this.away = rand(10, 40); this.leadOut = true;
+    const h = this.heading;
+    this.flight.forEach((a, slot) => {
+      a.pickOrbit(true); a.fwd.set(Math.cos(h), 0, Math.sin(h)); a.v = a.orbit.v;
+      this.board(a, slot, () => [Away, Return]); a.mesh.position.copy(a.mission.far);
+    });
   }
   update(a, dt) {
     const c = a.mission;

@@ -34,6 +34,7 @@ const CFG = {
   shake: true,        // subtle camera shake on heavy hits
   missions: 5,        // how often flights leave on missions (0 = never)
   subtitles: true,    // Ace Combat style radio subtitles
+  saveState: true,    // remember who is in the air / on a mission between sessions (js/persist.js)
   shadows: true,
   showPanel: true,
   panelPos: 'br',

@@ -8,7 +8,7 @@ User-facing docs: `README.md` (keep it in sync when behaviour or properties chan
 - Plain JS, no build step, no npm. `'use strict'` classic scripts sharing **global** scope
   (no modules). three.js **r149** is vendored as `js/three.min.js` — never edit it.
 - `index.html` loads scripts in dependency order (later files use globals of earlier ones):
-  `core → flightpath → models → airframes → effects → radio → aircraft → missions → combat → airwar → main → properties → settings`,
+  `core → flightpath → models → airframes → effects → radio → aircraft → missions → persist → combat → airwar → main → properties → settings`,
   then an inline script registers the WE audio listener (or starts the browser demo beat).
   `main.js` calls `init()` at its end, so anything `init()` needs must be defined before `main.js`.
 
@@ -21,6 +21,7 @@ User-facing docs: `README.md` (keep it in sync when behaviour or properties chan
 | `js/effects.js` | `Tracers` (InstancedMesh), `SpriteFX` (flash/smoke pools), `Splashes`, `Foam` (points), `FlashLights` |
 | `js/radio.js` | callsigns, `RADIO` subtitle queue, mission orders, `STRESS` + `THREAT_TIERS`, `radioLine()`, line pools `OPS` / `COMBAT` / `AIRWAR_LINES` / `LINES` (see "Radio lines & threat tiers") |
 | `js/aircraft.js` | `Aircraft` → `FixedWing` / `Helicopter` state machines, deck resources `FD` / `DECK`, types, `Flyby` |
+| `js/persist.js` | `PERSIST`: remembers who is in the air / on a mission (`localStorage`, `CFG.saveState`), restores it after a fresh `buildAirWing()` (orbit / `Mission.resume`), radio `LINES.restore` |
 | `js/missions.js` | missions: `Leg` steps, `Mission` types (`patrol`, `cod`, `sling`, `ship`, `pilot`), `pickMission`, mission-world objects `CARGO` / `VESSELS` / `ROPES` — see "Missions" |
 | `js/combat.js` | enemies: `ENEMY_TYPES` (Su-25/33/47/57 — model builders live in `airframes.js`; speed, altitude, hp, anti-ship missile chance, stress-based weight), vampires, boats, dogfight bandits (`duel`, flying a pass path), beat-synced hit resolution, ship damage |
 | `js/airwar.js` | `AIRWAR`: combat passes — armed aircraft wait off-screen (`cbt_wait`) and cross the screen chasing / chased by a dogfight bandit or hunting boats; screen helpers (`ndc`, `onScreen`, `groundAt`), pass weapons on the beat (`AIRWAR.onBeat`), pass radio |
@@ -31,7 +32,7 @@ User-facing docs: `README.md` (keep it in sync when behaviour or properties chan
 
 ## Rules / conventions
 - **After changing any JS/CSS file, bump the cache-buster** `?v=N` on all `<script>`/`<link>` tags in
-  `index.html` (WE's CEF caches aggressively). Current: `v=36`.
+  `index.html` (WE's CEF caches aggressively). Current: `v=37`.
 - **New WE property**: add it to `project.json`, read it in `applyUserProperties` (`main.js`) into `CFG`,
   then run `python tools/gen_properties.py`. Property `order` decides the browser-drawer group
   (0–9 camera/time, 10–19 audio/combat, 20–29 sea, 30–39 panel, 40–49 air wing, 50–59 hull number).
@@ -45,6 +46,9 @@ User-facing docs: `README.md` (keep it in sync when behaviour or properties chan
   The CMV-22B tiltrotor is a `Helicopter` with `conv` (0 = VTOL, 1 = airplane mode) and `gearDown` getters read by its model.
 - Match the existing style: dense one-liners, short comments, `const` scratch vectors at module level.
 - Sim time is `T` (advances only in `step(dt)`); real time is `RT()` (audio arming, beat gaps).
+- **Session state** (`js/persist.js`): saved every 10 s and on pagehide / WE pause; only *who* is up (`AIR_STATES`,
+  `cbt_*`) or on a mission, never positions. A new airborne state must go into `AIR_STATES`. The start-up splash
+  (`#splash`, hidden in `step` at `T > 3.2`) covers the build / restore / start-up rebuild.
 - **Combat state** is latched in `updateArming()` (`main.js`, first thing in `step`): `AUD.hot` = sound for
   `ARM_DELAY` s → `AUD.combat` (read everywhere as `AUD.armed`). When the sound stops, `AUD.holding` is true for
   `DISARM_DELAY` s: still `armed` (aircraft stay engaged, no missions), but not `AUD.fighting` — no new waves, passes,

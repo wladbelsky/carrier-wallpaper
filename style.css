@@ -1,6 +1,22 @@
 html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #0a1220; }
 #c { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
 
+/* start-up splash (hidden by main.js after the first seconds; the 8 s fallback hides it even if scripts fail) */
+#splash {
+  position: fixed; inset: 0; z-index: 50; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
+  background: radial-gradient(ellipse at center, #10233a 0%, #0a1220 70%); color: #78dcaa;
+  font: 13px/1.4 Consolas, 'Lucida Console', 'Courier New', monospace; letter-spacing: .25em; user-select: none;
+  transition: opacity .6s; animation: splashFailsafe .6s 8s forwards;
+}
+#splash .t { font-size: 22px; font-weight: bold; letter-spacing: .3em; text-shadow: 0 0 14px rgba(120,220,170,.45); }
+#splash .s { opacity: .75; animation: splashBlink 1.2s steps(2) infinite; }
+#splash .bar { width: 260px; height: 3px; background: rgba(120,220,170,.15); overflow: hidden; }
+#splash .bar i { display: block; height: 100%; background: #78dcaa; transform-origin: left; animation: splashBar 3.2s ease-out forwards; }
+#splash.off { opacity: 0; pointer-events: none; }
+@keyframes splashBar { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes splashBlink { 50% { opacity: .35; } }
+@keyframes splashFailsafe { to { opacity: 0; visibility: hidden; } }
+
 #panel {
   --ui: 120,220,170; --scale: 1;
   position: fixed; width: 392px; z-index: 10;
