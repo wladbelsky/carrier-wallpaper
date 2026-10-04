@@ -19,6 +19,8 @@ From source:
    or in Wallpaper Engine choose **Open Wallpaper → Open from File** and pick `project.json`.
 2. Audio reaction needs audio recording enabled in the WE settings (it is on by default).
 3. Panel buttons need mouse input enabled in WE. The mouse never moves the camera.
+   WE doesn't pass the mouse wheel to wallpapers, so the aircraft list isn't scrolled: when it doesn't fit, it is
+   split into pages (◀ 1/3 ▶) with a chip per aircraft type that jumps to it.
 
 ## Air wing
 

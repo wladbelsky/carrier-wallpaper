@@ -77,7 +77,7 @@ function init() {
   sunLight = new THREE.DirectionalLight(0xffffff, 1);
   sunLight.castShadow = CFG.shadows;
   sunLight.shadow.mapSize.set(2048, 2048);
-  Object.assign(sunLight.shadow.camera, { left: -50, right: 50, top: 50, bottom: -50, near: 1, far: 400 });
+  Object.assign(sunLight.shadow.camera, { left: -50, right: 50, top: 50, bottom: -50, near: -100, far: 400 });   // bounds: fitShadow()
   sunLight.shadow.bias = -0.0006; sunLight.shadow.normalBias = 0.03;
   scene.add(sunLight); scene.add(sunLight.target);
 
@@ -692,6 +692,23 @@ function updateChatter(dt) {
 
 /* ---- control panel ---- */
 let uiTimer = 0, meterTimer = 0, envTimer = 0;
+/* The aircraft list is paged, not scrolled: Wallpaper Engine passes clicks but no mouse wheel to the wallpaper.
+   The pager (◀ n/N ▶ + a chip per aircraft type) only shows when the rows don't fit into 42 % of the window. */
+const PAGER = { page: 0, size: 0, rowH: 0, shownH: 0, rows: [], chips: [] };   // shownH: the row height the page was laid out with
+function pageSize() {
+  const r = PAGER.rows.find(r => r.offsetHeight > 0); if (r) PAGER.rowH = r.offsetHeight;   // measured while shown (none while collapsed)
+  return Math.max(4, Math.floor(innerHeight * 0.42 / (CFG.panelScale / 100) / (PAGER.rowH || 23)));
+}
+function showPage() {
+  const n = PAGER.rows.length, size = PAGER.size = pageSize(), pages = Math.max(1, Math.ceil(n / size)); PAGER.shownH = PAGER.rowH;
+  const page = PAGER.page = clamp(PAGER.page, 0, pages - 1), from = pages > 1 ? page * size : 0, to = pages > 1 ? from + size : n;
+  PAGER.rows.forEach((r, i) => { r.style.display = i >= from && i < to ? '' : 'none'; });
+  for (const c of PAGER.chips) c.el.classList.toggle('on', c.first < to && c.last >= from);
+  document.getElementById('pager').hidden = pages <= 1;
+  document.getElementById('pgInfo').textContent = `${page + 1}/${pages}`;
+  // a fixed height while paged: the last, shorter page doesn't shrink the (bottom-anchored) panel under the cursor
+  document.getElementById('list').style.minHeight = pages > 1 ? size * (PAGER.rowH || 23) + 'px' : '';
+}
 function buildList() {
   const list = document.getElementById('list'); list.innerHTML = '';
   // group flights together: by type, then callsign (JOKER 1, JOKER 2, … QUEEN 1 …)
@@ -717,12 +734,27 @@ function buildList() {
     a.ui = { row, st: row.querySelector('.st'), btn };
     list.appendChild(row);
   });
+  // pages: one chip per type, jumping to the page with its first aircraft
+  PAGER.rows = sorted.map(a => a.ui.row); PAGER.chips = [];
+  const types = document.getElementById('pgTypes'); types.innerHTML = '';
+  sorted.forEach((a, i) => {
+    const c = PAGER.chips[PAGER.chips.length - 1];
+    if (c && c.key === a.spec.key) { c.last = i; return; }
+    const el = document.createElement('span'); el.className = 'chip'; el.textContent = a.spec.tag;
+    const chip = { key: a.spec.key, el, first: i, last: i }; PAGER.chips.push(chip);
+    el.addEventListener('click', () => { PAGER.page = Math.floor(chip.first / PAGER.size); showPage(); });
+    types.appendChild(el);
+  });
+  showPage();
   updateUI();
 }
 function buildUI() {
   document.getElementById('allUp').onclick = () => { AIRCRAFT.forEach(a => a.canLaunch() && a.requestLaunch()); updateUI(); };
   document.getElementById('allDown').onclick = () => { AIRCRAFT.forEach(a => a.canLand() && a.requestLand()); updateUI(); };
   document.getElementById('autoChk').onchange = e => { CFG.auto = e.target.checked; };
+  const turnPage = d => { const pages = Math.ceil(PAGER.rows.length / PAGER.size); PAGER.page = (PAGER.page + d + pages) % pages; showPage(); };
+  document.getElementById('pgPrev').onclick = () => turnPage(-1);
+  document.getElementById('pgNext').onclick = () => turnPage(1);
   document.getElementById('collapse').onclick = () => {
     const p = document.getElementById('panel'); p.classList.toggle('collapsed');
     document.getElementById('collapse').textContent = p.classList.contains('collapsed') ? '+' : '–';
@@ -743,6 +775,8 @@ function buildUI() {
   });
 }
 function updateUI() {
+  // window / panel size or the row height changed: lay the pages out again (read before the writes below: no forced reflow)
+  if (PAGER.rows.length && (pageSize() !== PAGER.size || PAGER.rowH !== PAGER.shownH)) showPage();
   const now = getNow();
   document.getElementById('clock').textContent = now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
   const e = ENV.elev;
@@ -808,7 +842,25 @@ function frame(ms) {
   const el = clamp((ms - lastMs) / 1000, 0, 0.25); lastMs = ms;
   const n = Math.max(1, Math.ceil(el / 0.05)), dt = el / n;
   for (let i = 0; i < n * TIME_SCALE; i++) step(dt);
+  if (CFG.shadows) fitShadow();
   renderer.render(scene, camera);
+}
+/* The sun's shadow camera covers just the visible sea: the light-space bounds of the screen corners at sea level.
+   Anything casting onto the screen lies above that area along the light, however far out or high (a jet climbing
+   out); a fixed box cut such shadows off. Follows zoom, window size and the rotating camera. */
+const _shc = new V3(), _shi = new THREE.Matrix4(), SCREEN_CORNERS = [[-1, -1], [1, -1], [1, 1], [-1, 1]];
+function fitShadow() {
+  const sc = sunLight.shadow.camera;
+  camera.updateMatrixWorld();
+  _shi.lookAt(sunLight.position, sunLight.target.position, sc.up).setPosition(sunLight.position).invert();   // = the shadow camera's view
+  let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+  for (const c of SCREEN_CORNERS) {
+    AIRWAR.groundAt(c[0], c[1], 0, _shc).applyMatrix4(_shi);
+    x0 = Math.min(x0, _shc.x); x1 = Math.max(x1, _shc.x); y0 = Math.min(y0, _shc.y); y1 = Math.max(y1, _shc.y);
+  }
+  const m = 4;   // waves, ships' sides
+  if (Math.abs(sc.left - (x0 - m)) + Math.abs(sc.right - (x1 + m)) + Math.abs(sc.bottom - (y0 - m)) + Math.abs(sc.top - (y1 + m)) < 0.5) return;
+  sc.left = x0 - m; sc.right = x1 + m; sc.bottom = y0 - m; sc.top = y1 + m; sc.updateProjectionMatrix();
 }
 const TIME_SCALE = Math.max(1, Math.round(parseFloat(QS.get('ts') || '1')));
 let wcAcc = 0;

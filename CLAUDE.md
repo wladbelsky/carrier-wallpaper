@@ -32,7 +32,7 @@ User-facing docs: `README.md` (keep it in sync when behaviour or properties chan
 
 ## Rules / conventions
 - **After changing any JS/CSS file, bump the cache-buster** `?v=N` on all `<script>`/`<link>` tags in
-  `index.html` (WE's CEF caches aggressively). Current: `v=47`.
+  `index.html` (WE's CEF caches aggressively). Current: `v=50`.
 - **New WE property**: add it to `project.json`, read it in `applyUserProperties` (`main.js`) into `CFG`,
   then run `python tools/gen_properties.py`. Property `order` decides the browser-drawer group
   (0–9 camera/time, 10–19 audio/combat, 20–29 sea, 30–39 panel, 40–49 air wing, 50–59 hull number).
@@ -46,6 +46,8 @@ User-facing docs: `README.md` (keep it in sync when behaviour or properties chan
   The CMV-22B tiltrotor is a `Helicopter` with `conv` (0 = VTOL, 1 = airplane mode) and `gearDown` getters read by its model.
 - Match the existing style: dense one-liners, short comments, `const` scratch vectors at module level.
 - Sim time is `T` (advances only in `step(dt)`); real time is `RT()` (audio arming, beat gaps).
+- **No scrolling UI**: WE passes clicks and mouse movement to the wallpaper but not the wheel. Long content gets
+  click targets instead — the panel's aircraft list is paged (`PAGER` in `main.js`, pager only when it doesn't fit).
 - **Session state** (`js/persist.js`): saved every 10 s and on pagehide / WE pause; only *who* is up (`AIR_STATES`,
   `cbt_*`) or on a mission, never positions. A new airborne state must go into `AIR_STATES`. The start-up splash
   (`#splash`, hidden in `step` at `T > 3.2`) covers the build / restore / start-up rebuild. The threat level
@@ -116,7 +118,8 @@ Missions fly beyond the screen edge while there is no music. `dispatchFlight` (`
   - outside combat (`!AUD.armed`): `peace` if present, otherwise the current tier;
   - in combat: the current tier, but `MIX_CALMER` (30 %) of the time one tier calmer, repeatable down the tiers;
   - a missing tier key falls back to the next calmer tier, then to any tier present.
-  So a pool may define only some tiers (e.g. `{ calm, panic }`).
+  So a pool may define only some tiers (e.g. `{ calm, panic }`). The same line never comes twice in a row from one
+  list (`LAST_LINE`).
 - **Placeholders** `{name}` are filled from `vars` (`radioLine(pool, { C: callsign, T: type })`); unknown ones stay as
   they are. In use: `{c}` deck-call callsign, `{C}` callsign, `{T}` enemy type, `{B}` bearing words, `{D}` compass
   direction, `{N}` bandit count, `{Q}` enemy squadron, `{K}` enemy callsign just lost; missions also use `{S}` sector,
@@ -151,6 +154,8 @@ Missions fly beyond the screen edge while there is no music. `dispatchFlight` (`
   reproduces `SpriteMaterial` (color × texture, opacity, scene fog). Normal-blended pools sort live
   particles back to front on the CPU each update (needs the camera: `FX.smoke.update(dt, tint, camera)`);
   the whole pool shares one `renderOrder`, so don't rely on interleaving with other transparent objects.
+- The sun's shadow camera is fitted to the visible sea every frame (`fitShadow`, `main.js`; one 2048² map):
+  don't set fixed shadow bounds, they cut off shadows of aircraft far out.
 - Searchlight `SpotLight`s are hidden by day (`updateLights`): every visible light costs every lit
   fragment even at zero intensity.
 - Main loop (`frame`): FPS limit keeps cadence via `frameDue`; simulation runs in ≤50 ms sub-steps
