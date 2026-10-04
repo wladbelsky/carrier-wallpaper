@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <title>Carrier Strike Group</title>
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
-<link rel="stylesheet" href="style.css?v=47">
+<link rel="stylesheet" href="style.css?v=50">
 </head>
 <body>
 <canvas id="c"></canvas>
@@ -26,6 +26,7 @@
     <div id="fleet"></div>
     <div id="meter"></div>
     <div id="list"></div>
+    <div id="pager" hidden><button id="pgPrev">◀</button><span id="pgTypes"></span><span id="pgInfo">1/1</span><button id="pgNext">▶</button></div>
     <div class="btns">
       <button id="allUp">LAUNCH ALL</button>
       <button id="allDown">RECOVER ALL</button>
@@ -34,20 +35,20 @@
   </div>
 </div>
 <script src="js/three.min.js"></script>
-<script src="js/core.js?v=47"></script>
-<script src="js/flightpath.js?v=47"></script>
-<script src="js/models.js?v=47"></script>
-<script src="js/airframes.js?v=47"></script>
-<script src="js/effects.js?v=47"></script>
-<script src="js/radio.js?v=47"></script>
-<script src="js/aircraft.js?v=47"></script>
-<script src="js/missions.js?v=47"></script>
-<script src="js/persist.js?v=47"></script>
-<script src="js/combat.js?v=47"></script>
-<script src="js/airwar.js?v=47"></script>
-<script src="js/main.js?v=47"></script>
-<script src="js/properties.js?v=47"></script>
-<script src="js/settings.js?v=47"></script>
+<script src="js/core.js?v=50"></script>
+<script src="js/flightpath.js?v=50"></script>
+<script src="js/models.js?v=50"></script>
+<script src="js/airframes.js?v=50"></script>
+<script src="js/effects.js?v=50"></script>
+<script src="js/radio.js?v=50"></script>
+<script src="js/aircraft.js?v=50"></script>
+<script src="js/missions.js?v=50"></script>
+<script src="js/persist.js?v=50"></script>
+<script src="js/combat.js?v=50"></script>
+<script src="js/airwar.js?v=50"></script>
+<script src="js/main.js?v=50"></script>
+<script src="js/properties.js?v=50"></script>
+<script src="js/settings.js?v=50"></script>
 <script>
   // Audio listener is registered at the end of <body>, as the Wallpaper Engine docs recommend
   if (window.wallpaperRegisterAudioListener) {
