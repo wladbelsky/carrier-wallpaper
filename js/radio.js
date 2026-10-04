@@ -244,13 +244,15 @@ const STRESS = {
    radioLine(pool, vars):
      - outside combat: `peace` if the pool has it, otherwise the current tier;
      - in combat: the current tier, but MIX_CALMER of the time one tier calmer (variety, repeatable down the tiers);
-     - fills {name} placeholders from vars ({c}, {C}, {T}, {B}, {D}, {N}, …); unknown ones are left untouched.   */
+     - fills {name} placeholders from vars ({c}, {C}, {T}, {B}, {D}, {N}, …); unknown ones are left untouched;
+     - never gives the same line of a list twice in a row.                                                        */
 const THREAT_TIERS = [
   { key: 'calm', upTo: 0.33 },
   { key: 'tense', upTo: 0.66 },
   { key: 'panic', upTo: Infinity }
 ];
 const MIX_CALMER = 0.3;
+const LAST_LINE = new WeakMap();   // line list -> the line last taken from it: never the same one twice in a row
 const fillLine = (t, vars) => vars ? t.replace(/\{(\w+)\}/g, (m, k) => vars[k] != null ? vars[k] : m) : t;
 function radioLine(pool, vars) {
   let list = Array.isArray(pool) ? pool : !AUD.armed && pool.peace;
@@ -259,25 +261,36 @@ function radioLine(pool, vars) {
     while (i > 0 && (!pool[THREAT_TIERS[i].key] || Math.random() < MIX_CALMER)) i--;
     list = pool[THREAT_TIERS[i].key] || THREAT_TIERS.map(t => pool[t.key]).find(Boolean) || pool.peace;
   }
-  return fillLine(pick(list), vars);
+  let line = pick(list);
+  if (line === LAST_LINE.get(list) && list.length > 1) line = pick(list.filter(l => l !== line));
+  LAST_LINE.set(list, line);
+  return fillLine(line, vars);
 }
 
 /* ===== Routine flight-deck calls — peace versions + combat versions by tier (used while music plays) ===== */
 const OPS = {
   launchClear: {
-    peace: ["{c}, you're cleared for launch.", '{c}, catapult is ready. Good luck.', '{c}, wind is on the nose. Cleared to go.'],
-    calm: ['{c}, hot deck! Launch, launch, launch!', '{c}, bandits inbound — get airborne now!', "{c}, cat's ready, go! We need you up there!", '{c}, scramble! Scramble!'],
-    panic: ["{c}, launch NOW! They're right on top of us!", "{c}, go, go, go! Deck's under fire!", "{c}, get off this deck before it's too late!"]
+    peace: ["{c}, you're cleared for launch.", '{c}, catapult is ready. Good luck.', '{c}, wind is on the nose. Cleared to go.',
+      '{c}, weight board checked, tension up. Cleared to launch.', '{c}, deck is clear ahead. Launch when ready.', '{c}, the shooter has you. Stand by.',
+      '{c}, the cat is yours. Have a good flight.', '{c}, all checks complete. Off you go.', '{c}, good to go. See you on recovery.',
+      '{c}, final checks good. Launch at your discretion.'],
+    calm: ['{c}, hot deck! Launch, launch, launch!', '{c}, bandits inbound — get airborne now!', "{c}, cat's ready, go! We need you up there!", '{c}, scramble! Scramble!',
+      "{c}, tension's up. Go get them!", '{c}, skip the checks, launch now!', "{c}, the fight's waiting. Cleared hot!"],
+    panic: ["{c}, launch NOW! They're right on top of us!", "{c}, go, go, go! Deck's under fire!", "{c}, get off this deck before it's too late!",
+      "{c}, launch! We can't hold the cat any longer!", '{c}, go now, before the next hit!', '{c}, shoot! Shoot! Get airborne!']
   },
   launchReady: {
-    peace: ['Ready.', 'Roger, launching.', "Let's go.", 'Copy. Full power.'],
-    calm: ['Going hot!', 'Copy, launching hot!', 'Master arm on. Go!', 'Roger, scrambling!'],
-    panic: ['Launching! Get me out there!', 'Going, going!', 'Hang on, here we go!']
+    peace: ['Ready.', 'Roger, launching.', "Let's go.", 'Copy. Full power.', 'Controls checked. Ready on the cat.', 'All green. Saluting the shooter.',
+      'Ready. Hang on to your coffee.', 'Copy. Military power, ready.'],
+    calm: ['Going hot!', 'Copy, launching hot!', 'Master arm on. Go!', 'Roger, scrambling!', 'Ready! Shoot me off!', "Weapons hot. Let's get them!"],
+    panic: ['Launching! Get me out there!', 'Going, going!', 'Hang on, here we go!', 'Just fire the cat!', 'Ready, ready, go!']
   },
   airborne: {
-    peace: ['airborne.', 'is off the deck.', 'airborne, climbing to angels one-five.', 'wheels up.'],
-    calm: ['airborne, weapons hot!', 'off the deck, heading for the fight!', 'airborne, looking for trade.', 'up and armed. Point me at them.'],
-    panic: ['airborne! Engaging immediately!', "I'm up! Where do you need me?!", 'airborne — they are everywhere!']
+    peace: ['airborne.', 'is off the deck.', 'airborne, climbing to angels one-five.', 'wheels up.', 'airborne, climbing out.', 'off the cat. Good shot.',
+      'clean and climbing.', 'airborne, switching to departure.'],
+    calm: ['airborne, weapons hot!', 'off the deck, heading for the fight!', 'airborne, looking for trade.', 'up and armed. Point me at them.',
+      'airborne, burner on, going to the fight!'],
+    panic: ['airborne! Engaging immediately!', "I'm up! Where do you need me?!", 'airborne — they are everywhere!', 'off the deck! That was close!']
   },
   awacsUp: {
     peace: ['airborne. Radar is up, picture clean.', 'on station. Datalink is up, all flights check in.',
@@ -301,17 +314,17 @@ const OPS = {
     panic: ['Trapped! Get it below, now!', 'On deck! Hurry, more bandits inbound!', 'Caught a wire! Clear the landing area!']
   },
   heliUp: {
-    peace: ['lifting off.', 'airborne, heading out.', 'wheels up.'],
+    peace: ['lifting off.', 'airborne, heading out.', 'wheels up.', 'off the deck, departing the pattern.', 'lifting off, nose over.', 'airborne. Thanks, deck.'],
     calm: ['lifting off, staying low!', 'airborne, keep your heads down!', 'up and moving, watch the flak!'],
     panic: ['lifting off under fire!', 'airborne — that was close!']
   },
   heliCleared: {
-    peace: ['{c}, cleared to land.'],
+    peace: ['{c}, cleared to land.', '{c}, deck is green. Cleared to land.', '{c}, spot is clear, cleared to land.', '{c}, winds are good. Cleared to land.'],
     calm: ['{c}, cleared to land, make it fast!', '{c}, deck is clear, get down quick!'],
     panic: ["{c}, land now, we're under attack!", '{c}, get down, get down!']
   },
   heliDown: {
-    peace: ['on deck.', 'touchdown. Shutting down.', 'safe on deck.'],
+    peace: ['on deck.', 'touchdown. Shutting down.', 'safe on deck.', 'down and safe. Chocks and chains, please.', 'on deck. Thanks for the spot.'],
     calm: ['on deck, rearm us quick!', 'down. Refuel and we go again.'],
     panic: ['down! That was too close!', 'on deck — we took some hits!']
   }
