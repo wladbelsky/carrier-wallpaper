@@ -16,15 +16,16 @@ const tankWing = (k, side) => [1.5 + 0.7 * k, side * (2.9 + 2.4 * k), 0.1 + 0.1 
 
 const TANKER = registerMissionWorld({
   // first pass 3-5 min after a start / rebuild: the tanker is launched ~90 s before it, not with the first flights
-  ev: null, timer: rand(180, 300),
-  reset() { this.ev = null; this.timer = rand(180, 300); },
+  ev: null, timer: rand(180, 300), miss: 0,
+  reset() { this.ev = null; this.timer = rand(180, 300); this.miss = 0; },
   update(dt) {
     if (this.ev) { this.tick(this.ev, dt); return; }
     const combat = combatOn();
+    if (combat && this.timer > 70) this.timer = rand(35, 70);    // a fight started: no waiting out the peacetime interval
     if ((this.timer -= dt) > 0) { if (this.timer < 90 && !combat && CFG.auto) this.launchTanker(); return; }   // up in time for the pass
     if (combat && !AUD.fighting) { this.timer = 5; return; }      // holding after the music stopped: nothing new
-    if (this.start()) { this.timer = combat ? rand(35, 70) : rand(240, 420); return; }   // + gathering: in peace every 5-9 min
-    this.timer = rand(8, 15);                                  // nobody ready: look again soon (a down tanker is launched above)
+    if (this.start() || ++this.miss > 8) { this.miss = 0; this.timer = combat ? rand(35, 70) : rand(240, 420); return; }   // + gathering: in peace every 5-9 min
+    this.timer = rand(8, 15);   // nobody ready: look again soon (a down tanker is launched above); after ~90 s give up until the next one, so it can be recovered
   },
   /* a pass is due and no tanker is up: send one (auto flight ops; runs every step, so no allocations) */
   launchTanker() {
