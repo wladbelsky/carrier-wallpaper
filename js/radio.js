@@ -267,7 +267,8 @@ function radioLine(pool, vars) {
   return fillLine(line, vars);
 }
 
-/* ===== Routine flight-deck calls — peace versions + combat versions by tier (used while music plays) ===== */
+/* ===== Routine flight-deck calls — peace versions + combat versions by tier (used while music plays).
+   The combat versions are for armed aircraft; unarmed ones (AWACS, transport helicopters) use OPS_UNARMED. ===== */
 const OPS = {
   launchClear: {
     peace: ["{c}, you're cleared for launch.", '{c}, catapult is ready. Good luck.', '{c}, wind is on the nose. Cleared to go.',
@@ -315,8 +316,8 @@ const OPS = {
   },
   heliUp: {
     peace: ['lifting off.', 'airborne, heading out.', 'wheels up.', 'off the deck, departing the pattern.', 'lifting off, nose over.', 'airborne. Thanks, deck.'],
-    calm: ['lifting off, staying low!', 'airborne, keep your heads down!', 'up and moving, watch the flak!'],
-    panic: ['lifting off under fire!', 'airborne — that was close!']
+    calm: ['lifting off, guns hot!', 'airborne, rockets armed, moving in!', 'up and armed. Point me at the boats.', 'lifting off, weapons hot, staying low!'],
+    panic: ['lifting off under fire! Weapons hot!', "airborne! Rolling in on whatever's closest!"]
   },
   heliCleared: {
     peace: ['{c}, cleared to land.', '{c}, deck is green. Cleared to land.', '{c}, spot is clear, cleared to land.', '{c}, winds are good. Cleared to land.'],
@@ -329,8 +330,39 @@ const OPS = {
     panic: ['down! That was too close!', 'on deck — we took some hits!']
   }
 };
-/* returns [text, hot]: hot lines keep their priority during combat */
-function opsLine(key, c) { return [radioLine(OPS[key], { c: c || '' }), AUD.armed]; }
+/* combat deck calls of unarmed aircraft (only the keys and tiers that differ; peace lines are shared from OPS) */
+const OPS_UNARMED = {
+  launchClear: {
+    calm: ["{c}, get the radar up there, we're blind without you!", '{c}, cleared to launch. Stay clear of the furball.',
+      '{c}, cat is yours. Get on station, fleet needs the picture.', '{c}, launch, then hold well back from the fight.'],
+    panic: ['{c}, launch now, we need eyes up there!', "{c}, go! We can't fight blind!", '{c}, get off this deck before the next hit!']
+  },
+  launchReady: {
+    calm: ["Ready. Get us up, radar's warm.", "Copy, launching. We'll stay well back.", 'Ready. Datalink is up, shoot us off.'],
+    panic: ['Just shoot us off, the fleet needs the picture!', 'Going! Get us out of here!']
+  },
+  approach: {
+    calm: ['bingo fuel, handing the picture to the ship. RTB.', 'off station, coming in. Ship has the picture.',
+      'low on fuel, coming home. Relaunch us fast.', 'fuel state low, recovering. Picture passed to the escorts.'],
+    panic: ['coming in with the radar still hot, clear the deck!', "bingo fuel and bandits everywhere, I'm coming in!",
+      'coming home, we took some hits! Clear the deck!']
+  },
+  trap: {
+    calm: ["Hawkeye's down. Fuel it and get it back up!", "On deck. Hot refuel, they're blind out there.", 'Good trap. Turn it around, fast!'],
+    panic: ['On deck! Refuel and relaunch, we need that radar!', 'Caught a wire! Get it fuelled, now!']
+  },
+  heliUp: {
+    calm: ['lifting off, staying low and clear.', 'airborne, keeping out of the fight.', 'up and moving, watch the flak!',
+      'airborne, holding outside the threat ring.'],
+    panic: ['lifting off under fire, staying low!', 'airborne — that was close!', 'off the deck! Keeping clear!']
+  },
+  heliDown: {
+    calm: ['on deck. Refuel us, we go again.', 'down. Unloading, then back out.', 'on deck. Hot refuel, please.'],
+    panic: ['on deck! Get the wounded off!', 'down — that was too close!', 'on deck — we took some hits!']
+  }
+};
+/* returns [text, hot]: hot lines keep their priority during combat; a = the aircraft (unarmed ones get OPS_UNARMED in combat) */
+function opsLine(key, c, a) { const u = AUD.armed && a && !a.spec.armed && OPS_UNARMED[key]; return [radioLine(u || OPS[key], { c: c || '' }), AUD.armed]; }
 
 /* ===== Combat chatter by stress tier ===== */
 const COMBAT = {

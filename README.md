@@ -180,7 +180,9 @@ It changes:
 ## Radio priority
 
 During combat, combat calls go first (contacts, kills, vampires, damage). Routine deck calls switch to their
-combat versions ("hot deck, launch, launch!") or are dropped if they get stale.
+combat versions ("hot deck, launch, launch!") or are dropped if they get stale. Armed and unarmed aircraft
+have their own combat versions: fighters and the AH-1Z go in hot and come back to rearm, while the AWACS
+and the transport helicopters keep clear of the fight and come back to refuel.
 
 Urgent calls (unknown contacts, combat start, vampires, hits) cut in over a less important line, and
 lines are shortened when others are waiting, so the radio keeps up with what happens on screen.

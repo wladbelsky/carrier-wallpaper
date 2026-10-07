@@ -32,7 +32,7 @@ User-facing docs: `README.md` (keep it in sync when behaviour or properties chan
 
 ## Rules / conventions
 - **After changing any JS/CSS file, bump the cache-buster** `?v=N` on all `<script>`/`<link>` tags in
-  `index.html` (WE's CEF caches aggressively). Current: `v=51`.
+  `index.html` (WE's CEF caches aggressively). Current: `v=52`.
 - **New WE property**: add it to `project.json`, read it in `applyUserProperties` (`main.js`) into `CFG`,
   then run `python tools/gen_properties.py`. Property `order` decides the browser-drawer group
   (0–9 camera/time, 10–19 audio/combat, 20–29 sea, 30–39 panel, 40–49 air wing, 50–59 hull number).
@@ -107,8 +107,9 @@ Missions fly beyond the screen edge while there is no music. `dispatchFlight` (`
 
 ## Radio lines & threat tiers (`js/radio.js`)
 - **Every radio line goes through `radioLine(pool, vars)`** — never `pick()` a line pool directly, never build
-  lines with `.replace('{X}', …)`. `opsLine(key, c)` (flight-deck calls) is a thin wrapper returning `[text, hot]`.
-- **Pools** live in `radio.js`: `OPS` (deck routine), `COMBAT` (fleet/combat chatter), `AIRWAR_LINES` (combat passes),
+  lines with `.replace('{X}', …)`. `opsLine(key, c, a)` (flight-deck calls) is a thin wrapper returning `[text, hot]`;
+  pass the aircraft `a`: in combat an unarmed one (no `spec.armed`) takes `OPS_UNARMED[key]` (combat tiers only), else `OPS[key]`.
+- **Pools** live in `radio.js`: `OPS` (deck routine; its combat tiers are for armed aircraft) / `OPS_UNARMED` (combat deck calls of unarmed ones), `COMBAT` (fleet/combat chatter), `AIRWAR_LINES` (combat passes),
   `ENEMY_LINES` (intercepted enemy traffic), `LINES` (alerts, mission acknowledgements), `MISSIONS` (order/done pairs). A pool is either
   - an array — the same lines at any time, or
   - an object keyed by threat tier (`calm`, `tense`, `panic`, …) plus optional `peace` (used outside combat).
