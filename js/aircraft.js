@@ -84,6 +84,7 @@ class Aircraft {
   get status() { return STATUS[this.state] || ['—', 'busy']; }
   get airborne() { return this.state === 'orbit' || this.state === 'climb' || this.state === 'depart'; }
   get isAwacs() { return !!this.spec.awacs; }
+  get isSupport() { return !!(this.spec.awacs || this.spec.tanker); }   // AWACS / tanker: stay up in combat, scrambled first
   canLaunch() { return this.state === 'parked' || this.state === 'hangar'; }
   get onMission() { return !!this.mission; }
   get inCombat() { return this.state.startsWith('cbt_'); }
@@ -117,7 +118,7 @@ class Aircraft {
   }
 
   /* --- flight along a FlightPath (turn radius limited) --- */
-  fly(path, v0, v1) { this.path = path; this.ps = 0; this.pv0 = v0; this.pv1 = v1; this.pathOff = 0; }
+  fly(path, v0, v1) { this.path = path; this.ps = 0; this.pv0 = v0; this.pv1 = v1; this.pathOff = this.pathDy = 0; }
   followPath(dt) {
     const P = this.path, u = this.ps / P.length;
     this.v = lerp(this.pv0, this.pv1, u);
@@ -125,6 +126,7 @@ class Aircraft {
     const s = P.sample(this.ps, this.smp);
     this.mesh.position.copy(s.pos);
     if (this.pathOff) this.mesh.position.add(_po.set(-s.dir.z, 0, s.dir.x).normalize().multiplyScalar(this.pathOff));   // wingman beside the lead
+    if (this.pathDy) this.mesh.position.y += this.pathDy;
     this.orientFlight(s.dir, s.turn * this.bankFor(this.v, s.R), dt);
     return this.ps >= P.length - 1e-4;
   }
@@ -263,7 +265,7 @@ class FixedWing extends Aircraft {
   get engineOn() { return !LIFT_STATES.has(this.state) && this.state !== 'parked' && this.state !== 'wait_lift' && this.state !== 'onto_lift'; }
   get sweepTarget() { return this.airborne || this.onMission || this.inCombat || this.state === 'approach' || this.state === 'final' ? lerp(20, 68, clamp((this.v - 11) / 9, 0, 1)) : 20; }
   get gearDown() {
-    if (this.state === 'orbit' || this.onMission || this.inCombat) return false;
+    if (this.state === 'orbit' || this.onMission || this.inCombat || this.tank) return false;
     if (this.state === 'climb') return this.ps < 18;
     if (this.state === 'approach') return this.ps > this.finalS - 25;
     return true;
@@ -272,6 +274,7 @@ class FixedWing extends Aircraft {
   onLiftTop() { this.state = 'queued'; this.onLift = true; }
 
   updateState(dt) {
+    if (this.tank) { TANKER.fly(this, dt); return; }   // refuelling pass (js/tanker.js)
     if (this.missionFlow(dt)) { this.glow = 0.4; return; }
     if (this.combatFlow(dt)) { this.glow = this.state === 'cbt_pass' ? 0.9 : 0.6; return; }
     const S = this.spec, L = this.lift;
@@ -324,7 +327,7 @@ class FixedWing extends Aircraft {
           this.pickOrbit(true); this.pathToOrbit(P, p1, headingOf(f), 0.9);
           this.fly(P, this.v, S.speed);
           this.fwd.copy(f); this.state = 'climb'; this.airT = 0;
-          { const [l, hot] = opsLine(this.isAwacs ? 'awacsUp' : 'airborne', this); this.say(l, { delay: 0.6, hot }); }
+          { const [l, hot] = opsLine('airborne', this); this.say(l, { delay: 0.6, hot }); }
         }
         break;
       }
@@ -348,8 +351,10 @@ class FixedWing extends Aircraft {
         glow = 0.3;
         if (this.state === 'approach' && this.ps >= this.finalS) {
           this.state = 'final';
-          { const [l, hot] = opsLine('callBall', this); RADIO.say(RADIO_NAMES.lso, l, { role: 'ship', hot }); }
-          this.say(`${S.ballName} ball, ${rand(2.8, 5.5).toFixed(1)}.`, { delay: 0.3, hot: AUD.armed });
+          if (S.ballName) {                    // unmanned (MQ-25): no ball call
+            { const [l, hot] = opsLine('callBall', this); RADIO.say(RADIO_NAMES.lso, l, { role: 'ship', hot }); }
+            this.say(`${S.ballName} ball, ${rand(2.8, 5.5).toFixed(1)}.`, { delay: 0.3, hot: AUD.armed });
+          }
         }
         if (this.followPath(dt)) { this.state = 'trap'; this.ls = 4; this.v = S.approachV; this.trapDecel = this.v * this.v / 16; }
         break;
@@ -539,8 +544,14 @@ class F35 extends FixedWing {
   buildModel() { return buildF35(); }
 }
 class E2D extends FixedWing {
-  static spec = Object.assign({}, FixedWing.spec, { key: 'e2d', tag: 'E-2D', speed: 12, turnR: 26, orbitR: [46, 80], farOrbit: [72, 88], alt: [21, 24], ballName: 'Hawkeye', catIndex: 0, approachV: 11, climbOut: 36, awacs: true, bankMax: 0.5, callsignGroup: 1 });
+  static spec = Object.assign({}, FixedWing.spec, { key: 'e2d', tag: 'E-2D', speed: 12, turnR: 26, orbitR: [46, 80], farOrbit: [72, 88], alt: [21, 24], ballName: 'Hawkeye', catIndex: 0, approachV: 11, climbOut: 36, awacs: true, voice: 'awacs', bankMax: 0.5, callsignGroup: 1 });
   buildModel() { return buildE2D(); }
+}
+/* unmanned carrier tanker: flies refuelling passes with a flight in tow (js/tanker.js), no missions */
+class MQ25 extends FixedWing {
+  static spec = Object.assign({}, FixedWing.spec, { key: 'mq25', tag: 'MQ-25', speed: 13, turnR: 24, orbitR: [44, 76], farOrbit: [70, 86], alt: [18, 21], approachV: 12, climbOut: 32, bankMax: 0.6, callsignGroup: 1, tanker: true, voice: 'tanker', missions: [] });
+  get hoseOut() { return this.tank && this.state === 'tank_pass' ? 1 : 0; }
+  buildModel() { return buildMQ25(); }
 }
 class MH60 extends Helicopter {
   static spec = Object.assign({}, Helicopter.spec, { key: 'mh60', tag: 'MH-60', speed: 7, orbitR: [18, 46], farOrbit: [50, 62], alt: [8.5, 10.5], transport: true });
@@ -561,8 +572,8 @@ class CMV22 extends Helicopter {
   get gearDown() { return this.conv < 0.5; }
   buildModel() { return buildCMV22(); }
 }
-const AIRCRAFT_TYPES = { fa18: FA18, f14: F14, f35: F35, e2d: E2D, mh60: MH60, ch53: CH53, ah1: AH1, cmv22: CMV22 };
-const FIXED_ORDER = ['fa18', 'f14', 'f35', 'e2d'], HELI_ORDER = ['mh60', 'ch53', 'ah1', 'cmv22'];
+const AIRCRAFT_TYPES = { fa18: FA18, f14: F14, f35: F35, e2d: E2D, mq25: MQ25, mh60: MH60, ch53: CH53, ah1: AH1, cmv22: CMV22 };
+const FIXED_ORDER = ['fa18', 'f14', 'f35', 'e2d', 'mq25'], HELI_ORDER = ['mh60', 'ch53', 'ah1', 'cmv22'];
 
 /* ---- callsign allocation: groups of 4 jets / 2 helicopters per type ---- */
 function callsignsFor(key, n, offset) {

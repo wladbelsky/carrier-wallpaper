@@ -6,6 +6,7 @@ const CALLSIGNS = {
   f14: ['WARDOG', 'SWORDSMAN', 'CROW'],                    // Wardog / Swordsman: flew from the carrier Kestrel (AC5)
   f35: ['GARUDA', 'SCARFACE', 'GRYPHUS', 'OGRE', 'SABER'],
   e2d: ['SKYEYE', 'THUNDERHEAD', 'EAGLE EYE', 'LONG CASTER', 'BANDOG', 'SKY KEEPER', 'DEALER'],
+  mq25: ['BARREL', 'PIPELINE', 'GUSHER', 'DERRICK'],     // tankers: oil / fuel words
   mh60: ['SEA GOBLIN', 'OSPREY', 'HALO'],
   ch53: ['ATLAS', 'HERCULES', 'TITAN'],
   ah1: ['VIPER', 'COBRA', 'SWEEPER'],
@@ -268,7 +269,7 @@ function radioLine(pool, vars) {
 }
 
 /* ===== Routine flight-deck calls — peace versions + combat versions by tier (used while music plays).
-   The combat versions are for armed aircraft; unarmed ones (AWACS, transport helicopters) use OPS_UNARMED. ===== */
+   The combat versions are for armed aircraft; the AWACS and the tanker have their own voices (OPS_VOICE), unarmed helicopters OPS_UNARMED. ===== */
 const OPS = {
   launchClear: {
     peace: ["{c}, you're cleared for launch.", '{c}, catapult is ready. Good luck.', '{c}, wind is on the nose. Cleared to go.',
@@ -292,12 +293,6 @@ const OPS = {
     calm: ['airborne, weapons hot!', 'off the deck, heading for the fight!', 'airborne, looking for trade.', 'up and armed. Point me at them.',
       'airborne, burner on, going to the fight!'],
     panic: ['airborne! Engaging immediately!', "I'm up! Where do you need me?!", 'airborne — they are everywhere!', 'off the deck! That was close!']
-  },
-  awacsUp: {
-    peace: ['airborne. Radar is up, picture clean.', 'on station. Datalink is up, all flights check in.',
-      "airborne and climbing. I'll call the picture from up here.", "on station. Scope is quiet. Let's keep it that way."],
-    calm: ['airborne. Picture is hot, multiple groups inbound.', 'on station. Bandits on the scope, stand by for vectors.', 'up and radiating. Hostiles in the air. Weapons free.'],
-    panic: ['airborne. Scope is saturated, too many tracks to count!', 'on station. Hostiles everywhere. All flights, engage at will!']
   },
   approach: {
     peace: ['commencing approach.', 'RTB, requesting landing.', 'low on fuel, coming home.'],
@@ -330,27 +325,64 @@ const OPS = {
     panic: ['down! That was too close!', 'on deck — we took some hits!']
   }
 };
-/* combat deck calls of unarmed aircraft (only the keys and tiers that differ; peace lines are shared from OPS) */
+/* per-type deck voices (spec.voice): taken first by opsLine — in peace only where a pool has `peace` */
+const OPS_VOICE = {
+  awacs: {
+    airborne: {
+      peace: ['airborne. Radar is up, picture clean.', 'on station. Datalink is up, all flights check in.',
+        "airborne and climbing. I'll call the picture from up here.", "on station. Scope is quiet. Let's keep it that way."],
+      calm: ['airborne. Picture is hot, multiple groups inbound.', 'on station. Bandits on the scope, stand by for vectors.', 'up and radiating. Hostiles in the air. Weapons free.'],
+      panic: ['airborne. Scope is saturated, too many tracks to count!', 'on station. Hostiles everywhere. All flights, engage at will!']
+    },
+    launchClear: {
+      calm: ["{c}, get the radar up there, we're blind without you!", '{c}, cleared to launch. Stay clear of the furball.',
+        '{c}, cat is yours. Get on station, fleet needs the picture.', '{c}, launch, then hold well back from the fight.'],
+      panic: ['{c}, launch now, we need eyes up there!', "{c}, go! We can't fight blind!", '{c}, get off this deck before the next hit!']
+    },
+    launchReady: {
+      calm: ["Ready. Get us up, radar's warm.", "Copy, launching. We'll stay well back.", 'Ready. Datalink is up, shoot us off.'],
+      panic: ['Just shoot us off, the fleet needs the picture!', 'Going! Get us out of here!']
+    },
+    approach: {
+      calm: ['bingo fuel, handing the picture to the ship. RTB.', 'off station, coming in. Ship has the picture.',
+        'low on fuel, coming home. Relaunch us fast.', 'fuel state low, recovering. Picture passed to the escorts.'],
+      panic: ['coming in with the radar still hot, clear the deck!', "bingo fuel and bandits everywhere, I'm coming in!",
+        'coming home, we took some hits! Clear the deck!']
+    },
+    trap: {
+      calm: ['{c} is down. Fuel it and get it back up!', "On deck. Hot refuel, they're blind out there.", 'Good trap. Turn it around, fast!'],
+      panic: ['On deck! Refuel and relaunch, we need that radar!', 'Caught a wire! Get it fuelled, now!']
+    }
+  },
+  tanker: {
+    airborne: {
+      peace: ['airborne. Twelve thousand pounds to give.', 'on station, tanker track established. Basket available.',
+        'airborne and climbing. Gas station opens in five.', 'on station. Fighters, check your fuel and come see me.'],
+      calm: ['airborne. Gas on station for the fighters.', 'on station. Fuel available, fighters top off and get back in it.',
+        'up and on track. Hold well clear, the basket is open.'],
+      panic: ['airborne! Fighters, take what you need, fast!', "on station, holding as close as I dare. Come get your gas!"]
+    },
+    launchClear: {
+      calm: ['{c}, get the tanker up, the fighters are running dry!', '{c}, cleared to launch. Keep that track clear of the fight.'],
+      panic: ["{c}, launch now! Half the wing is on fumes!", '{c}, go! They need the gas up there!']
+    },
+    launchReady: {
+      calm: ['Ready. Tanks full, send us.', 'Copy, launching. Basket is armed.'],
+      panic: ['Shoot us off, the fighters are bingo!', 'Ready, go! Every pound counts!']
+    },
+    approach: {
+      peace: ['give-away fuel spent, RTB.', 'tanks dry, coming home to reload.', 'bingo, recovering.'],
+      calm: ['give-away spent, coming in. Turn me around fast.', 'tanks dry, RTB. Fighters, you are on your own for a bit.'],
+      panic: ['empty and coming in! Refuel me and launch me again!', 'tanks dry, coming in hot! Clear the deck!']
+    },
+    trap: {
+      calm: ['{c} is down. Fill it up and get it back out!', 'On deck. Hot refuel the tanker, fighters are waiting.'],
+      panic: ['Tanker on deck! Fuel it, now!', 'Caught a wire! Fill it and shoot it off again!']
+    }
+  }
+};
+/* combat deck calls of unarmed helicopters (only the keys and tiers that differ; peace lines are shared from OPS) */
 const OPS_UNARMED = {
-  launchClear: {
-    calm: ["{c}, get the radar up there, we're blind without you!", '{c}, cleared to launch. Stay clear of the furball.',
-      '{c}, cat is yours. Get on station, fleet needs the picture.', '{c}, launch, then hold well back from the fight.'],
-    panic: ['{c}, launch now, we need eyes up there!', "{c}, go! We can't fight blind!", '{c}, get off this deck before the next hit!']
-  },
-  launchReady: {
-    calm: ["Ready. Get us up, radar's warm.", "Copy, launching. We'll stay well back.", 'Ready. Datalink is up, shoot us off.'],
-    panic: ['Just shoot us off, the fleet needs the picture!', 'Going! Get us out of here!']
-  },
-  approach: {
-    calm: ['bingo fuel, handing the picture to the ship. RTB.', 'off station, coming in. Ship has the picture.',
-      'low on fuel, coming home. Relaunch us fast.', 'fuel state low, recovering. Picture passed to the escorts.'],
-    panic: ['coming in with the radar still hot, clear the deck!', "bingo fuel and bandits everywhere, I'm coming in!",
-      'coming home, we took some hits! Clear the deck!']
-  },
-  trap: {
-    calm: ['{c} is down. Fuel it and get it back up!', "On deck. Hot refuel, they're blind out there.", 'Good trap. Turn it around, fast!'],
-    panic: ['On deck! Refuel and relaunch, we need that radar!', 'Caught a wire! Get it fuelled, now!']
-  },
   heliUp: {
     calm: ['lifting off, staying low and clear.', 'airborne, keeping out of the fight.', 'up and moving, watch the flak!',
       'airborne, holding outside the threat ring.'],
@@ -361,8 +393,13 @@ const OPS_UNARMED = {
     panic: ['on deck! Get the wounded off!', 'down — that was too close!', 'on deck — we took some hits!']
   }
 };
-/* returns [text, hot]: hot lines keep their priority during combat; a = the aircraft ({c} = its callsign; unarmed ones get OPS_UNARMED in combat) */
-function opsLine(key, a) { const u = AUD.armed && !a.spec.armed && OPS_UNARMED[key]; return [radioLine(u || OPS[key], { c: a.callsign }), AUD.armed]; }
+/* returns [text, hot]: hot lines keep their priority during combat; a = the aircraft ({c} = its callsign).
+   Pool: its voice (OPS_VOICE[spec.voice], in peace only with a `peace` list), unarmed ones OPS_UNARMED in combat, else OPS. */
+function opsLine(key, a) {
+  const v = OPS_VOICE[a.spec.voice] && OPS_VOICE[a.spec.voice][key], armed = AUD.armed;
+  const pool = (v && (armed || v.peace) && v) || (armed && !a.spec.armed && OPS_UNARMED[key]) || OPS[key];
+  return [radioLine(pool, { c: a.callsign }), armed];
+}
 
 /* ===== Combat chatter by stress tier ===== */
 const COMBAT = {
@@ -663,3 +700,39 @@ LINES.falseAlarm = [
   'Contacts identified as a friendly airliner. Stand down.',
   'Radar glitch. False alarm, everyone relax.'
 ];
+
+/* ===== Refuelling passes (js/tanker.js) — {F} the flight, {C} a receiver, {A} the tanker ===== */
+const TANKER_LINES = {
+  join: {   // tanker, as the pass comes on screen
+    peace: ['{F} flight, {A} on station. Cleared to the basket.', '{F} flight, tanker track is steady. Join on my left wing.',
+      '{F} flight, {A}. Basket is out, plenty to give.', '{F} flight, you are cleared to join. Lead plugs first.'],
+    calm: ['{F} flight, gas on station, make it quick.', '{F} flight, {A}. Basket is out, plug in and get back in the fight.',
+      '{F} flight, cleared to join. Keep it tight, bandits in the area.'],
+    panic: ['{F} flight, get in here and take your gas, fast!', "{F} flight, I can't stay out here long! Plug in now!"]
+  },
+  contact: {   // receiver, in the basket
+    peace: ['{C}, contact. Taking fuel.', '{C} in the basket. Good flow.', '{C}, contact. Fuel flowing.'],
+    calm: ['{C}, contact! Taking fuel.', '{C} plugged. Fill me up, quick.', '{C}, contact. Hurry it up.'],
+    panic: ['{C}, contact! Come on, come on!', "{C}'s in! Give me everything you can!"]
+  },
+  next: {   // tanker, next receiver
+    peace: ['{C}, cleared to the basket.', '{C}, your turn. Basket is steady.', '{C}, cleared astern, then contact.'],
+    calm: ['{C}, you are next. Plug in.', '{C}, cleared to the basket, quick.'],
+    panic: ['{C}, in now! Go, go!', '{C}, plug in, we are running out of time!']
+  },
+  full: {   // receiver, done
+    peace: ['{C}, topped off. Disconnecting.', '{C} full. Moving to the right wing.', '{C}, disconnect. Thanks for the gas.'],
+    calm: ['{C}, topped off. Disconnecting.', '{C} full, breaking away.'],
+    panic: ['{C}, enough! Disconnecting!', '{C} has enough, breaking off!']
+  },
+  done: {   // tanker, leaving the screen
+    peace: ['{F} flight, all topped off. {A} returning to station.', 'All receivers clear. {A} back to the track.', '{F} flight, you are clear. Have a good one.'],
+    calm: ['{F} flight, all topped off. Go get them.', '{F} flight, clear of the basket. Back to the fight.'],
+    panic: ['{F} flight, that is all I can give, get back in there!', '{F} flight, go! {A} is pulling out!']
+  },
+  thanks: {   // receiver, last
+    peace: ['Thanks for the gas, {A}.', 'Appreciate it, {A}. See you next round.', 'Good tanking, {A}.'],
+    calm: ['Thanks, {A}. Back to work.', 'Thanks for the gas, {A}. Going back in.'],
+    panic: ['Thanks, {A}! Now get clear!', 'Owe you one, {A}!']
+  }
+};

@@ -32,6 +32,7 @@ Aircraft counts are set in the wallpaper properties.
 | F-14 Super Tomcat | variable sweep in flight, 75° oversweep when parked |
 | F-35C Lightning II | outer wing panels fold up |
 | E-2D Hawkeye (AWACS) | Sto-Wing: wings twist and fold back along the fuselage |
+| MQ-25 Stingray (unmanned tanker, up to 2) | outer wing panels fold up |
 | MH-60 Seahawk / CH-53 Sea Stallion / AH-1Z Viper | rotor blades fold aft |
 | CMV-22B Osprey (COD tiltrotor) | blades fold, nacelles tilt forward, the wing turns 90° to lie along the fuselage |
 
@@ -46,12 +47,17 @@ Each destroyer can also carry one MH-60 (optional).
 - Automatic flight ops work by flights (aircraft sharing a callsign): a four-ship flight launches as
   all four or as its lead pair (chosen at random), the second pair usually follows soon to join it,
   and flights are recovered together. About half of the air wing is airborne on average.
-- In combat the AWACS stays up (if it is on deck when the fight starts, it launches first) and fighters
+- In combat the AWACS and the tanker stay up (if one is on deck when the fight starts, it launches first) and fighters
   go first off the deck. Flights come back to rearm only now and then, never the last one still in the fight.
 - Jets fly turn-radius-limited paths (Dubins curves), so launches, orbits and approaches use wide, realistic turns.
 - Each flight picks its own random orbit distance (wingmen share the lead's); the far orbits run partly off-screen.
   Now and then a flight on station moves to a new distance, easing in and out smoothly.
 - Landing gear retracts in flight.
+- **Aerial refuelling:** now and then the MQ-25 and a fighter flight leave the screen and cross it together, the
+  tanker leading with its hose out. One jet at a time plugs into the basket while the others wait on the tanker's right
+  wing; the ones done move out to the left. The radio follows (cleared to the basket, contact, topped off). The flight
+  then goes back to its orbit with a full sortie ahead (its time in the air starts again). In combat the fighters
+  come from the fight off-screen and go back to it. The MQ-25 flies no missions.
 - The CMV-22B takes off and lands vertically like a helicopter, then tilts its nacelles forward and raises
   its gear to cruise in airplane mode; it converts back as it slows down for landing.
 
@@ -66,6 +72,7 @@ helicopter departures and landings, and combat chatter while music is playing.
   - **Helicopters / COD:** Sea Goblin, Osprey, Halo (MH-60), Atlas, Hercules, Titan (CH-53), Viper, Cobra,
     Sweeper (AH-1Z), Sunhawk, Greyhound, Pelican (CMV-22B).
   - **AWACS:** SkyEye, Thunderhead, Eagle Eye, Long Caster, Bandog, Sky Keeper, Dealer.
+  - **Tankers (MQ-25):** Barrel, Pipeline, Gusher, Derrick (oil words, not from the games).
   - **Fly-by aces:** Reaper, Avalanche, Sohei.
   - **Ships:** carrier KESTREL, escorts BUCCANEER (port) and CUTLASS (starboard). The control panel
     lists them with their status (on station / engaging / damaged).
@@ -181,8 +188,9 @@ It changes:
 
 During combat, combat calls go first (contacts, kills, vampires, damage). Routine deck calls switch to their
 combat versions ("hot deck, launch, launch!") or are dropped if they get stale. Armed and unarmed aircraft
-have their own combat versions: fighters and the AH-1Z go in hot and come back to rearm, while the AWACS
-and the transport helicopters keep clear of the fight (the AWACS stays up; the helicopters come back to refuel).
+have their own combat versions: fighters and the AH-1Z go in hot and come back to rearm, the AWACS and the tanker
+talk about the radar picture and the fuel they have to give, and the transport helicopters keep clear of the fight
+(the AWACS and the tanker stay up; the helicopters come back to refuel).
 
 Urgent calls (unknown contacts, combat start, vampires, hits) cut in over a less important line, and
 lines are shortened when others are waiting, so the radio keeps up with what happens on screen.
