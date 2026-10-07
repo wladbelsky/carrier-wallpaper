@@ -70,7 +70,7 @@ const TANKER = registerMissionWorld({
       a.fwd.copy(P.sample(ps).dir).setY(0).normalize();
     };
     put(ev.tanker, lead, 'tank_pass');
-    for (const a of ev.recv) { const s = this.slot(ev, a); a.slot = s.slice(); put(a, lead - s[0], ev.combat ? 'cbt_tank' : 'tank_pass'); a.pathOff = s[1]; a.pathDy = s[2]; }
+    for (const a of ev.recv) { const s = a.slot = this.slot(ev, a); put(a, lead - s[0], ev.combat ? 'cbt_tank' : 'tank_pass'); a.pathOff = s[1]; a.pathDy = s[2]; }
   },
   slot(ev, a) { const i = ev.recv.indexOf(a); return i === ev.cur ? TANK_BASKET : i > ev.cur ? tankWing(i - ev.cur - 1, 1) : tankWing(ev.cur - 1 - i, -1); },
 
@@ -91,12 +91,7 @@ const TANKER = registerMissionWorld({
     a.glow = 0.45;
     if (a === tk) ev.tkN = ev.n;                             // the tanker has moved this step
     else {
-      // receivers: ease into their slot — dropping back first and then across, or across first and then forward
-      // (clear of the tanker's wing); their own speed plus a capped correction keeps the gap behind the tanker
-      const s = this.slot(ev, a), back = s[0] > a.slot[0], fast = Math.min(1, dt * 2.6), slow = Math.min(1, dt * 0.9);
-      a.slot[0] += (s[0] - a.slot[0]) * (back ? fast : slow);
-      for (let i = 1; i < 3; i++) a.slot[i] += (s[i] - a.slot[i]) * (back ? slow : fast);
-      a.pathOff = a.slot[1]; a.pathDy = a.slot[2];
+      // receivers hold their slot (fixed for the pass, set in board): their own speed plus a capped correction keeps the gap
       // target: the gap behind where the tanker is after this step (it may update before or after us)
       if (tk.tank === ev && tk.state === 'tank_pass') a.ps += clamp(tk.ps + (ev.tkN === ev.n ? 0 : ev.v * dt) - a.slot[0] - ev.v * dt - a.ps, -2.5 * dt, 2.5 * dt);
     }
@@ -135,7 +130,8 @@ const TANKER = registerMissionWorld({
       ev.intro = true; this.say(ev, tk, L.join, rc.callsign); this.say(ev, rc, L.contact, null, 2.5);
     }
     if (ev.intro && !ev.outro && tk.state === 'tank_pass' && !AIRWAR.onScreen(tk.mesh.position, 0.05)) {
-      ev.outro = true; this.say(ev, rc, L.full); this.say(ev, tk, ev.cur < ev.recv.length - 1 ? L.doneMore : L.done, null, 1.2); if (Math.random() < 0.5) this.say(ev, ev.recv[0], L.thanks, null, 2.5);
+      const more = ev.cur < ev.recv.length - 1;            // some of the flight still to go (off-screen)
+      ev.outro = true; this.say(ev, rc, L.full); this.say(ev, tk, more ? L.doneMore : L.done, null, 1.2); if (!more && Math.random() < 0.5) this.say(ev, ev.recv[0], L.thanks, null, 2.5);
     }
     for (const a of ev.all) if (a.tank === ev && !a.passDone) return;
     this.ev = null;
