@@ -30,6 +30,7 @@ User-facing docs: `README.md` (keep it in sync when behaviour or properties chan
 | `js/properties.js` | **generated** from `project.json` — do not edit by hand |
 | `js/settings.js` | browser-only settings drawer, demo beat, audio-file player (returns early inside WE) |
 | `tools/gen_properties.py` | regenerates `js/properties.js` |
+| `tests/`, `playwright.config.js`, `package.json` | automated tests (Playwright Test) — see "Running & testing"; `tools/test.ps1` runs them in Docker, `.github/workflows/tests.yml` in CI |
 
 ## Rules / conventions
 - **After changing any JS/CSS file, bump the cache-buster** `?v=N` on all `<script>`/`<link>` tags in
@@ -191,11 +192,26 @@ Missions fly beyond the screen edge while there is no music. `dispatchFlight` (`
 - Browser preview: serve the folder, e.g. `python -m http.server 8765`, open `http://localhost:8765/`.
   The ⚙ SETTINGS drawer mirrors all WE properties (stored in `localStorage`); URL params `?hour=22`,
   `?zoom=150`, `?demo=1`, `?ts=N` (time scale).
-- No test suite. Verify in the browser console — all globals are reachable:
-  set `paused = true` and drive the sim with `step(0.05)` + `renderer.render(scene, camera)`;
-  check `renderer.info.render.calls` (main-pass draw calls, shadow pass excluded) and
-  `renderer.info.memory.geometries` (must plateau during long runs, e.g. spawning many `new Flyby()` /
-  `spawnBandits(3)`); force combat with `Object.defineProperty(AUD, 'armed', { get: () => true })`
-  and `onBeat('low', 2)`.
+- **Automated tests** (`tests/`, Playwright Test in headless Chromium + SwiftShader WebGL): run them in Docker —
+  `powershell -ExecutionPolicy Bypass -File tools/test.ps1 [file / -g pattern]` (no local Node; `$env:SEED = N` for
+  another seed); CI runs the same image on every push / PR (`.github/workflows/tests.yml`). Run them after a change.
+  - The harness (`tests/support/harness.js`) boots the page deterministically: seeded `Math.random` (`SEED`), fixed
+    date in UTC, no `requestAnimationFrame` (time only advances through `__t.sim(sec)` = `step(0.05)` per tick),
+    `RT()` on simulated time, Wallpaper Engine mode (audio fed by `__t.sim(sec, { audio: true/false })`).
+  - `tests/support/inpage.js` (`window.__t`): `sim` runs `checkInvariants()` after every step (deck resources:
+    catapults, landing area, spots, lifts, helo pad; known states; NaN; mission / tanker consistency; bounded
+    pools) and the stuck detector (`STATE_LIMITS`); `forceFight` / `fightOff`; `sample` (pixels); `geometries`
+    (leak check: geometries dropped without `dispose`).
+  - **When adding a state, a deck resource, a line pool, a placeholder or a cache**, update the harness: aircraft
+    states come from `STATUS` (so `registerLeg` / `Object.assign(STATUS, …)` is enough), but mission / tanker / lift /
+    runway / catapult state sets, `STATE_LIMITS`, the placeholder list in `radio-pools.spec.js` and `GEO_CACHES` are
+    listed by hand.
+  - `repo.spec.js` checks the cache-buster (all tags equal, matches "Current: `v=N`" here), the load order line above,
+    and that `js/properties.js` is regenerated.
+- Console checks by hand: all globals are reachable; set `paused = true` and drive the sim with `step(0.05)` +
+  `renderer.render(scene, camera)`; check `renderer.info.render.calls` (main-pass draw calls, shadow pass excluded)
+  and `renderer.info.memory.geometries`. To force a fight: `AUD.combat` alone gives `armed` but not `fighting` (no
+  waves / passes / beats); use `Object.defineProperty(AUD, 'active', { get: () => true }); AUD.soundStart = RT() - 10;
+  AUD.combat = true;` (what `__t.forceFight()` does), then `onBeat('low', 2)`.
 - Baseline after the 2026-10 optimisation pass: ~400 GL draw calls/frame (was ~950), geometries
   plateau ≈ 900 under sustained combat.

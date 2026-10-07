@@ -1,5 +1,7 @@
 # Carrier Strike Group — web wallpaper for Wallpaper Engine
 
+[![tests](https://github.com/wladbelsky/carrier-wallpaper/actions/workflows/tests.yml/badge.svg)](https://github.com/wladbelsky/carrier-wallpaper/actions/workflows/tests.yml)
+
 Isometric carrier strike group: a carrier, two escorting destroyers and a configurable air wing that
 react to the music playing on your PC. Guns, CIWS and aircraft fire to the beat, Ace Combat style radio
 subtitles run at the top of the screen, and the time of day follows your PC clock.
@@ -261,3 +263,32 @@ Settings are saved in `localStorage`; the audio file itself is not. **Reset all 
 URL parameters still work and override stored values: `?hour=22`, `?zoom=150`, `?demo=1`.
 
 If you add a property to `project.json`, run `python tools/gen_properties.py` to refresh `js/properties.js`.
+
+## Tests
+
+Automated tests (Playwright Test, headless Chromium with software WebGL) drive the real page: the simulation is
+seeded and stepped by the tests, so every run is reproducible. They cover:
+
+- **repository**: one cache-buster on every script, every file referenced, `js/properties.js` generated from
+  `project.json`, the project file itself;
+- **units**: flight paths (Dubins curves never turn tighter than the turn radius), radio lines and threat tiers,
+  every line pool and placeholder, mission texts, callsigns, mission picking, sun / sky, the wave shader vs its JS
+  twin, every model builder;
+- **flight logic**: launch and recovery of every aircraft type through its deck / elevator sequence, LAUNCH ALL /
+  RECOVER ALL, half an hour of automatic flight ops with deck resources (catapults, landing area, parking spots,
+  elevators, helicopter pad) checked after every step and a stuck-aircraft detector;
+- **combat**: arming from music, hold / resume / stand-down, passes, waves, missiles and boats, clean-up afterwards;
+- **missions** (every type and on-screen variant), **refuelling passes** (peace, combat, abort), **session state**,
+  **air wing changes** at runtime, the **control panel** (pages, buttons) and **radio subtitles**;
+- **rendering**: no WebGL errors, draw-call budget, the fleet on screen, day vs night, shadows and their coverage,
+  no geometry leaks;
+- **soak**: two hours of simulated life (music and silence, missions, count changes) with all of the above.
+
+Run them locally with Docker (no Node needed):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tools/test.ps1
+```
+
+Pass a file or `-g pattern` to run part of them; `$env:SEED = 7` repeats them with another random seed. GitHub
+Actions runs the same Docker image on every push and pull request.
