@@ -56,7 +56,9 @@ Each destroyer can also carry one MH-60 (optional).
 - **Aerial refuelling:** now and then the MQ-25 and a fighter flight leave the screen and cross it together, the
   tanker leading with its hose out. One jet at a time plugs into the basket while the others wait on the tanker's right
   wing; the ones done move out to the left. The radio follows (cleared to the basket, contact, topped off). The flight
-  then goes back to its orbit with a full sortie ahead (its time in the air starts again). In combat the fighters
+  then goes back to its orbit with a full sortie ahead (its time in the air starts again). In peace this happens about every 5–10
+  minutes (the tanker stays on station at least 5 minutes per sortie and is launched when a pass is due),
+  in combat every minute or so. In combat the fighters
   come from the fight off-screen and go back to it. The MQ-25 flies no missions.
 - The CMV-22B takes off and lands vertically like a helicopter, then tilts its nacelles forward and raises
   its gear to cruise in airplane mode; it converts back as it slows down for landing.

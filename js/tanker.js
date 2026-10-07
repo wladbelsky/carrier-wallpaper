@@ -19,24 +19,30 @@ const TANKER = registerMissionWorld({
   reset() { this.ev = null; this.timer = rand(40, 80); },
   update(dt) {
     if (this.ev) { this.tick(this.ev, dt); return; }
-    if ((this.timer -= dt) > 0) return;
     const combat = combatOn();
+    if ((this.timer -= dt) > 0) { if (this.timer < 90 && !combat && CFG.auto) this.launchTanker(); return; }   // up in time for the pass
     if (combat && !AUD.fighting) { this.timer = 5; return; }      // holding after the music stopped: nothing new
-    this.timer = this.start() ? (combat ? rand(35, 70) : rand(60, 120)) : rand(8, 15);   // nobody ready: look again soon
+    if (this.start()) { this.timer = combat ? rand(35, 70) : rand(240, 420); return; }   // + gathering: in peace every 5-9 min
+    this.timer = rand(8, 15);                                  // nobody ready: look again soon
+    if (this.noTanker && CFG.auto) this.launchTanker();
+  },
+  /* a pass is due and no tanker is up: send one (auto flight ops) */
+  launchTanker() {
+    for (const a of AIRCRAFT) if (a.spec.tanker && !isDown(a)) return;   // one is up, launching or landing
+    const g = flightGroups(), tk = AIRCRAFT.find(a => a.spec.tanker && !a.retiring && isDown(a) && g.get(flightOf(a)).every(settled));
+    if (tk) tk.requestLaunch();
   },
 
-  /* a tanker on station and a flight that has been up a while (in combat: fighters waiting off-screen) */
+  /* a tanker on station and armed jets of one flight: in orbit (in combat: waiting off-screen) */
   start() {
     const combat = combatOn();
     const tankers = AIRCRAFT.filter(a => a.spec.tanker && a.state === 'orbit' && !a.landReq && !a.retiring && !a.tank && a.airT > 20);
-    if (!tankers.length) return false;
+    this.noTanker = !tankers.length; if (this.noTanker) return false;
     const flights = [];
     const idle = combat && new Set(AIRWAR.idle(FixedWing));
     for (const all of flightGroups().values()) {
-      if (combat) { const l = all.filter(a => idle.has(a) && a.spec.armed && !a.retiring && a.airT > 30); if (l.length) flights.push(l); continue; }
-      if (!all[0].spec.armed || !(all[0] instanceof FixedWing) || !all.every(settled)) continue;
-      const up = all.filter(a => !isDown(a));
-      if (up.length && up.every(a => a.state === 'orbit' && !a.landReq && !a.retiring && a.airT >= 30)) flights.push(up);
+      const l = all.filter(a => (combat ? idle.has(a) && a.airT > 30 : a.state === 'orbit' && a.airT >= 10) && a.spec.armed && a instanceof FixedWing && !a.landReq && !a.retiring);
+      if (l.length) flights.push(l);
     }
     if (!flights.length) return false;
     const recv = wpick(flights.map(l => ({ l, w: 1 + Math.min(...l.map(a => a.airT)) / 60 }))).l.sort((a, b) => csNum(a) - csNum(b)).slice(0, 4);
