@@ -503,28 +503,45 @@ const isDown = a => a.state === 'parked' || a.state === 'hangar';
 const settled = a => isDown(a) || ((a.state === 'orbit' || a.onMission || a.inCombat) && !a.landReq);
 function wpick(cands) { let r = Math.random() * cands.reduce((s, c) => s + c.w, 0); for (const c of cands) if ((r -= c.w) <= 0) return c; return cands[cands.length - 1]; }
 const flightSize = n => n >= 4 && Math.random() < 0.5 ? 2 : n;   // a four-ship flight goes as a pair or as all four
+// in combat: flights come back to rearm now and then (a try on 30 % of the ticks, after 2 min up), the AWACS stays up
+const CBT_RECOVER_P = 0.3, CBT_SORTIE = 120;
+const engaged = a => a.inCombat && !a.landReq;
 function autoLaunch(joinOnly) {
-  const cands = [];
+  const cands = [], armed = AUD.armed;
   for (const all of flightGroups().values()) {
     if (!all.every(settled)) continue;
     const down = all.filter(isDown); if (!down.length) continue;
     const split = down.length < all.length;     // part of the flight is already up: send the rest to join it
     if (joinOnly && !split) continue;
     const n = split ? down.length : flightSize(down.length);
-    cands.push({ list: down.slice(0, n), w: (split ? 4 : 1) + down.filter(a => a.state === 'parked').length * 0.5 });
+    const w = (split ? 4 : 1) + down.filter(a => a.state === 'parked').length * 0.5;
+    cands.push({ list: down.slice(0, n), w: armed && down[0].spec.armed ? w * 3 : w });   // in combat fighters go first
   }
   if (!cands.length) return false;
   for (const a of wpick(cands).list) a.requestLaunch();
   return true;
 }
+/* combat: the AWACS goes up first if it is on deck */
+function scrambleAwacs() {
+  const aw = AIRCRAFT.filter(a => a.isAwacs && !a.retiring);
+  if (!aw.length || aw.some(a => !isDown(a))) return false;
+  const all = flightGroups().get(flightOf(aw[0]));
+  if (!all.every(settled)) return false;
+  for (const a of all.filter(isDown)) a.requestLaunch();
+  return true;
+}
 function autoRecover() {
-  const cands = [];
-  for (const all of flightGroups().values()) {
-    if (!all.every(settled) || all.some(a => a.onMission)) continue;
-    const air = all.filter(a => a.state === 'orbit' && !a.landReq);
+  const armed = AUD.armed;
+  if (armed && Math.random() > CBT_RECOVER_P) return false;
+  const groups = [...flightGroups().values()], cands = [];
+  for (const all of groups) {
+    if (!all.every(settled) || all.some(a => a.onMission) || (armed && all.some(a => a.isAwacs))) continue;
+    const air = all.filter(a => (a.state === 'orbit' || a.inCombat) && !a.landReq);
     // a pair whose flight-mates are still on deck waits for them to join instead of being recovered
-    if (!air.length || air.length < all.length || air.some(a => a.airT < 25)) continue;
-    cands.push({ list: air, w: 1 + Math.min(...air.map(a => a.airT)) / 60 });   // longest on station first
+    if (!air.length || air.length < all.length || air.some(a => a.airT < (armed ? CBT_SORTIE : 25))) continue;
+    // an armed flight leaves the fight only while another one stays engaged
+    if (armed && air[0].spec.armed && combatOn() && !groups.some(l => l !== all && l.some(engaged))) continue;
+    cands.push({ list: air, w: armed ? 1 : 1 + Math.min(...air.map(a => a.airT)) / 60 });   // peace: longest on station first
   }
   if (!cands.length) return false;
   for (const a of wpick(cands).list) a.requestLand();
@@ -539,6 +556,7 @@ function autoFlight(dt) {
     const onStation = [...flightGroups().values()].filter(l => l.every(a => a.state === 'orbit' && !a.landReq));
     if (onStation.length) pick(onStation).forEach((a, i) => a.pickOrbit(false, i === 0));
   }
+  if (AUD.armed && scrambleAwacs()) return;
   // a pair already up is usually joined by the rest of its flight, even past the air wing cap
   if (Math.random() < 0.7 && autoLaunch(true)) return;
   const busy = AIRCRAFT.filter(a => !isDown(a)).length;

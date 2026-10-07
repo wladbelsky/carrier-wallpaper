@@ -175,6 +175,7 @@ class Aircraft {
       return true;
     }
     if (!this.inCombat) return false;
+    this.airT += dt;                                   // sortie time (auto recovery to rearm)
     switch (this.state) {
       case 'cbt_out': if (this.followPath(dt)) { this.state = 'cbt_wait'; this.t = 0; this.mesh.visible = false; } break;
       case 'cbt_pass':

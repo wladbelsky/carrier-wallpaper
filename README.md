@@ -46,6 +46,8 @@ Each destroyer can also carry one MH-60 (optional).
 - Automatic flight ops work by flights (aircraft sharing a callsign): a four-ship flight launches as
   all four or as its lead pair (chosen at random), the second pair usually follows soon to join it,
   and flights are recovered together. About half of the air wing is airborne on average.
+- In combat the AWACS stays up (if it is on deck when the fight starts, it launches first) and fighters
+  go first off the deck. Flights come back to rearm only now and then, never the last one still in the fight.
 - Jets fly turn-radius-limited paths (Dubins curves), so launches, orbits and approaches use wide, realistic turns.
 - Each flight picks its own random orbit distance (wingmen share the lead's); the far orbits run partly off-screen.
   Now and then a flight on station moves to a new distance, easing in and out smoothly.
