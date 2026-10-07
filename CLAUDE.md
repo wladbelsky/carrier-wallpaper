@@ -33,7 +33,7 @@ User-facing docs: `README.md` (keep it in sync when behaviour or properties chan
 
 ## Rules / conventions
 - **After changing any JS/CSS file, bump the cache-buster** `?v=N` on all `<script>`/`<link>` tags in
-  `index.html` (WE's CEF caches aggressively). Current: `v=54`.
+  `index.html` (WE's CEF caches aggressively). Current: `v=55`.
 - **New WE property**: add it to `project.json`, read it in `applyUserProperties` (`main.js`) into `CFG`,
   then run `python tools/gen_properties.py`. Property `order` decides the browser-drawer group
   (0–9 camera/time, 10–19 audio/combat, 20–29 sea, 30–39 panel, 40–49 air wing, 50–59 hull number).
@@ -115,7 +115,8 @@ Missions fly beyond the screen edge while there is no music. `dispatchFlight` (`
   (`AIRWAR.idle`). Up to 4 receivers. `TANKER.start()` forces one when possible.
 - **Flow:** participants get `a.tank = ev`; `FixedWing.updateState` hands them to `TANKER.fly` first. `tank_out` (to
   `AIRWAR.offscreenFrom`) → `tank_wait` (hidden) → once all wait, one `AIRWAR.screenPass` → `tank_pass` → `tank_back`
-  (to an orbit, like `cbt_rtb`). Combat receivers stay in `cbt_tank` (hidden, still `inCombat`) and return to `cbt_wait`.
+  (to an orbit via `Aircraft.edgeToOrbit`, shared with `cbt_rtb`). `Aircraft.aloft` (airborne / mission / combat /
+  refuelling) is the "up" predicate for landing requests and F-14 sweep; auto-recovery skips flights with `a.tank`. Combat receivers stay in `cbt_tank` (hidden, still `inCombat`) and return to `cbt_wait`.
   Abort after 45 s if someone never arrives. Receivers get `airT = 0` at the end.
 - **Formation:** slots `[gap behind along the path, side offset, height]` (`TANK_BASKET`, `tankWing`); waiting receivers
   on the right wing, finished ones on the left, so no paths cross on a swap. Receivers fly their own `ps` plus a capped

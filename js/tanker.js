@@ -11,6 +11,7 @@ Object.assign(STATUS, { tank_out: ['TANKER ▶', 'air'], tank_wait: ['TANKING', 
 // slots as [gap behind the tanker along the path, side offset (+ = right), height]: the basket hangs off the left-wing pod;
 // receivers still waiting hold on the right wing, the ones done move out to the left (no crossing paths on a swap)
 const TANK_BASKET = [3.2, -0.53, -0.24];
+const tankWaiting = a => a.state === 'tank_wait' || a.state === 'cbt_tank';   // off-screen, ready for the pass
 const tankWing = (k, side) => [1.5 + 0.7 * k, side * (2.9 + 2.4 * k), 0.1 + 0.1 * k];
 
 const TANKER = registerMissionWorld({
@@ -30,19 +31,18 @@ const TANKER = registerMissionWorld({
     const tankers = AIRCRAFT.filter(a => a.spec.tanker && a.state === 'orbit' && !a.landReq && !a.retiring && !a.tank && a.airT > 20);
     if (!tankers.length) return false;
     const flights = [];
-    if (combat) {
-      const g = new Map();
-      for (const a of AIRWAR.idle(FixedWing)) if (a.spec.armed && !a.retiring && a.airT > 30) (g.get(flightOf(a)) || g.set(flightOf(a), []).get(flightOf(a))).push(a);
-      flights.push(...g.values());
-    } else for (const all of flightGroups().values()) {
+    const idle = combat && new Set(AIRWAR.idle(FixedWing));
+    for (const all of flightGroups().values()) {
+      if (combat) { const l = all.filter(a => idle.has(a) && a.spec.armed && !a.retiring && a.airT > 30); if (l.length) flights.push(l); continue; }
       if (!all[0].spec.armed || !(all[0] instanceof FixedWing) || !all.every(settled)) continue;
       const up = all.filter(a => !isDown(a));
       if (up.length && up.every(a => a.state === 'orbit' && !a.landReq && !a.retiring && a.airT >= 30)) flights.push(up);
     }
     if (!flights.length) return false;
     const recv = wpick(flights.map(l => ({ l, w: 1 + Math.min(...l.map(a => a.airT)) / 60 }))).l.sort((a, b) => csNum(a) - csNum(b)).slice(0, 4);
-    const ev = this.ev = { tanker: pick(tankers), recv, combat, t: 0, P: null, cur: 0, intro: false, outro: false };
-    for (const a of [ev.tanker, ...recv]) { a.tank = ev; a.passDone = false; a.cbtDelay = null; }
+    const tanker = pick(tankers), ev = this.ev = { tanker, recv, all: [tanker, ...recv], combat, t: 0, P: null, cur: 0, intro: false, outro: false,
+      F: flightOf(recv[0]), o: combat ? { cat: 'combat', prio: 1 } : { prio: 1 } };   // radio: flight name, options
+    for (const a of ev.all) { a.tank = ev; a.passDone = false; a.cbtDelay = null; }
     this.out(ev.tanker);
     for (const a of recv) if (combat) { a.state = 'cbt_tank'; a.t = 0; a.mesh.visible = false; } else this.out(a);
     return true;
@@ -100,15 +100,11 @@ const TANKER = registerMissionWorld({
     if (a.state === 'cbt_tank' && combatOn()) { a.state = 'cbt_wait'; a.t = 0; a.mesh.visible = false; a.tank = null; }
     else this.back(a);
   },
-  back(a) {                                                  // from beyond the edge back to an orbit (like cbt_rtb)
-    const from = a.mesh.position.clone(), P = new FlightPath();
-    a.pickOrbit(true); a.pathToOrbit(P, from, Math.atan2(-from.z, -from.x), 0.5);
-    a.fly(P, a.spec.speed * 1.1, a.orbit.v); a.fwd.set(-from.x, 0, -from.z).normalize();
-    a.mesh.visible = true; a.state = 'tank_back'; a.t = 0;
-  },
+  back(a) { a.edgeToOrbit(a.spec.speed * 1.1); a.state = 'tank_back'; a.t = 0; },   // from beyond the edge back to an orbit
+  say(ev, a, pool, C, delay) { a.say(radioLine(pool, { F: ev.F, A: ev.tanker.callsign, C: C || a.callsign }), Object.assign({ delay: delay || 0 }, ev.o)); },
   /* someone never got there: everyone goes back */
   abort(ev) {
-    for (const a of [ev.tanker, ...ev.recv]) {
+    for (const a of ev.all) {
       if (a.tank !== ev) continue;
       a.passDone = true;
       if (a.state === 'cbt_tank' && combatOn()) { a.state = 'cbt_wait'; a.t = 0; a.tank = null; }
@@ -120,25 +116,23 @@ const TANKER = registerMissionWorld({
   /* the event: start the pass once everyone waits off-screen, swap receivers, radio */
   tick(ev, dt) {                                             // after all aircraft have moved this step
     ev.t += dt; ev.n = (ev.n || 0) + 1;
-    const all = [ev.tanker, ...ev.recv];
     if (!ev.P) {
-      if (all.every(a => a.state === 'tank_wait' || a.state === 'cbt_tank')) this.board(ev);
+      if (ev.all.every(tankWaiting)) this.board(ev);
       else if (ev.t > 45) this.abort(ev);
       return;
     }
-    const tk = ev.tanker, n = ev.recv.length, u = (tk.ps - ev.s0) / Math.max(1, ev.s1 - ev.s0);
-    const o = ev.combat ? { cat: 'combat', prio: 1 } : { prio: 1 }, F = flightOf(ev.recv[0]), A = tk.callsign;
-    const said = (a, pool, vars, delay) => a.say(radioLine(pool, Object.assign({ F, A, C: a.callsign }, vars)), Object.assign({ delay: delay || 0 }, o));
+    const tk = ev.tanker, n = ev.recv.length, u = (tk.ps - ev.s0) / Math.max(1, ev.s1 - ev.s0), L = TANKER_LINES;
     if (!ev.intro && tk.state === 'tank_pass' && AIRWAR.onScreen(tk.mesh.position, -0.1)) {
-      ev.intro = true; said(tk, TANKER_LINES.join); said(ev.recv[ev.cur], TANKER_LINES.contact, null, 2.5);
+      ev.intro = true; this.say(ev, tk, L.join); this.say(ev, ev.recv[ev.cur], L.contact, null, 2.5);
     }
     if (ev.cur < n - 1 && u > (ev.cur + 1) / n) {           // next receiver into the basket
       const prev = ev.recv[ev.cur++], next = ev.recv[ev.cur];
-      if (ev.intro && !ev.outro) { said(prev, TANKER_LINES.full); said(tk, TANKER_LINES.next, { C: next.callsign }, 1.2); said(next, TANKER_LINES.contact, null, 3.5); }
+      if (ev.intro && !ev.outro) { this.say(ev, prev, L.full); this.say(ev, tk, L.next, next.callsign, 1.2); this.say(ev, next, L.contact, null, 3.5); }
     }
     if (ev.intro && !ev.outro && tk.state === 'tank_pass' && !AIRWAR.onScreen(tk.mesh.position, 0.05)) {
-      ev.outro = true; said(tk, TANKER_LINES.done, null, 0.5); if (Math.random() < 0.5) said(ev.recv[0], TANKER_LINES.thanks, null, 2);
+      ev.outro = true; this.say(ev, tk, L.done, null, 0.5); if (Math.random() < 0.5) this.say(ev, ev.recv[0], L.thanks, null, 2);
     }
-    if (all.every(a => a.tank !== ev || a.passDone)) this.ev = null;
+    for (const a of ev.all) if (a.tank === ev && !a.passDone) return;
+    this.ev = null;
   }
 });

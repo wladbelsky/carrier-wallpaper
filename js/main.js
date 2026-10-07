@@ -505,7 +505,7 @@ function wpick(cands) { let r = Math.random() * cands.reduce((s, c) => s + c.w, 
 const flightSize = n => n >= 4 && Math.random() < 0.5 ? 2 : n;   // a four-ship flight goes as a pair or as all four
 // in combat: flights come back to rearm now and then (a try on 30 % of the ticks, after 2 min up), the AWACS and the tanker stay up
 const CBT_RECOVER_P = 0.3, CBT_SORTIE = 120;
-const engaged = a => a.inCombat && !a.landReq;
+const engaged = a => a.inCombat && !a.landReq && !a.tank;   // a flight away refuelling isn't fighting
 function autoLaunch(joinOnly) {
   const cands = [], armed = AUD.armed;
   for (const all of flightGroups().values()) {
@@ -539,7 +539,7 @@ function autoRecover() {
   if (armed && Math.random() > CBT_RECOVER_P) return false;
   const groups = [...flightGroups().values()], cands = [];
   for (const all of groups) {
-    if (!all.every(settled) || all.some(a => a.onMission) || (armed && all.some(a => a.isSupport))) continue;
+    if (!all.every(settled) || all.some(a => a.onMission || a.tank) || (armed && all.some(a => a.isSupport))) continue;
     const air = all.filter(a => (a.state === 'orbit' || a.inCombat) && !a.landReq);
     // a pair whose flight-mates are still on deck waits for them to join instead of being recovered
     if (!air.length || air.length < all.length || air.some(a => a.airT < (armed ? CBT_SORTIE : 25))) continue;

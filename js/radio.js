@@ -704,7 +704,7 @@ LINES.falseAlarm = [
 /* ===== Refuelling passes (js/tanker.js) — {F} the flight, {C} a receiver, {A} the tanker ===== */
 const TANKER_LINES = {
   join: {   // tanker, as the pass comes on screen
-    peace: ['{F} flight, {A} on station. Cleared to the basket.', '{F} flight, tanker track is steady. Join on my left wing.',
+    peace: ['{F} flight, {A} on station. Cleared to the basket.', '{F} flight, tanker track is steady. Join on my right wing.',
       '{F} flight, {A}. Basket is out, plenty to give.', '{F} flight, you are cleared to join. Lead plugs first.'],
     calm: ['{F} flight, gas on station, make it quick.', '{F} flight, {A}. Basket is out, plug in and get back in the fight.',
       '{F} flight, cleared to join. Keep it tight, bandits in the area.'],
@@ -721,7 +721,7 @@ const TANKER_LINES = {
     panic: ['{C}, in now! Go, go!', '{C}, plug in, we are running out of time!']
   },
   full: {   // receiver, done
-    peace: ['{C}, topped off. Disconnecting.', '{C} full. Moving to the right wing.', '{C}, disconnect. Thanks for the gas.'],
+    peace: ['{C}, topped off. Disconnecting.', '{C} full. Moving to the left wing.', '{C}, disconnect. Thanks for the gas.'],
     calm: ['{C}, topped off. Disconnecting.', '{C} full, breaking away.'],
     panic: ['{C}, enough! Disconnecting!', '{C} has enough, breaking off!']
   },
@@ -730,7 +730,7 @@ const TANKER_LINES = {
     calm: ['{F} flight, all topped off. Go get them.', '{F} flight, clear of the basket. Back to the fight.'],
     panic: ['{F} flight, that is all I can give, get back in there!', '{F} flight, go! {A} is pulling out!']
   },
-  thanks: {   // receiver, last
+  thanks: {   // the lead receiver, at the end
     peace: ['Thanks for the gas, {A}.', 'Appreciate it, {A}. See you next round.', 'Good tanking, {A}.'],
     calm: ['Thanks, {A}. Back to work.', 'Thanks for the gas, {A}. Going back in.'],
     panic: ['Thanks, {A}! Now get clear!', 'Owe you one, {A}!']
