@@ -75,7 +75,7 @@ const RADIO = {
   }
 };
 
-/* Untiered radio lines (tiered pools are in OPS and COMBAT below) */
+/* Untiered radio lines (tiered pools are in OPS / OPS_UNARMED and COMBAT below) */
 const LINES = {};
 
 /* ---- mission orders (only when there is no music) ---- */
@@ -348,7 +348,7 @@ const OPS_UNARMED = {
       'coming home, we took some hits! Clear the deck!']
   },
   trap: {
-    calm: ["Hawkeye's down. Fuel it and get it back up!", "On deck. Hot refuel, they're blind out there.", 'Good trap. Turn it around, fast!'],
+    calm: ['{c} is down. Fuel it and get it back up!', "On deck. Hot refuel, they're blind out there.", 'Good trap. Turn it around, fast!'],
     panic: ['On deck! Refuel and relaunch, we need that radar!', 'Caught a wire! Get it fuelled, now!']
   },
   heliUp: {
@@ -361,8 +361,8 @@ const OPS_UNARMED = {
     panic: ['on deck! Get the wounded off!', 'down — that was too close!', 'on deck — we took some hits!']
   }
 };
-/* returns [text, hot]: hot lines keep their priority during combat; a = the aircraft (unarmed ones get OPS_UNARMED in combat) */
-function opsLine(key, c, a) { const u = AUD.armed && a && !a.spec.armed && OPS_UNARMED[key]; return [radioLine(u || OPS[key], { c: c || '' }), AUD.armed]; }
+/* returns [text, hot]: hot lines keep their priority during combat; a = the aircraft ({c} = its callsign; unarmed ones get OPS_UNARMED in combat) */
+function opsLine(key, a) { const u = AUD.armed && !a.spec.armed && OPS_UNARMED[key]; return [radioLine(u || OPS[key], { c: a.callsign }), AUD.armed]; }
 
 /* ===== Combat chatter by stress tier ===== */
 const COMBAT = {

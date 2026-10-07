@@ -302,8 +302,8 @@ class FixedWing extends Aircraft {
         if (this.onLift && this.ds > 2.8) { this.onLift = false; L.busy = null; }
         if (this.followDeck(dt)) {
           this.state = 'hold'; this.t = 0;
-          const [c, hot] = opsLine('launchClear', this.callsign, this); RADIO.say(RADIO_NAMES.carrier, c, { role: 'ship', hot });
-          this.say(opsLine('launchReady', null, this)[0], { delay: 0.2, hot });
+          const [c, hot] = opsLine('launchClear', this); RADIO.say(RADIO_NAMES.carrier, c, { role: 'ship', hot });
+          this.say(opsLine('launchReady', this)[0], { delay: 0.2, hot });
         }
         break;
       case 'hold':
@@ -324,7 +324,7 @@ class FixedWing extends Aircraft {
           this.pickOrbit(true); this.pathToOrbit(P, p1, headingOf(f), 0.9);
           this.fly(P, this.v, S.speed);
           this.fwd.copy(f); this.state = 'climb'; this.airT = 0;
-          { const [l, hot] = opsLine(this.isAwacs ? 'awacsUp' : 'airborne'); this.say(l, { delay: 0.6, hot }); }
+          { const [l, hot] = opsLine(this.isAwacs ? 'awacsUp' : 'airborne', this); this.say(l, { delay: 0.6, hot }); }
         }
         break;
       }
@@ -340,7 +340,7 @@ class FixedWing extends Aircraft {
           const P = new FlightPath().addDubins(this.mesh.position, headingOf(this.fwd), gate, headingOf(adw), S.turnR).addLine(gate, this.TDw);
           this.finalS = P.lastDubinsEnd;
           this.fly(P, this.orbit.v, S.approachV); this.state = 'approach';
-          { const [l, hot] = opsLine('approach', null, this); this.say(l, { hot }); }
+          { const [l, hot] = opsLine('approach', this); this.say(l, { hot }); }
         }
         break;
       case 'approach':
@@ -348,7 +348,7 @@ class FixedWing extends Aircraft {
         glow = 0.3;
         if (this.state === 'approach' && this.ps >= this.finalS) {
           this.state = 'final';
-          { const [l, hot] = opsLine('callBall', this.callsign); RADIO.say(RADIO_NAMES.lso, l, { role: 'ship', hot }); }
+          { const [l, hot] = opsLine('callBall', this); RADIO.say(RADIO_NAMES.lso, l, { role: 'ship', hot }); }
           this.say(`${S.ballName} ball, ${rand(2.8, 5.5).toFixed(1)}.`, { delay: 0.3, hot: AUD.armed });
         }
         if (this.followPath(dt)) { this.state = 'trap'; this.ls = 4; this.v = S.approachV; this.trapDecel = this.v * this.v / 16; }
@@ -359,7 +359,7 @@ class FixedWing extends Aircraft {
         const p = A.A0.clone().addScaledVector(A.AD, this.ls);
         this.deckPose(p.x, p.z, Math.atan2(-A.AD.z, A.AD.x), 0); glow = 0.15;
         if (this.v <= 0.2) {
-          { const [l, hot] = opsLine('trap', null, this); RADIO.say(RADIO_NAMES.lso, l, { role: 'ship', hot }); }
+          { const [l, hot] = opsLine('trap', this); RADIO.say(RADIO_NAMES.lso, l, { role: 'ship', hot }); }
           const E = A.A0.clone().addScaledVector(A.AD, this.ls), E2 = E.clone().addScaledVector(A.AD, 1.3);
           const pts = [[E.x, E.z], [E2.x, E2.z]];
           // park on deck if there is room; now and then (or when full) strike below via the elevator
@@ -461,7 +461,7 @@ class Helicopter extends Aircraft {
           const P = new FlightPath(); this.pickOrbit(true); this.pathToOrbit(P, this.mesh.position.clone(), headingOf(f), 0.7);
           this.fly(P, 1.5, S.speed); this.state = 'depart';
           if (this.pad && this.pad.busy === this) this.pad.busy = null;
-          { const [l, hot] = opsLine('heliUp', null, this); this.say(l, { hot }); }
+          { const [l, hot] = opsLine('heliUp', this); this.say(l, { hot }); }
         }
         break;
       case 'depart': air = 1; this.rotor = 1; if (this.followPath(dt)) this.state = 'orbit'; break;
@@ -473,14 +473,14 @@ class Helicopter extends Aircraft {
           const P0 = this.hostToWorld(s.x, this.host.deckY + 4, s.z), f = this.hostFwd(new V3());
           this.fly(new FlightPath().addDubins(this.mesh.position, headingOf(this.fwd), P0, headingOf(f), S.turnR), this.orbit.v, 0.7);
           this.state = 'ret';
-          { const [l, hot] = opsLine('heliCleared', this.callsign); RADIO.say(this.host.radio || RADIO_NAMES.carrier, l, { role: 'ship', hot }); }
+          { const [l, hot] = opsLine('heliCleared', this); RADIO.say(this.host.radio || RADIO_NAMES.carrier, l, { role: 'ship', hot }); }
         }
         break;
       case 'ret': air = 1; this.rotor = 1; if (this.followPath(dt)) { this.state = 'hover'; this.t = 0; this.v = 0; } break;
       case 'hover': air = 1; this.deckPose(s.x, s.z, s.yaw, 4 + Math.sin(this.t * 2) * 0.05); if (this.t > 1.2) { this.state = 'descend'; this.t = 0; } break;
       case 'descend':
         air = 1; this.deckPose(s.x, s.z, s.yaw, 4 * (1 - smoothstep(0, 3.5, this.t)));
-        if (this.t > 3.5) { this.state = 'spindown'; this.t = 0; const [l, hot] = opsLine('heliDown', null, this); this.say(l, { hot }); }
+        if (this.t > 3.5) { this.state = 'spindown'; this.t = 0; const [l, hot] = opsLine('heliDown', this); this.say(l, { hot }); }
         break;
       case 'spindown':
         this.rotor = Math.max(0, 1 - this.t / 3.5); this.deckPose(s.x, s.z, s.yaw, 0);
