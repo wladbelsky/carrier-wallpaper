@@ -15,8 +15,9 @@ const tankWaiting = a => a.state === 'tank_wait' || a.state === 'cbt_tank';   //
 const tankWing = (k, side) => [1.5 + 0.7 * k, side * (2.9 + 2.4 * k), 0.1 + 0.1 * k];
 
 const TANKER = registerMissionWorld({
-  ev: null, timer: rand(40, 80),
-  reset() { this.ev = null; this.timer = rand(40, 80); },
+  // first pass 3-5 min after a start / rebuild: the tanker is launched ~90 s before it, not with the first flights
+  ev: null, timer: rand(180, 300),
+  reset() { this.ev = null; this.timer = rand(180, 300); },
   update(dt) {
     if (this.ev) { this.tick(this.ev, dt); return; }
     const combat = combatOn();

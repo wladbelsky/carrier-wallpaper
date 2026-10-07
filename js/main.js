@@ -510,7 +510,7 @@ const engaged = a => a.inCombat && !a.landReq && !a.tank;   // a flight away ref
 function autoLaunch(joinOnly) {
   const cands = [], armed = AUD.armed;
   for (const all of flightGroups().values()) {
-    if (!all.every(settled)) continue;
+    if (!all.every(settled) || all[0].spec.tanker) continue;   // the tanker goes up for refuelling passes only (TANKER / scrambleSupport)
     const down = all.filter(isDown); if (!down.length) continue;
     const split = down.length < all.length;     // part of the flight is already up: send the rest to join it
     if (joinOnly && !split) continue;

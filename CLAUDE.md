@@ -33,7 +33,7 @@ User-facing docs: `README.md` (keep it in sync when behaviour or properties chan
 
 ## Rules / conventions
 - **After changing any JS/CSS file, bump the cache-buster** `?v=N` on all `<script>`/`<link>` tags in
-  `index.html` (WE's CEF caches aggressively). Current: `v=57`.
+  `index.html` (WE's CEF caches aggressively). Current: `v=58`.
 - **New WE property**: add it to `project.json`, read it in `applyUserProperties` (`main.js`) into `CFG`,
   then run `python tools/gen_properties.py`. Property `order` decides the browser-drawer group
   (0–9 camera/time, 10–19 audio/combat, 20–29 sea, 30–39 panel, 40–49 air wing, 50–59 hull number).
@@ -110,8 +110,9 @@ Missions fly beyond the screen edge while there is no music. `dispatchFlight` (`
 
 ## Refuelling passes (`js/tanker.js`)
 `TANKER` is registered with `registerMissionWorld` (updated every step after the aircraft, reset in `buildAirWing`).
-- **Trigger:** in peace every 5–9 min (4–7 min timer + gathering), in combat every 35–70 s while `AUD.fighting`; if nobody is ready it looks again in
-  8–15 s. With auto flight ops a down tanker is launched ~90 s before a peacetime pass is due (`launchTanker`), and
+- **Trigger:** the first 3–5 min after a start / rebuild, then in peace every 5–9 min (4–7 min timer + gathering), in combat every 35–70 s while `AUD.fighting`; if nobody is ready it looks again in
+  8–15 s. With auto flight ops a down tanker is launched ~90 s before a peacetime pass is due (`launchTanker`; `autoLaunch` never
+  launches it, in combat `scrambleSupport` does), and
   `autoRecover` keeps a tanker up for `TANKER_STATION` (300 s) and never recovers it while a pass is due (`TANKER.timer < 120`). Needs a tanker in `orbit` (`airT > 20`) plus armed
   fixed-wing jets of one flight — in peace those in `orbit` (`airT ≥ 10`, part of a flight is fine), in combat idle
   `cbt_wait` fighters (`AIRWAR.idle`). Up to 4 receivers. `TANKER.start()` forces one when possible.
