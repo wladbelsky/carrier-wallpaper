@@ -25,7 +25,7 @@ User-facing docs: `README.md` (keep it in sync when behaviour or properties chan
 | `js/missions.js` | missions: `Leg` steps, `Mission` types (`patrol`, `cod`, `sling`, `ship`, `pilot`), `pickMission`, mission-world objects `CARGO` / `VESSELS` / `ROPES` — see "Missions" |
 | `js/combat.js` | enemies: `ENEMY_TYPES` (Su-25/33/47/57 — model builders live in `airframes.js`; speed, altitude, hp, anti-ship missile chance, stress-based weight), vampires, boats, dogfight bandits (`duel`, flying a pass path), beat-synced hit resolution, ship damage |
 | `js/airwar.js` | `AIRWAR`: combat passes — armed aircraft wait off-screen (`cbt_wait`) and cross the screen chasing / chased by a dogfight bandit or hunting boats; screen helpers (`ndc`, `onScreen`, `groundAt`), pass weapons on the beat (`AIRWAR.onBeat`), pass radio |
-| `js/tanker.js` | `TANKER` (a mission-world object): refuelling passes — an MQ-25 and a fighter flight cross the screen together, receivers take turns in the basket, their `airT` is reset (see "Refuelling passes") |
+| `js/tanker.js` | `TANKER` (a mission-world object): refuelling passes — an MQ-25 and a fighter flight cross the screen together, one random receiver in the basket per pass (the rest fly along on the wings), their `airT` is reset (see "Refuelling passes") |
 | `js/main.js` | WE property listener, scene init, audio analysis + `onBeat`, weapons, ships, missions, chatter, panel UI, main loop |
 | `js/properties.js` | **generated** from `project.json` — do not edit by hand |
 | `js/settings.js` | browser-only settings drawer, demo beat, audio-file player (returns early inside WE) |
@@ -33,7 +33,7 @@ User-facing docs: `README.md` (keep it in sync when behaviour or properties chan
 
 ## Rules / conventions
 - **After changing any JS/CSS file, bump the cache-buster** `?v=N` on all `<script>`/`<link>` tags in
-  `index.html` (WE's CEF caches aggressively). Current: `v=59`.
+  `index.html` (WE's CEF caches aggressively). Current: `v=60`.
 - **New WE property**: add it to `project.json`, read it in `applyUserProperties` (`main.js`) into `CFG`,
   then run `python tools/gen_properties.py`. Property `order` decides the browser-drawer group
   (0–9 camera/time, 10–19 audio/combat, 20–29 sea, 30–39 panel, 40–49 air wing, 50–59 hull number).
@@ -121,8 +121,9 @@ Missions fly beyond the screen edge while there is no music. `dispatchFlight` (`
   (to an orbit via `Aircraft.edgeToOrbit`, shared with `cbt_rtb`). `Aircraft.aloft` (airborne / mission / combat /
   refuelling) is the "up" predicate for landing requests and F-14 sweep; auto-recovery skips flights with `a.tank`. Combat receivers stay in `cbt_tank` (hidden, still `inCombat`) and return to `cbt_wait`.
   Abort after 45 s if someone never arrives. Receivers get `airT = 0` at the end.
-- **Formation:** slots `[gap behind along the path, side offset, height]` (`TANK_BASKET`, `tankWing`); waiting receivers
-  on the right wing, finished ones on the left, so no paths cross on a swap. Receivers fly their own `ps` plus a capped
+- **Formation:** slots `[gap behind along the path, side offset, height]` (`TANK_BASKET`, `tankWing`). One receiver
+  (`ev.cur`, random, fixed for the pass) is in the basket; those before it in `recv` fly on the left wing (done),
+  those after it on the right (still to go) — no swaps on screen. Receivers fly their own `ps` plus a capped
   correction toward `tanker.ps − gap`; `ev.n` / `ev.tkN` tell whether the tanker already moved this step (the update
   order in `AIRCRAFT` is arbitrary). `followPath` takes `pathOff` (side) and `pathDy` (height).
 - New airborne states are in `AIR_STATES` (persist restores them into orbit; the event is dropped).

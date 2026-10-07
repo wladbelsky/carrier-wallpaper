@@ -1,7 +1,8 @@
 'use strict';
 /* ===== Aerial refuelling passes (MQ-25 tanker) =====
    Now and then an airborne tanker and a fighter flight leave the screen and then cross it together: the tanker leads
-   with its hose out, one receiver in the basket, the others waiting on its right wing; they take turns. Afterwards the
+   with its hose out and one receiver in the basket for the whole pass (picked at random); the rest of the flight flies
+   along — the ones already topped off on its left wing, the ones still to go on its right (refuelled off-screen). Afterwards the
    flight's time in the air is reset and it goes back to its orbit (in combat: back to the fight, cbt_wait); the tanker
    returns to its orbit.
    States: tank_out (flying off-screen) → tank_wait (hidden until everyone is there) → tank_pass → tank_back (to the orbit).
@@ -9,7 +10,7 @@
    pass in it. FixedWing.updateState hands an aircraft with a.tank = <event> to TANKER.fly.                           */
 Object.assign(STATUS, { tank_out: ['TANKER ▶', 'air'], tank_wait: ['TANKING', 'air'], tank_pass: ['REFUELING', 'air'], tank_back: ['RETURN', 'air'], cbt_tank: ['REFUELING', 'air'] });
 // slots as [gap behind the tanker along the path, side offset (+ = right), height]: the basket hangs off the left-wing pod;
-// receivers still waiting hold on the right wing, the ones done move out to the left (no crossing paths on a swap)
+// receivers still to go hold on the right wing, the ones done on the left
 const TANK_BASKET = [3.2, -0.53, -0.24];
 const tankWaiting = a => a.state === 'tank_wait' || a.state === 'cbt_tank';   // off-screen, ready for the pass
 const tankWing = (k, side) => [1.5 + 0.7 * k, side * (2.9 + 2.4 * k), 0.1 + 0.1 * k];
@@ -47,7 +48,8 @@ const TANKER = registerMissionWorld({
     }
     if (!flights.length) return false;
     const recv = wpick(flights.map(l => ({ l, w: 1 + Math.min(...l.map(a => a.airT)) / 60 }))).l.sort((a, b) => csNum(a) - csNum(b)).slice(0, 4);
-    const tanker = pick(tankers), ev = this.ev = { tanker, recv, all: [tanker, ...recv], combat, t: 0, P: null, cur: 0, intro: false, outro: false,
+    // one jet in the basket for the whole pass, picked at random: those before it are done (left wing), those after it wait (right)
+    const tanker = pick(tankers), ev = this.ev = { tanker, recv, all: [tanker, ...recv], combat, t: 0, P: null, cur: randi(0, recv.length - 1), intro: false, outro: false,
       F: flightOf(recv[0]), o: combat ? { cat: 'combat', prio: 1 } : { prio: 1 } };   // radio: flight name, options
     for (const a of ev.all) { a.tank = ev; a.passDone = false; a.cbtDelay = null; }
     this.out(ev.tanker);
@@ -62,7 +64,7 @@ const TANKER = registerMissionWorld({
   /* everyone is off-screen: one pass edge to edge, the tanker leading */
   board(ev) {
     const n = ev.recv.length, lead = 12 + n * 2.5, P = ev.P = AIRWAR.screenPass(rand(14, 18), 34, lead);
-    ev.v = ev.tanker.spec.speed * 0.85; ev.s0 = lead + 10; ev.s1 = P.length - 12;   // the stretch on screen
+    ev.v = ev.tanker.spec.speed * 0.85;
     const put = (a, ps, state) => {
       a.fly(P, ev.v, ev.v); a.ps = ps; a.state = state; a.t = 0; a.mesh.visible = true; a.bank = 0;
       a.fwd.copy(P.sample(ps).dir).setY(0).normalize();
@@ -120,7 +122,7 @@ const TANKER = registerMissionWorld({
     this.ev = null;
   },
 
-  /* the event: start the pass once everyone waits off-screen, swap receivers, radio */
+  /* the event: start the pass once everyone waits off-screen, radio */
   tick(ev, dt) {                                             // after all aircraft have moved this step
     ev.t += dt; ev.n = (ev.n || 0) + 1;
     if (!ev.P) {
@@ -128,16 +130,12 @@ const TANKER = registerMissionWorld({
       else if (ev.t > 45) this.abort(ev);
       return;
     }
-    const tk = ev.tanker, n = ev.recv.length, u = (tk.ps - ev.s0) / Math.max(1, ev.s1 - ev.s0), L = TANKER_LINES;
+    const tk = ev.tanker, rc = ev.recv[ev.cur], L = TANKER_LINES;
     if (!ev.intro && tk.state === 'tank_pass' && AIRWAR.onScreen(tk.mesh.position, -0.1)) {
-      ev.intro = true; this.say(ev, tk, L.join); this.say(ev, ev.recv[ev.cur], L.contact, null, 2.5);
-    }
-    if (ev.cur < n - 1 && u > (ev.cur + 1) / n) {           // next receiver into the basket
-      const prev = ev.recv[ev.cur++], next = ev.recv[ev.cur];
-      if (ev.intro && !ev.outro) { this.say(ev, prev, L.full); this.say(ev, tk, L.next, next.callsign, 1.2); this.say(ev, next, L.contact, null, 3.5); }
+      ev.intro = true; this.say(ev, tk, L.join, rc.callsign); this.say(ev, rc, L.contact, null, 2.5);
     }
     if (ev.intro && !ev.outro && tk.state === 'tank_pass' && !AIRWAR.onScreen(tk.mesh.position, 0.05)) {
-      ev.outro = true; this.say(ev, tk, L.done, null, 0.5); if (Math.random() < 0.5) this.say(ev, ev.recv[0], L.thanks, null, 2);
+      ev.outro = true; this.say(ev, rc, L.full); this.say(ev, tk, ev.cur < ev.recv.length - 1 ? L.doneMore : L.done, null, 1.2); if (Math.random() < 0.5) this.say(ev, ev.recv[0], L.thanks, null, 2.5);
     }
     for (const a of ev.all) if (a.tank === ev && !a.passDone) return;
     this.ev = null;

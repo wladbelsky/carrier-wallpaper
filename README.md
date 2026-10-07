@@ -54,8 +54,9 @@ Each destroyer can also carry one MH-60 (optional).
   Now and then a flight on station moves to a new distance, easing in and out smoothly.
 - Landing gear retracts in flight.
 - **Aerial refuelling:** now and then the MQ-25 and a fighter flight leave the screen and cross it together, the
-  tanker leading with its hose out. One jet at a time plugs into the basket while the others wait on the tanker's right
-  wing; the ones done move out to the left. The radio follows (cleared to the basket, contact, topped off). The flight
+  tanker leading with its hose out. One jet is in the basket for the whole pass; the rest of the flight flies along —
+  those already topped off on the tanker's left wing, those still to go on its right (at random: all done, all
+  waiting or a mix; they refuel off-screen). The radio follows (cleared to the basket, contact, topped off). The flight
   then goes back to its orbit with a full sortie ahead (its time in the air starts again). In peace this happens about every 5–10
   minutes (the tanker goes up only for that — about a minute and a half before a pass — and stays on station at least
   5 minutes; the first pass comes 3–5 minutes after start),

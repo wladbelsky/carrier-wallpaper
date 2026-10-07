@@ -703,32 +703,33 @@ LINES.falseAlarm = [
 
 /* ===== Refuelling passes (js/tanker.js) — {F} the flight, {C} a receiver, {A} the tanker ===== */
 const TANKER_LINES = {
-  join: {   // tanker, as the pass comes on screen
-    peace: ['{F} flight, {A} on station. Cleared to the basket.', '{F} flight, tanker track is steady. Join on my right wing.',
-      '{F} flight, {A}. Basket is out, plenty to give.', '{F} flight, you are cleared to join. Lead plugs first.'],
-    calm: ['{F} flight, gas on station, make it quick.', '{F} flight, {A}. Basket is out, plug in and get back in the fight.',
-      '{F} flight, cleared to join. Keep it tight, bandits in the area.'],
-    panic: ['{F} flight, get in here and take your gas, fast!', "{F} flight, I can't stay out here long! Plug in now!"]
+  join: {   // tanker, as the pass comes on screen — {C} is the jet in the basket (one per pass, the rest off-screen)
+    peace: ['{F} flight, {A} on station. {C}, cleared to the basket.', '{F} flight, tanker track is steady. {C}, you are up.',
+      '{F} flight, {A}. Basket is out, plenty to give. {C}, cleared contact.', '{C}, {A}. Stabilized, cleared to the basket.'],
+    calm: ['{F} flight, gas on station, make it quick. {C}, plug in.', '{C}, {A}. Basket is out, take it and get back in the fight.',
+      '{F} flight, keep it tight, bandits in the area. {C}, cleared contact.'],
+    panic: ['{C}, get in here and take your gas, fast!', "{F} flight, I can't stay out here long! {C}, plug in now!"]
   },
   contact: {   // receiver, in the basket
     peace: ['{C}, contact. Taking fuel.', '{C} in the basket. Good flow.', '{C}, contact. Fuel flowing.'],
     calm: ['{C}, contact! Taking fuel.', '{C} plugged. Fill me up, quick.', '{C}, contact. Hurry it up.'],
     panic: ['{C}, contact! Come on, come on!', "{C}'s in! Give me everything you can!"]
   },
-  next: {   // tanker, next receiver
-    peace: ['{C}, cleared to the basket.', '{C}, your turn. Basket is steady.', '{C}, cleared astern, then contact.'],
-    calm: ['{C}, you are next. Plug in.', '{C}, cleared to the basket, quick.'],
-    panic: ['{C}, in now! Go, go!', '{C}, plug in, we are running out of time!']
-  },
   full: {   // receiver, done
-    peace: ['{C}, topped off. Disconnecting.', '{C} full. Moving to the left wing.', '{C}, disconnect. Thanks for the gas.'],
+    peace: ['{C}, topped off. Disconnecting.', '{C} full. Clear of the basket.', '{C}, disconnect. Thanks for the gas.'],
     calm: ['{C}, topped off. Disconnecting.', '{C} full, breaking away.'],
     panic: ['{C}, enough! Disconnecting!', '{C} has enough, breaking off!']
   },
-  done: {   // tanker, leaving the screen
+  done: {   // tanker, leaving the screen — the whole flight is full
     peace: ['{F} flight, all topped off. {A} returning to station.', 'All receivers clear. {A} back to the track.', '{F} flight, you are clear. Have a good one.'],
     calm: ['{F} flight, all topped off. Go get them.', '{F} flight, clear of the basket. Back to the fight.'],
     panic: ['{F} flight, that is all I can give, get back in there!', '{F} flight, go! {A} is pulling out!']
+  },
+  doneMore: {   // tanker, leaving the screen — some of the flight still to go (they refuel off-screen)
+    peace: ['{F} flight, {A} continuing on the track. Next receiver, stand by.', 'Basket clear. {A} holding the track for the rest of you.',
+      '{F} flight, stay with me until everyone is full.'],
+    calm: ['{F} flight, keep it moving. Next one in, quick.', 'Basket clear. Next receiver, plug in and get back in the fight.'],
+    panic: ['Next one, get in here, fast!', "{F} flight, hurry up, I can't hold this track forever!"]
   },
   thanks: {   // the lead receiver, at the end
     peace: ['Thanks for the gas, {A}.', 'Appreciate it, {A}. See you next round.', 'Good tanking, {A}.'],
