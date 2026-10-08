@@ -59,22 +59,70 @@ test('peacetime pass: the flight joins the tanker, one jet in the basket, everyo
   expect(await wp.stuck()).toEqual([]);
 });
 
-test('combat pass: receivers wait off-screen in combat and return to the fight', async ({ wp }) => {
+test('no refuelling passes start in combat', async ({ wp }) => {
   await ready(wp);
   await wp.run(() => __t.forceFight());
-  const idle = await wp.until(() => AIRWAR.idle(FixedWing).filter(a => a.spec.armed && a.airT > 30).length > 0, 200);
-  expect(idle.done).toBe(true);
-  const ok = await wp.run(() => { const ok = TANKER.start(); window.TANKER_RECV = ok ? TANKER.ev.recv.slice() : []; return ok; });
-  expect(ok).toBe(true);
-  expect(await wp.run(() => TANKER.ev.combat && TANKER.ev.recv.every(a => a.state === 'cbt_tank'))).toBe(true);
+  await wp.sim(40);
+  expect(await wp.run(() => TANKER.start())).toBe(false);
+  await wp.run(() => { TANKER.timer = 0; });
+  const r = await wp.sim(180);
+  expect(r.violations).toEqual([]);
+  expect(await wp.run(() => ({ ev: TANKER.ev, tank: AIRCRAFT.filter(a => a.tank).length }))).toEqual({ ev: null, tank: 0 });
+});
+
+test('a fight starting while the flight gathers off-screen calls the pass off', async ({ wp }) => {
+  await ready(wp);
+  expect(await wp.run(() => TANKER.start())).toBe(true);
+  await wp.sim(2);
+  expect(await wp.run(() => !!TANKER.ev && !TANKER.ev.P)).toBe(true);   // still gathering
+  await wp.run(() => { window.__h0 = new Map(__f.filter(a => a.state === 'tank_out').map(a => [a, Math.atan2(a.fwd.z, a.fwd.x)])); __t.forceFight(); });
+  await wp.sim(0.1);
+  expect(await wp.run(() => TANKER.ev)).toBeNull();
+  // those still flying out turn back smoothly: no heading snap in the step the pass is called off
+  const snap = await wp.run(() => Math.max(0, ...[...__h0].map(([a, h]) => { const d = Math.atan2(a.fwd.z, a.fwd.x) - h; return Math.abs(Math.atan2(Math.sin(d), Math.cos(d))); })));
+  expect(snap, 'heading change in one step (rad)').toBeLessThan(0.3);
+  const back = await wp.until(() => !AIRCRAFT.some(a => a.tank || __t.TANK_STATES.has(a.state)), 400);
+  expect(back.violations).toEqual([]);
+  expect(back.done, JSON.stringify(await wp.states())).toBe(true);
+  // the fighters join the fight; the tanker stays up on its orbit
+  const r = await wp.until(() => __f.filter(a => a.spec.armed).some(a => a.inCombat), 120);
+  expect(r.done).toBe(true);
+  expect(await wp.run(() => AIRCRAFT.find(a => a.spec.tanker).state)).toBe('orbit');
+});
+
+test('a pass already on screen when a fight starts is flown to the end', async ({ wp }) => {
+  await ready(wp);
+  await wp.run(() => TANKER.start());
+  const on = await wp.until(() => !!TANKER.ev && !!TANKER.ev.P, 400);
+  expect(on.done).toBe(true);
+  await wp.run(() => __t.forceFight());
   const seen = await runPass(wp, 400);
   expect(seen.done).toBe(true);
-  expect(seen.boarded).toBe(true);
   expect(seen.badSlots.slice(0, 5)).toEqual([]);
-  // receivers are back in the fight at once; the tanker flies tank_back to its orbit (keeping a.tank until it is there)
-  expect(await wp.run(() => TANKER_RECV.every(a => a.state.startsWith('cbt_') && a.state !== 'cbt_tank' && !a.tank))).toBe(true);
-  const home = await wp.until(() => !AIRCRAFT.some(a => a.tank) && AIRCRAFT.find(a => a.spec.tanker).state === 'orbit', 300);
-  expect(home.done, JSON.stringify(await wp.states())).toBe(true);
+  const back = await wp.until(() => !AIRCRAFT.some(a => a.tank || __t.TANK_STATES.has(a.state)), 400);
+  expect(back.done, JSON.stringify(await wp.states())).toBe(true);
+});
+
+test('in combat the AWACS is scrambled, the tanker is not; a tanker already up stays up, passes resume after', async ({ wp }) => {
+  await wp.boot();
+  await wp.run(() => { CFG.auto = false; CFG.missions = 0; CFG.flyby = 0; buildAirWing(); TANKER.timer = 1e9; CFG.auto = true; __t.forceFight(); });
+  const r = await wp.sim(180);
+  expect(r.violations).toEqual([]);
+  const st = await wp.run(() => ({ awacs: AIRCRAFT.find(a => a.isAwacs).state, tanker: AIRCRAFT.find(a => a.spec.tanker).state }));
+  expect(st.awacs).not.toMatch(/^(parked|hangar)$/);
+  expect(st.tanker).toMatch(/^(parked|hangar)$/);
+  // a tanker launched in peace stays on station through a fight, then passes resume
+  await ready(wp);
+  await wp.run(() => { CFG.auto = true; __t.forceFight(); });
+  const fight = await wp.sim(240);
+  expect(fight.violations).toEqual([]);
+  expect(await wp.run(() => { const t = AIRCRAFT.find(a => a.spec.tanker); return [t.state, t.landReq]; })).toEqual(['orbit', false]);
+  await wp.run(() => __t.fightOff());
+  const calm = await wp.until(() => !AUD.armed, 30);
+  expect(calm.done).toBe(true);
+  await wp.run(() => { TANKER.timer = 5; });
+  const pass = await wp.until(() => !!TANKER.ev, 300);
+  expect(pass.done, 'a refuelling pass after the fight').toBe(true);
 });
 
 test('a pass that cannot assemble in 45 s is aborted and everyone goes back', async ({ wp }) => {

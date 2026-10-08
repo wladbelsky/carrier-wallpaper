@@ -8,7 +8,7 @@
 
   // states in which an aircraft is on a mission leg (registerLeg in missions.js) / a refuelling pass (tanker.js)
   H.MISSION_STATES = new Set(['mission_out', 'mission', 'mission_back', 'sling_to', 'sling_hook', 'sling_drop', 'ship_out', 'ship_hover', 'ship_watch']);
-  H.TANK_STATES = new Set(['tank_out', 'tank_wait', 'tank_pass', 'tank_back', 'cbt_tank']);
+  H.TANK_STATES = new Set(['tank_out', 'tank_wait', 'tank_pass', 'tank_back']);
   H.CAT_STATES = new Set(['queued', 'taxi_out', 'hold', 'launch']);
   // who may hold the landing area (from 'orbit' straight into approach; released while taxiing clear) / an elevator
   H.RUNWAY_STATES = new Set(['approach', 'final', 'trap', 'taxi_in', 'taxi_stage', 'wait_lift', 'turn']);
@@ -20,7 +20,7 @@
     tank_out: 240, tank_back: 300, tank_pass: 240, mission_out: 400, mission_back: 600, sling_to: 300, sling_hook: 120, sling_drop: 400,
     ship_out: 600 };
   H.DEFAULT_LIMIT = 600;
-  H.EXEMPT = new Set(['parked', 'hangar', 'orbit', 'cbt_wait', 'mission', 'ship_hover', 'ship_watch', 'tank_wait', 'cbt_tank',
+  H.EXEMPT = new Set(['parked', 'hangar', 'orbit', 'cbt_wait', 'mission', 'ship_hover', 'ship_watch', 'tank_wait',
     'queued', 'lift_wait', 'wait_lift', 'pad_wait']);   // waiting states depend on traffic: checked by "eventually" tests instead
 
   H.rt = () => rt;

@@ -503,7 +503,7 @@ const isDown = a => a.state === 'parked' || a.state === 'hangar';
 const settled = a => isDown(a) || ((a.state === 'orbit' || a.onMission || a.inCombat) && !a.landReq);
 function wpick(cands) { let r = Math.random() * cands.reduce((s, c) => s + c.w, 0); for (const c of cands) if ((r -= c.w) <= 0) return c; return cands[cands.length - 1]; }
 const flightSize = n => n >= 4 && Math.random() < 0.5 ? 2 : n;   // a four-ship flight goes as a pair or as all four
-// in combat: flights come back to rearm now and then (a try on 30 % of the ticks, after 2 min up), the AWACS and the tanker stay up
+// in combat: flights come back to rearm now and then (a try on 30 % of the ticks, after 2 min up), the AWACS and a tanker already up stay up
 const CBT_RECOVER_P = 0.3, CBT_SORTIE = 120;
 const TANKER_STATION = 300;   // in peace the tanker stays up at least 5 min (refuelling passes need it on station)
 const engaged = a => a.inCombat && !a.landReq && !a.tank;   // a flight away refuelling isn't fighting
@@ -522,9 +522,9 @@ function autoLaunch(joinOnly) {
   for (const a of wpick(cands).list) a.requestLaunch();
   return true;
 }
-/* combat: the AWACS and the tanker go up first if they are on deck (one type per call) */
+/* combat: the AWACS goes up first if it is on deck (one type per call); the tanker isn't scrambled (no refuelling in combat) */
 function scrambleSupport() {
-  const sup = AIRCRAFT.filter(a => a.isSupport && !a.retiring);
+  const sup = AIRCRAFT.filter(a => a.isAwacs && !a.retiring);
   for (const key of new Set(sup.map(a => a.spec.key))) {
     const kind = sup.filter(a => a.spec.key === key);
     if (kind.some(a => !isDown(a))) continue;

@@ -34,7 +34,7 @@ User-facing docs: `README.md` (keep it in sync when behaviour or properties chan
 
 ## Rules / conventions
 - **After changing any JS/CSS file, bump the cache-buster** `?v=N` on all `<script>`/`<link>` tags in
-  `index.html` (WE's CEF caches aggressively). Current: `v=61`.
+  `index.html` (WE's CEF caches aggressively). Current: `v=62`.
 - **New WE property**: add it to `project.json`, read it in `applyUserProperties` (`main.js`) into `CFG`,
   then run `python tools/gen_properties.py`. Property `order` decides the browser-drawer group
   (0–9 camera/time, 10–19 audio/combat, 20–29 sea, 30–39 panel, 40–49 air wing, 50–59 hull number).
@@ -44,7 +44,7 @@ User-facing docs: `README.md` (keep it in sync when behaviour or properties chan
   `<key>count` slider in `project.json`.
   Optional `spec` keys: `farOrbit` (orbit range for unarmed types during combat; `armed` types fly combat passes instead),
   `missions` (allow-list of mission type keys, e.g. `['cod']`; `[]` = never sent on missions — see "Missions"),
-  `awacs` / `tanker` (support types, `isSupport`: no auto-recovery in combat, scrambled first), `voice` (key into `OPS_VOICE`),
+  `awacs` / `tanker` (support types, `isSupport`: no auto-recovery in combat; only the AWACS is scrambled for a fight), `voice` (key into `OPS_VOICE`),
   no `ballName` = unmanned (no ball call), `blades` (rotor blade count, for the
   stop-index snap), `noseDown` (helicopter cruise pitch), `callsignGroup`.
   The CMV-22B tiltrotor is a `Helicopter` with `conv` (0 = VTOL, 1 = airplane mode) and `gearDown` getters read by its model.
@@ -111,16 +111,17 @@ Missions fly beyond the screen edge while there is no music. `dispatchFlight` (`
 
 ## Refuelling passes (`js/tanker.js`)
 `TANKER` is registered with `registerMissionWorld` (updated every step after the aircraft, reset in `buildAirWing`).
-- **Trigger:** the first 3–5 min after a start / rebuild, then in peace every 5–9 min (4–7 min timer + gathering), in combat every 35–70 s while `AUD.fighting` (a longer peacetime timer is cut when combat starts); if nobody is ready it looks again every
-  8–15 s for ~90 s, then waits for the next one (so the tanker can be recovered). With auto flight ops a down tanker is launched ~90 s before a peacetime pass is due (`launchTanker`; `autoLaunch` never
-  launches it, in combat `scrambleSupport` does), and
+- **Peace only.** Trigger: the first 3–5 min after a start / rebuild, then every 5–9 min (4–7 min timer + gathering);
+  while `combatOn()` the timer is frozen and `start()` refuses. A fight starting while the event still gathers
+  (`!ev.P`) aborts it; a pass already on screen is flown to the end. If nobody is ready it looks again every
+  8–15 s for ~90 s, then waits for the next one (so the tanker can be recovered). With auto flight ops a down tanker is launched ~90 s before a pass is due (`launchTanker`; `autoLaunch` never
+  launches it, nor does `scrambleSupport` — AWACS only), and
   `autoRecover` keeps a tanker up for `TANKER_STATION` (300 s) and never recovers it while a pass is due (`TANKER.timer < 120`). Needs a tanker in `orbit` (`airT > 20`) plus armed
-  fixed-wing jets of one flight — in peace those in `orbit` (`airT ≥ 10`, part of a flight is fine), in combat idle
-  `cbt_wait` fighters (`AIRWAR.idle`). Up to 4 receivers. `TANKER.start()` forces one when possible.
+  fixed-wing jets of one flight in `orbit` (`airT ≥ 10`, part of a flight is fine). Up to 4 receivers. `TANKER.start()` forces one when possible.
 - **Flow:** participants get `a.tank = ev`; `FixedWing.updateState` hands them to `TANKER.fly` first. `tank_out` (to
   `AIRWAR.offscreenFrom`) → `tank_wait` (hidden) → once all wait, one `AIRWAR.screenPass` → `tank_pass` → `tank_back`
   (to an orbit via `Aircraft.edgeToOrbit`, shared with `cbt_rtb`). `Aircraft.aloft` (airborne / mission / combat /
-  refuelling) is the "up" predicate for landing requests and F-14 sweep; auto-recovery skips flights with `a.tank`. Combat receivers stay in `cbt_tank` (hidden, still `inCombat`) and return to `cbt_wait`.
+  refuelling) is the "up" predicate for landing requests and F-14 sweep; auto-recovery skips flights with `a.tank`.
   Abort after 45 s if someone never arrives. Receivers get `airT = 0` at the end.
 - **Formation:** slots `[gap behind along the path, side offset, height]` (`TANK_BASKET`, `tankWing`). One receiver
   (`ev.cur`, random, fixed for the pass) is in the basket; those before it in `recv` fly on the left wing (done),

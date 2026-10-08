@@ -701,7 +701,8 @@ LINES.falseAlarm = [
   'Radar glitch. False alarm, everyone relax.'
 ];
 
-/* ===== Refuelling passes (js/tanker.js) — {F} the flight, {C} a receiver, {A} the tanker ===== */
+/* ===== Refuelling passes (js/tanker.js) — {F} the flight, {C} a receiver, {A} the tanker =====
+   Passes start only in peace; the combat tiers are for a pass that was already on screen when a fight started. */
 const TANKER_LINES = {
   join: {   // tanker, as the pass comes on screen — {C} is the jet in the basket (one per pass, the rest off-screen)
     peace: ['{F} flight, {A} on station. {C}, cleared to the basket.', '{F} flight, tanker track is steady. {C}, you are up.',

@@ -86,6 +86,10 @@ test('fire intensity 0: combat mode without passes or enemies', async ({ wp }) =
 });
 
 test('a long, heavy fight (high stress) stays within bounds', async ({ wp }) => {
+  // the gunship up first: boats only come in gunship passes
+  await wp.run(() => AIRCRAFT.filter(a => a.spec.key === 'ah1').forEach(a => a.requestLaunch()));
+  const up = await wp.until(() => AIRCRAFT.some(a => a.spec.key === 'ah1' && a.aloft), 300);
+  expect(up.done).toBe(true);
   await wp.run(() => { __t.forceFight(); STRESS.level = 0.9; });
   const seen = await fight(wp, 300);
   expect(seen.kinds.vampire || 0, 'anti-ship missiles at high stress').toBeGreaterThan(0);

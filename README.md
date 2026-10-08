@@ -49,8 +49,8 @@ Each destroyer can also carry one MH-60 (optional).
 - Automatic flight ops work by flights (aircraft sharing a callsign): a four-ship flight launches as
   all four or as its lead pair (chosen at random), the second pair usually follows soon to join it,
   and flights are recovered together. About half of the air wing is airborne on average.
-- In combat the AWACS and the tanker stay up (if one is on deck when the fight starts, it launches first) and fighters
-  go first off the deck. Flights come back to rearm only now and then, never the last one still in the fight.
+- In combat the AWACS stays up (if it is on deck when the fight starts, it launches first), a tanker already up stays
+  on its far orbit (it isn't launched for a fight), and fighters go first off the deck. Flights come back to rearm only now and then, never the last one still in the fight.
 - Jets fly turn-radius-limited paths (Dubins curves), so launches, orbits and approaches use wide, realistic turns.
 - Each flight picks its own random orbit distance (wingmen share the lead's); the far orbits run partly off-screen.
   Now and then a flight on station moves to a new distance, easing in and out smoothly.
@@ -59,11 +59,10 @@ Each destroyer can also carry one MH-60 (optional).
   tanker leading with its hose out. One jet is in the basket for the whole pass; the rest of the flight flies along —
   those already topped off on the tanker's left wing, those still to go on its right (at random: all done, all
   waiting or a mix; they refuel off-screen). The radio follows (cleared to the basket, contact, topped off). The flight
-  then goes back to its orbit with a full sortie ahead (its time in the air starts again). In peace this happens about every 5–10
-  minutes (the tanker goes up only for that — about a minute and a half before a pass — and stays on station at least
-  5 minutes; the first pass comes 3–5 minutes after start),
-  in combat every minute or so. In combat the fighters
-  come from the fight off-screen and go back to it. The MQ-25 flies no missions.
+  then goes back to its orbit with a full sortie ahead (its time in the air starts again). This happens only in peace,
+  about every 5–10 minutes (the tanker goes up only for that — about a minute and a half before a pass — and stays on
+  station at least 5 minutes; the first pass comes 3–5 minutes after start). A fight starting while the flight is still
+  gathering off-screen calls the pass off; one already on screen is flown to the end. The MQ-25 flies no missions.
 - The CMV-22B takes off and lands vertically like a helicopter, then tilts its nacelles forward and raises
   its gear to cruise in airplane mode; it converts back as it slows down for landing.
 
@@ -196,7 +195,7 @@ During combat, combat calls go first (contacts, kills, vampires, damage). Routin
 combat versions ("hot deck, launch, launch!") or are dropped if they get stale. Armed and unarmed aircraft
 have their own combat versions: fighters and the AH-1Z go in hot and come back to rearm, the AWACS and the tanker
 talk about the radar picture and the fuel they have to give, and the transport helicopters keep clear of the fight
-(the AWACS and the tanker stay up; the helicopters come back to refuel).
+(the AWACS and a tanker already up stay up; the helicopters come back to refuel).
 
 Urgent calls (unknown contacts, combat start, vampires, hits) cut in over a less important line, and
 lines are shortened when others are waiting, so the radio keeps up with what happens on screen.
@@ -278,7 +277,7 @@ seeded and stepped by the tests, so every run is reproducible. They cover:
   RECOVER ALL, half an hour of automatic flight ops with deck resources (catapults, landing area, parking spots,
   elevators, helicopter pad) checked after every step and a stuck-aircraft detector;
 - **combat**: arming from music, hold / resume / stand-down, passes, waves, missiles and boats, clean-up afterwards;
-- **missions** (every type and on-screen variant), **refuelling passes** (peace, combat, abort), **session state**,
+- **missions** (every type and on-screen variant), **refuelling passes** (peace only, abort, a fight interrupting), **session state**,
   **air wing changes** at runtime, the **control panel** (pages, buttons) and **radio subtitles**;
 - **rendering**: no WebGL errors, draw-call budget, the fleet on screen, day vs night, shadows and their coverage,
   no geometry leaks;
