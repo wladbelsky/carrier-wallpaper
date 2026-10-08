@@ -30,6 +30,7 @@ User-facing docs: `README.md` (keep it in sync when behaviour or properties chan
 | `js/properties.js` | **generated** from `project.json` — do not edit by hand |
 | `js/settings.js` | browser-only settings drawer, demo beat, audio-file player (returns early inside WE) |
 | `tools/gen_properties.py` | regenerates `js/properties.js` |
+| `tools/preview.spec.js` | renders Workshop preview candidates (`powershell -ExecutionPolicy Bypass -File tools/test.ps1 -c tools/preview.config.js` → `test-results/preview-<seed>.jpg`; copy the best over `preview.jpg`) |
 | `tests/`, `playwright.config.js`, `package.json` | automated tests (Playwright Test) — see "Running & testing"; `tools/test.ps1` runs them in Docker, `.github/workflows/tests.yml` in CI |
 
 ## Rules / conventions
