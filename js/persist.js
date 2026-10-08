@@ -4,7 +4,7 @@
    calls PERSIST.restore(): aircraft that were up go straight into an orbit, mission flights are put back out of
    sight already away (Mission.resume). localStorage (WE keeps it per wallpaper); off with CFG.saveState.
    A new airborne aircraft state must be added to AIR_STATES (or start with cbt_) to be remembered. */
-const AIR_STATES = new Set(['orbit', 'climb', 'depart', 'approach', 'final', 'ret']);
+const AIR_STATES = new Set(['orbit', 'climb', 'depart', 'approach', 'final', 'ret', 'tank_out', 'tank_wait', 'tank_pass', 'tank_back']);
 const PERSIST = {
   KEY: 'csg.airwing.v1', timer: 10, announced: false, stressBack: false, last: null,   // last: the JSON last written
   state(a) { return a.mission ? 'mission' : AIR_STATES.has(a.state) || a.inCombat ? 'air' : null; },

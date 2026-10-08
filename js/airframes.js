@@ -298,6 +298,51 @@ function buildE2D(color) {
   };
 }
 
+/* ---------- MQ-25 Stingray — unmanned tanker: dorsal intake, V-tail, refuelling pod under the left wing ---------- */
+function buildMQ25(color) {
+  const g = new THREE.Group(), C = M(color || 0xaeb3b8), C2 = M(0x9aa0a6), D = M(0x33383d);
+  // fuselage: one six-sided loft (chines on the sides, flattened) — nose, body and tail cone share the section
+  const seg = (rBack, rFront, x0, x1, mat) => { const m = cyl(g, rFront, rBack, x1 - x0, 6, mat, (x0 + x1) / 2, 0.3, 0); m.rotation.z = -Math.PI / 2; m.scale.x = 0.62; return m; };
+  seg(0.08, 0.13, -0.86, -0.5, C); seg(0.13, 0.13, -0.5, 0.42, C); seg(0.13, 0.004, 0.42, 0.88, C);
+  taper(g, 0.42, 0.06, 0.15, C, 0.24, 0.39, 0, 0.55, 0.75, -0.08);                // dorsal hump
+  box(g, 0.07, 0.05, 0.12, D, 0.36, 0.4, 0);                                        // flush intake
+  seg(0.05, 0.07, -0.92, -0.86, 0x2a2a2a);                                          // nozzle
+  const inner = [[0.16, 0.1], [-0.2, 0.6], [-0.38, 0.6], [-0.34, 0.1]];
+  prism(g, inner, 0.27, 0.035, C); prism(g, mirrorZ(inner), 0.27, 0.035, C);
+  const pivots = [];
+  for (const s of [1, -1]) {
+    const pv = new THREE.Group(); pv.position.set(0, 0.27, s * 0.6); g.add(pv);
+    const outer = [[-0.2, 0], [-0.56, 0.52], [-0.66, 0.52], [-0.38, 0]];
+    prism(pv, s > 0 ? outer : mirrorZ(outer), 0, 0.03, C);
+    pivots.push({ pv, s });
+  }
+  for (const s of [-1, 1]) { const f = taper(g, 0.3, 0.3, 0.025, C2, -0.6, 0.47, s * 0.1, 0.5, 1, -0.12); f.rotation.x = s * 0.62; }
+  // refuelling store: the hose reels out of its tail, the drogue rides on the end
+  const PX = -0.36, PY = 0.17, PZ = -0.42, HL = 1.0, HA = 0.14;
+  const pod = cyl(g, 0.045, 0.045, 0.38, 6, 0xc8ccd0, -0.17, PY, PZ); pod.rotation.z = Math.PI / 2;
+  const podNose = shade(new THREE.Mesh(new THREE.ConeGeometry(0.045, 0.1, 6), C2)); podNose.rotation.z = -Math.PI / 2; podNose.position.set(0.07, PY, PZ); g.add(podNose);
+  box(g, 0.12, 0.08, 0.02, C2, -0.14, 0.23, PZ);                                    // pylon
+  const hose = new THREE.Group(); hose.position.set(PX, PY, PZ); hose.rotation.z = HA; g.add(hose);
+  const hm = cyl(hose, 0.01, 0.01, 1, 4, 0x2a2a2a, -0.5, 0, 0); hm.rotation.z = Math.PI / 2; hm.castShadow = false;
+  const drogue = new THREE.Group(); g.add(drogue);
+  const dc = shade(new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.09, 8, 1, true), M(0xd9dde0, { side: THREE.DoubleSide })), false); dc.rotation.z = -Math.PI / 2; drogue.add(dc);
+  const gr = gear(g, [[0.5, 0], [-0.12, 0.3], [-0.12, -0.3]], 0.2);
+  const glow = glowSprite(g, -0.95, 0.3, 0, 0.5);
+  mergeStatic(g, [...pivots.map(p => p.pv), gr, hose, drogue]);
+  let ext = 0;
+  return {
+    group: g,
+    setFold(f) { for (const p of pivots) p.pv.rotation.x = -p.s * f * 1.7; },
+    tick(dt, st) {
+      gr.visible = st.gearDown !== false;
+      glow.material.opacity += ((st.glow || 0) - glow.material.opacity) * Math.min(1, dt * 6); const sc = 0.4 + glow.material.opacity * 0.5; glow.scale.set(sc, sc, 1);
+      ext += ((st.hoseOut || 0) - ext) * Math.min(1, dt * 0.9);
+      const L = HL * ext; hose.visible = ext > 0.02; hose.scale.x = Math.max(L, 1e-3);
+      drogue.position.set(PX - 0.03 - L * Math.cos(HA), PY - L * Math.sin(HA), PZ);
+    }
+  };
+}
+
 /* ---------- Helicopter helpers ---------- */
 function heliRotor(g, x, y, n, len, chord, color) {
   const rotor = new THREE.Group(); rotor.position.set(x, y, 0); g.add(rotor);

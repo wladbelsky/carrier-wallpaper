@@ -1,5 +1,7 @@
 # Carrier Strike Group — web wallpaper for Wallpaper Engine
 
+[![tests](https://github.com/wladbelsky/carrier-wallpaper/actions/workflows/tests.yml/badge.svg)](https://github.com/wladbelsky/carrier-wallpaper/actions/workflows/tests.yml)
+
 Isometric carrier strike group: a carrier, two escorting destroyers and a configurable air wing that
 react to the music playing on your PC. Guns, CIWS and aircraft fire to the beat, Ace Combat style radio
 subtitles run at the top of the screen, and the time of day follows your PC clock.
@@ -32,6 +34,7 @@ Aircraft counts are set in the wallpaper properties.
 | F-14 Super Tomcat | variable sweep in flight, 75° oversweep when parked |
 | F-35C Lightning II | outer wing panels fold up |
 | E-2D Hawkeye (AWACS) | Sto-Wing: wings twist and fold back along the fuselage |
+| MQ-25 Stingray (unmanned tanker, up to 2) | outer wing panels fold up |
 | MH-60 Seahawk / CH-53 Sea Stallion / AH-1Z Viper | rotor blades fold aft |
 | CMV-22B Osprey (COD tiltrotor) | blades fold, nacelles tilt forward, the wing turns 90° to lie along the fuselage |
 
@@ -46,10 +49,20 @@ Each destroyer can also carry one MH-60 (optional).
 - Automatic flight ops work by flights (aircraft sharing a callsign): a four-ship flight launches as
   all four or as its lead pair (chosen at random), the second pair usually follows soon to join it,
   and flights are recovered together. About half of the air wing is airborne on average.
+- In combat the AWACS stays up (if it is on deck when the fight starts, it launches first), a tanker already up stays
+  on its far orbit (it isn't launched for a fight), and fighters go first off the deck. Flights come back to rearm only now and then, never the last one still in the fight.
 - Jets fly turn-radius-limited paths (Dubins curves), so launches, orbits and approaches use wide, realistic turns.
 - Each flight picks its own random orbit distance (wingmen share the lead's); the far orbits run partly off-screen.
   Now and then a flight on station moves to a new distance, easing in and out smoothly.
 - Landing gear retracts in flight.
+- **Aerial refuelling:** now and then the MQ-25 and a fighter flight leave the screen and cross it together, the
+  tanker leading with its hose out. One jet is in the basket for the whole pass; the rest of the flight flies along —
+  those already topped off on the tanker's left wing, those still to go on its right (at random: all done, all
+  waiting or a mix; they refuel off-screen). The radio follows (cleared to the basket, contact, topped off). The flight
+  then goes back to its orbit with a full sortie ahead (its time in the air starts again). This happens only in peace,
+  about every 5–10 minutes (the tanker goes up only for that — about a minute and a half before a pass — and stays on
+  station at least 5 minutes; the first pass comes 3–5 minutes after start). A fight starting while the flight is still
+  gathering off-screen calls the pass off; one already on screen is flown to the end. The MQ-25 flies no missions.
 - The CMV-22B takes off and lands vertically like a helicopter, then tilts its nacelles forward and raises
   its gear to cruise in airplane mode; it converts back as it slows down for landing.
 
@@ -64,6 +77,7 @@ helicopter departures and landings, and combat chatter while music is playing.
   - **Helicopters / COD:** Sea Goblin, Osprey, Halo (MH-60), Atlas, Hercules, Titan (CH-53), Viper, Cobra,
     Sweeper (AH-1Z), Sunhawk, Greyhound, Pelican (CMV-22B).
   - **AWACS:** SkyEye, Thunderhead, Eagle Eye, Long Caster, Bandog, Sky Keeper, Dealer.
+  - **Tankers (MQ-25):** Barrel, Pipeline, Gusher, Derrick (oil words, not from the games).
   - **Fly-by aces:** Reaper, Avalanche, Sohei.
   - **Ships:** carrier KESTREL, escorts BUCCANEER (port) and CUTLASS (starboard). The control panel
     lists them with their status (on station / engaging / damaged).
@@ -178,7 +192,10 @@ It changes:
 ## Radio priority
 
 During combat, combat calls go first (contacts, kills, vampires, damage). Routine deck calls switch to their
-combat versions ("hot deck, launch, launch!") or are dropped if they get stale.
+combat versions ("hot deck, launch, launch!") or are dropped if they get stale. Armed and unarmed aircraft
+have their own combat versions: fighters and the AH-1Z go in hot and come back to rearm, the AWACS and the tanker
+talk about the radar picture and the fuel they have to give, and the transport helicopters keep clear of the fight
+(the AWACS and a tanker already up stay up; the helicopters come back to refuel).
 
 Urgent calls (unknown contacts, combat start, vampires, hits) cut in over a less important line, and
 lines are shortened when others are waiting, so the radio keeps up with what happens on screen.
@@ -245,3 +262,32 @@ Settings are saved in `localStorage`; the audio file itself is not. **Reset all 
 URL parameters still work and override stored values: `?hour=22`, `?zoom=150`, `?demo=1`.
 
 If you add a property to `project.json`, run `python tools/gen_properties.py` to refresh `js/properties.js`.
+
+## Tests
+
+Automated tests (Playwright Test, headless Chromium with software WebGL) drive the real page: the simulation is
+seeded and stepped by the tests, so every run is reproducible. They cover:
+
+- **repository**: one cache-buster on every script, every file referenced, `js/properties.js` generated from
+  `project.json`, the project file itself;
+- **units**: flight paths (Dubins curves never turn tighter than the turn radius), radio lines and threat tiers,
+  every line pool and placeholder, mission texts, callsigns, mission picking, sun / sky, the wave shader vs its JS
+  twin, every model builder;
+- **flight logic**: launch and recovery of every aircraft type through its deck / elevator sequence, LAUNCH ALL /
+  RECOVER ALL, half an hour of automatic flight ops with deck resources (catapults, landing area, parking spots,
+  elevators, helicopter pad) checked after every step and a stuck-aircraft detector;
+- **combat**: arming from music, hold / resume / stand-down, passes, waves, missiles and boats, clean-up afterwards;
+- **missions** (every type and on-screen variant), **refuelling passes** (peace only, abort, a fight interrupting), **session state**,
+  **air wing changes** at runtime, the **control panel** (pages, buttons) and **radio subtitles**;
+- **rendering**: no WebGL errors, draw-call budget, the fleet on screen, day vs night, shadows and their coverage,
+  no geometry leaks;
+- **soak**: two hours of simulated life (music and silence, missions, count changes) with all of the above.
+
+Run them locally with Docker (no Node needed):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tools/test.ps1
+```
+
+Pass a file or `-g pattern` to run part of them; `$env:SEED = 7` repeats them with another random seed. GitHub
+Actions runs the same Docker image on every push and pull request.

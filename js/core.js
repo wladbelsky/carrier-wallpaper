@@ -27,7 +27,7 @@ const CFG = {
   fire: 100,          // fire intensity, %
   flyby: 5,           // fly-by frequency 0..10
   auto: true,         // automatic flight ops
-  counts: { fa18: 4, f14: 2, f35: 2, e2d: 1, mh60: 1, ch53: 1, ah1: 1, cmv22: 1 },  // air wing composition
+  counts: { fa18: 4, f14: 2, f35: 2, e2d: 1, mq25: 1, mh60: 1, ch53: 1, ah1: 1, cmv22: 1 },  // air wing composition
   ddHelis: true,      // one transport helicopter on each destroyer
   numbers: { carrier: '07' },  // carrier hull number
   enemies: true,      // enemy aircraft & anti-ship missiles during combat

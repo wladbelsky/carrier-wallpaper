@@ -4,3 +4,6 @@ __pycache__/
 .claude/settings.local.json
 Thumbs.db
 desktop.ini
+node_modules/
+test-results/
+playwright-report/

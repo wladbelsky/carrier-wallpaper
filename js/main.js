@@ -503,28 +503,52 @@ const isDown = a => a.state === 'parked' || a.state === 'hangar';
 const settled = a => isDown(a) || ((a.state === 'orbit' || a.onMission || a.inCombat) && !a.landReq);
 function wpick(cands) { let r = Math.random() * cands.reduce((s, c) => s + c.w, 0); for (const c of cands) if ((r -= c.w) <= 0) return c; return cands[cands.length - 1]; }
 const flightSize = n => n >= 4 && Math.random() < 0.5 ? 2 : n;   // a four-ship flight goes as a pair or as all four
+// in combat: flights come back to rearm now and then (a try on 30 % of the ticks, after 2 min up), the AWACS and a tanker already up stay up
+const CBT_RECOVER_P = 0.3, CBT_SORTIE = 120;
+const TANKER_STATION = 300;   // in peace the tanker stays up at least 5 min (refuelling passes need it on station)
+const engaged = a => a.inCombat && !a.landReq && !a.tank;   // a flight away refuelling isn't fighting
 function autoLaunch(joinOnly) {
-  const cands = [];
+  const cands = [], armed = AUD.armed;
   for (const all of flightGroups().values()) {
-    if (!all.every(settled)) continue;
+    if (!all.every(settled) || all[0].spec.tanker) continue;   // the tanker goes up for refuelling passes only (TANKER / scrambleSupport)
     const down = all.filter(isDown); if (!down.length) continue;
     const split = down.length < all.length;     // part of the flight is already up: send the rest to join it
     if (joinOnly && !split) continue;
     const n = split ? down.length : flightSize(down.length);
-    cands.push({ list: down.slice(0, n), w: (split ? 4 : 1) + down.filter(a => a.state === 'parked').length * 0.5 });
+    const w = (split ? 4 : 1) + down.filter(a => a.state === 'parked').length * 0.5;
+    cands.push({ list: down.slice(0, n), w: armed && down[0].spec.armed ? w * 3 : w });   // in combat fighters go first
   }
   if (!cands.length) return false;
   for (const a of wpick(cands).list) a.requestLaunch();
   return true;
 }
+/* combat: the AWACS goes up first if it is on deck (one type per call); the tanker isn't scrambled (no refuelling in combat) */
+function scrambleSupport() {
+  const sup = AIRCRAFT.filter(a => a.isAwacs && !a.retiring);
+  for (const key of new Set(sup.map(a => a.spec.key))) {
+    const kind = sup.filter(a => a.spec.key === key);
+    if (kind.some(a => !isDown(a))) continue;
+    const all = flightGroups().get(flightOf(kind[0]));
+    if (!all.every(settled)) continue;
+    for (const a of all.filter(isDown)) a.requestLaunch();
+    return true;
+  }
+  return false;
+}
 function autoRecover() {
-  const cands = [];
-  for (const all of flightGroups().values()) {
-    if (!all.every(settled) || all.some(a => a.onMission)) continue;
-    const air = all.filter(a => a.state === 'orbit' && !a.landReq);
+  const armed = AUD.armed;
+  if (armed && Math.random() > CBT_RECOVER_P) return false;
+  const groups = [...flightGroups().values()], cands = [];
+  for (const all of groups) {
+    if (!all.every(settled) || all.some(a => a.onMission || a.tank) || (armed && all.some(a => a.isSupport))) continue;
+    const air = all.filter(a => (a.state === 'orbit' || a.inCombat) && !a.landReq);
     // a pair whose flight-mates are still on deck waits for them to join instead of being recovered
-    if (!air.length || air.length < all.length || air.some(a => a.airT < 25)) continue;
-    cands.push({ list: air, w: 1 + Math.min(...air.map(a => a.airT)) / 60 });   // longest on station first
+    // the tanker isn't recovered while a refuelling pass is due (TANKER.update would launch it again right away)
+    const minUp = armed ? CBT_SORTIE : all[0].spec.tanker ? (TANKER.timer < 120 ? Infinity : TANKER_STATION) : 25;
+    if (!air.length || air.length < all.length || air.some(a => a.airT < minUp)) continue;
+    // an armed flight leaves the fight only while another one stays engaged
+    if (armed && air[0].spec.armed && combatOn() && !groups.some(l => l !== all && l.some(engaged))) continue;
+    cands.push({ list: air, w: armed ? 1 : 1 + Math.min(...air.map(a => a.airT)) / 60 });   // peace: longest on station first
   }
   if (!cands.length) return false;
   for (const a of wpick(cands).list) a.requestLand();
@@ -539,6 +563,7 @@ function autoFlight(dt) {
     const onStation = [...flightGroups().values()].filter(l => l.every(a => a.state === 'orbit' && !a.landReq));
     if (onStation.length) pick(onStation).forEach((a, i) => a.pickOrbit(false, i === 0));
   }
+  if (AUD.armed && scrambleSupport()) return;
   // a pair already up is usually joined by the rest of its flight, even past the air wing cap
   if (Math.random() < 0.7 && autoLaunch(true)) return;
   const busy = AIRCRAFT.filter(a => !isDown(a)).length;
@@ -639,6 +664,7 @@ function dispatchFlight() {
     if (all.some(a => LAUNCHING.has(a.state))) continue;
     const ready = all.filter(a => !isDown(a) && !a.onMission);
     if (!ready.length || ready.some(a => a.state !== 'orbit' || a.landReq)) continue;
+    if (ready[0].spec.missions && !ready[0].spec.missions.length) continue;   // no missions (tanker): not a flight on station either
     onStation++;                                             // counts a pair left behind while the other is away
     // never send part of a flight while its other part is away; members on deck don't block (manual ops)
     if (!all.some(a => a.onMission) && ready.every(a => a.airT > 15)) cands.push({ base, ready, full: ready.length === all.length, size: all.length });

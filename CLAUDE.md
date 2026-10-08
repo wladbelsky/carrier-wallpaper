@@ -8,7 +8,7 @@ User-facing docs: `README.md` (keep it in sync when behaviour or properties chan
 - Plain JS, no build step, no npm. `'use strict'` classic scripts sharing **global** scope
   (no modules). three.js **r149** is vendored as `js/three.min.js` — never edit it.
 - `index.html` loads scripts in dependency order (later files use globals of earlier ones):
-  `core → flightpath → models → airframes → effects → radio → aircraft → missions → persist → combat → airwar → main → properties → settings`,
+  `core → flightpath → models → airframes → effects → radio → aircraft → missions → persist → combat → airwar → tanker → main → properties → settings`,
   then an inline script registers the WE audio listener (or starts the browser demo beat).
   `main.js` calls `init()` at its end, so anything `init()` needs must be defined before `main.js`.
 
@@ -17,22 +17,25 @@ User-facing docs: `README.md` (keep it in sync when behaviour or properties chan
 | `js/core.js` | utils (`V3`, `rand`, `clamp`, `lerp`, `smoothstep`, `pick`…), `CFG` defaults, waves (JS + generated GLSL — keep in sync), sun position, sky palette, canvas textures `TEX` |
 | `js/flightpath.js` | `FlightPath`: Dubins CSC curves (turn-radius-limited flight) + lines |
 | `js/models.js` | mesh helpers (`M`, `box`, `cyl`, `taper`, `prism`…), `mergeStatic`, `disposeTree`, nav lights, searchlights, CIWS/gun mounts, `buildCarrier`, `buildDestroyer`, mission ships `buildFeeder` / `buildTrawler` / `buildCorvette` / `buildDestroyerTemplate` |
-| `js/airframes.js` | aircraft model builders → `{ group, setFold(f), tick(dt, st) }`; `buildWreck` (crashed jet template for pilot rescues) |
+| `js/airframes.js` | aircraft model builders → `{ group, setFold(f), tick(dt, st) }` (`buildMQ25`: refuelling hose reads `st.hoseOut`); `buildWreck` (crashed jet template for pilot rescues) |
 | `js/effects.js` | `Tracers` (InstancedMesh), `SpriteFX` (flash/smoke pools), `Splashes`, `Foam` (points), `FlashLights` |
-| `js/radio.js` | callsigns (+ `ENEMY_NAMES`), `RADIO` subtitle queue, mission orders, `STRESS` + `THREAT_TIERS`, `radioLine()`, line pools `OPS` / `COMBAT` / `AIRWAR_LINES` / `ENEMY_LINES` / `LINES` (see "Radio lines & threat tiers") |
+| `js/radio.js` | callsigns (+ `ENEMY_NAMES`), `RADIO` subtitle queue, mission orders, `STRESS` + `THREAT_TIERS`, `radioLine()`, line pools `OPS` / `OPS_VOICE` / `OPS_UNARMED` / `COMBAT` / `AIRWAR_LINES` / `ENEMY_LINES` / `TANKER_LINES` / `LINES` (see "Radio lines & threat tiers") |
 | `js/aircraft.js` | `Aircraft` → `FixedWing` / `Helicopter` state machines, deck resources `FD` / `DECK`, types, `Flyby` |
 | `js/persist.js` | `PERSIST`: remembers who is in the air / on a mission (`localStorage`, `CFG.saveState`), restores it after a fresh `buildAirWing()` (orbit / `Mission.resume`), radio `LINES.restore` |
 | `js/missions.js` | missions: `Leg` steps, `Mission` types (`patrol`, `cod`, `sling`, `ship`, `pilot`), `pickMission`, mission-world objects `CARGO` / `VESSELS` / `ROPES` — see "Missions" |
 | `js/combat.js` | enemies: `ENEMY_TYPES` (Su-25/33/47/57 — model builders live in `airframes.js`; speed, altitude, hp, anti-ship missile chance, stress-based weight), vampires, boats, dogfight bandits (`duel`, flying a pass path), beat-synced hit resolution, ship damage |
 | `js/airwar.js` | `AIRWAR`: combat passes — armed aircraft wait off-screen (`cbt_wait`) and cross the screen chasing / chased by a dogfight bandit or hunting boats; screen helpers (`ndc`, `onScreen`, `groundAt`), pass weapons on the beat (`AIRWAR.onBeat`), pass radio |
+| `js/tanker.js` | `TANKER` (a mission-world object): refuelling passes — an MQ-25 and a fighter flight cross the screen together, one random receiver in the basket per pass (the rest fly along on the wings), their `airT` is reset (see "Refuelling passes") |
 | `js/main.js` | WE property listener, scene init, audio analysis + `onBeat`, weapons, ships, missions, chatter, panel UI, main loop |
 | `js/properties.js` | **generated** from `project.json` — do not edit by hand |
 | `js/settings.js` | browser-only settings drawer, demo beat, audio-file player (returns early inside WE) |
 | `tools/gen_properties.py` | regenerates `js/properties.js` |
+| `tools/preview.spec.js` | renders Workshop preview candidates (`powershell -ExecutionPolicy Bypass -File tools/test.ps1 -c tools/preview.config.js` → `test-results/preview-<seed>.jpg`; copy the best over `preview.jpg`) |
+| `tests/`, `playwright.config.js`, `package.json` | automated tests (Playwright Test) — see "Running & testing"; `tools/test.ps1` runs them in Docker, `.github/workflows/tests.yml` in CI |
 
 ## Rules / conventions
 - **After changing any JS/CSS file, bump the cache-buster** `?v=N` on all `<script>`/`<link>` tags in
-  `index.html` (WE's CEF caches aggressively). Current: `v=50`.
+  `index.html` (WE's CEF caches aggressively). Current: `v=62`.
 - **New WE property**: add it to `project.json`, read it in `applyUserProperties` (`main.js`) into `CFG`,
   then run `python tools/gen_properties.py`. Property `order` decides the browser-drawer group
   (0–9 camera/time, 10–19 audio/combat, 20–29 sea, 30–39 panel, 40–49 air wing, 50–59 hull number).
@@ -41,7 +44,9 @@ User-facing docs: `README.md` (keep it in sync when behaviour or properties chan
   `aircraft.js`, register in `AIRCRAFT_TYPES` and `FIXED_ORDER`/`HELI_ORDER`, callsign pool in `radio.js`,
   `<key>count` slider in `project.json`.
   Optional `spec` keys: `farOrbit` (orbit range for unarmed types during combat; `armed` types fly combat passes instead),
-  `missions` (allow-list of mission type keys, e.g. `['cod']` — see "Missions"), `blades` (rotor blade count, for the
+  `missions` (allow-list of mission type keys, e.g. `['cod']`; `[]` = never sent on missions — see "Missions"),
+  `awacs` / `tanker` (support types, `isSupport`: no auto-recovery in combat; only the AWACS is scrambled for a fight), `voice` (key into `OPS_VOICE`),
+  no `ballName` = unmanned (no ball call), `blades` (rotor blade count, for the
   stop-index snap), `noseDown` (helicopter cruise pitch), `callsignGroup`.
   The CMV-22B tiltrotor is a `Helicopter` with `conv` (0 = VTOL, 1 = airplane mode) and `gearDown` getters read by its model.
 - Match the existing style: dense one-liners, short comments, `const` scratch vectors at module level.
@@ -105,10 +110,33 @@ Missions fly beyond the screen edge while there is no music. `dispatchFlight` (`
     (`reset` lets them sail off).
   - `ROPES`: pooled hoist cable / fast rope with one riding figure (`set(rope, top, bottom, u)`).
 
+## Refuelling passes (`js/tanker.js`)
+`TANKER` is registered with `registerMissionWorld` (updated every step after the aircraft, reset in `buildAirWing`).
+- **Peace only.** Trigger: the first 3–5 min after a start / rebuild, then every 5–9 min (4–7 min timer + gathering);
+  while `combatOn()` the timer is frozen and `start()` refuses. A fight starting while the event still gathers
+  (`!ev.P`) aborts it; a pass already on screen is flown to the end. If nobody is ready it looks again every
+  8–15 s for ~90 s, then waits for the next one (so the tanker can be recovered). With auto flight ops a down tanker is launched ~90 s before a pass is due (`launchTanker`; `autoLaunch` never
+  launches it, nor does `scrambleSupport` — AWACS only), and
+  `autoRecover` keeps a tanker up for `TANKER_STATION` (300 s) and never recovers it while a pass is due (`TANKER.timer < 120`). Needs a tanker in `orbit` (`airT > 20`) plus armed
+  fixed-wing jets of one flight in `orbit` (`airT ≥ 10`, part of a flight is fine). Up to 4 receivers. `TANKER.start()` forces one when possible.
+- **Flow:** participants get `a.tank = ev`; `FixedWing.updateState` hands them to `TANKER.fly` first. `tank_out` (to
+  `AIRWAR.offscreenFrom`) → `tank_wait` (hidden) → once all wait, one `AIRWAR.screenPass` → `tank_pass` → `tank_back`
+  (to an orbit via `Aircraft.edgeToOrbit`, shared with `cbt_rtb`). `Aircraft.aloft` (airborne / mission / combat /
+  refuelling) is the "up" predicate for landing requests and F-14 sweep; auto-recovery skips flights with `a.tank`.
+  Abort after 45 s if someone never arrives. Receivers get `airT = 0` at the end.
+- **Formation:** slots `[gap behind along the path, side offset, height]` (`TANK_BASKET`, `tankWing`). One receiver
+  (`ev.cur`, random, fixed for the pass) is in the basket; those before it in `recv` fly on the left wing (done),
+  those after it on the right (still to go) — no swaps on screen. Receivers fly their own `ps` plus a capped
+  correction toward `tanker.ps − gap`; `ev.n` / `ev.tkN` tell whether the tanker already moved this step (the update
+  order in `AIRCRAFT` is arbitrary). `followPath` takes `pathOff` (side) and `pathDy` (height).
+- New airborne states are in `AIR_STATES` (persist restores them into orbit; the event is dropped).
+
 ## Radio lines & threat tiers (`js/radio.js`)
 - **Every radio line goes through `radioLine(pool, vars)`** — never `pick()` a line pool directly, never build
-  lines with `.replace('{X}', …)`. `opsLine(key, c)` (flight-deck calls) is a thin wrapper returning `[text, hot]`.
-- **Pools** live in `radio.js`: `OPS` (deck routine), `COMBAT` (fleet/combat chatter), `AIRWAR_LINES` (combat passes),
+  lines with `.replace('{X}', …)`. `opsLine(key, a)` (flight-deck calls, `a` = the aircraft, `{c}` = its callsign) is a thin wrapper returning
+  `[text, hot]`. Pool: `OPS_VOICE[spec.voice][key]` (the AWACS's / tanker's own; in peace only if it has `peace`), then in combat
+  `OPS_UNARMED[key]` for an unarmed one (helicopters, combat tiers only), else `OPS[key]` (its combat tiers are the armed ones).
+- **Pools** live in `radio.js`: `OPS` (deck routine; its combat tiers are for armed aircraft) / `OPS_VOICE` (per-type voices) / `OPS_UNARMED` (combat deck calls of unarmed helicopters), `TANKER_LINES` (refuelling passes), `COMBAT` (fleet/combat chatter), `AIRWAR_LINES` (combat passes),
   `ENEMY_LINES` (intercepted enemy traffic), `LINES` (alerts, mission acknowledgements), `MISSIONS` (order/done pairs). A pool is either
   - an array — the same lines at any time, or
   - an object keyed by threat tier (`calm`, `tense`, `panic`, …) plus optional `peace` (used outside combat).
@@ -123,7 +151,7 @@ Missions fly beyond the screen edge while there is no music. `dispatchFlight` (`
 - **Placeholders** `{name}` are filled from `vars` (`radioLine(pool, { C: callsign, T: type })`); unknown ones stay as
   they are. In use: `{c}` deck-call callsign, `{C}` callsign, `{T}` enemy type, `{B}` bearing words, `{D}` compass
   direction, `{N}` bandit count, `{Q}` enemy squadron, `{K}` enemy callsign just lost; missions also use `{S}` sector,
-  `{G}` grid, `{P}` passengers, `{W}` pounds.
+  `{G}` grid, `{P}` passengers, `{W}` pounds; refuelling passes `{F}` the flight, `{A}` the tanker.
 - **Enemy lines** go through `enemySay(who, pool, vars, o)` (`combat.js`): role `enemy` (red), one at most every
   4–8 s (shorter as stress builds). Speakers are enemy callsigns: `e.cs` on every bandit / boat (a wave shares its
   squadron `e.sq`: `YELLOW 1`, `YELLOW 2`…), `ENEMY_NAMES.hq` for their command.
@@ -166,11 +194,26 @@ Missions fly beyond the screen edge while there is no music. `dispatchFlight` (`
 - Browser preview: serve the folder, e.g. `python -m http.server 8765`, open `http://localhost:8765/`.
   The ⚙ SETTINGS drawer mirrors all WE properties (stored in `localStorage`); URL params `?hour=22`,
   `?zoom=150`, `?demo=1`, `?ts=N` (time scale).
-- No test suite. Verify in the browser console — all globals are reachable:
-  set `paused = true` and drive the sim with `step(0.05)` + `renderer.render(scene, camera)`;
-  check `renderer.info.render.calls` (main-pass draw calls, shadow pass excluded) and
-  `renderer.info.memory.geometries` (must plateau during long runs, e.g. spawning many `new Flyby()` /
-  `spawnBandits(3)`); force combat with `Object.defineProperty(AUD, 'armed', { get: () => true })`
-  and `onBeat('low', 2)`.
+- **Automated tests** (`tests/`, Playwright Test in headless Chromium + SwiftShader WebGL): run them in Docker —
+  `powershell -ExecutionPolicy Bypass -File tools/test.ps1 [file / -g pattern]` (no local Node; `$env:SEED = N` for
+  another seed); CI runs the same image on every push / PR (`.github/workflows/tests.yml`). Run them after a change.
+  - The harness (`tests/support/harness.js`) boots the page deterministically: seeded `Math.random` (`SEED`), fixed
+    date in UTC, no `requestAnimationFrame` (time only advances through `__t.sim(sec)` = `step(0.05)` per tick),
+    `RT()` on simulated time, Wallpaper Engine mode (audio fed by `__t.sim(sec, { audio: true/false })`).
+  - `tests/support/inpage.js` (`window.__t`): `sim` runs `checkInvariants()` after every step (deck resources:
+    catapults, landing area, spots, lifts, helo pad; known states; NaN; mission / tanker consistency; bounded
+    pools) and the stuck detector (`STATE_LIMITS`); `forceFight` / `fightOff`; `sample` (pixels); `geometries`
+    (leak check: geometries dropped without `dispose`).
+  - **When adding a state, a deck resource, a line pool, a placeholder or a cache**, update the harness: aircraft
+    states come from `STATUS` (so `registerLeg` / `Object.assign(STATUS, …)` is enough), but mission / tanker / lift /
+    runway / catapult state sets, `STATE_LIMITS`, the placeholder list in `radio-pools.spec.js` and `GEO_CACHES` are
+    listed by hand.
+  - `repo.spec.js` checks the cache-buster (all tags equal, matches "Current: `v=N`" here), the load order line above,
+    and that `js/properties.js` is regenerated.
+- Console checks by hand: all globals are reachable; set `paused = true` and drive the sim with `step(0.05)` +
+  `renderer.render(scene, camera)`; check `renderer.info.render.calls` (main-pass draw calls, shadow pass excluded)
+  and `renderer.info.memory.geometries`. To force a fight: `AUD.combat` alone gives `armed` but not `fighting` (no
+  waves / passes / beats); use `Object.defineProperty(AUD, 'active', { get: () => true }); AUD.soundStart = RT() - 10;
+  AUD.combat = true;` (what `__t.forceFight()` does), then `onBeat('low', 2)`.
 - Baseline after the 2026-10 optimisation pass: ~400 GL draw calls/frame (was ~950), geometries
   plateau ≈ 900 under sustained combat.

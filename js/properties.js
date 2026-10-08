@@ -158,6 +158,14 @@ const WE_PROPERTIES = {
   "max": 2,
   "value": 1
  },
+ "mq25count": {
+  "order": 43,
+  "text": "MQ-25 Stingray (tanker) — count",
+  "type": "slider",
+  "min": 0,
+  "max": 2,
+  "value": 1
+ },
  "mh60count": {
   "order": 44,
   "text": "MH-60 Seahawk — count",

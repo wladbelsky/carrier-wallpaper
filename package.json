@@ -1,0 +1,11 @@
+{
+  "name": "carrier-wallpaper-tests",
+  "private": true,
+  "description": "Automated tests for the Carrier Strike Group wallpaper (the wallpaper itself has no build step)",
+  "scripts": {
+    "test": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0"
+  }
+}
