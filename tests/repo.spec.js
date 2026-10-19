@@ -41,6 +41,12 @@ test('js/properties.js is generated from project.json (run tools/gen_properties.
   expect(JSON.parse(m[1])).toEqual(props);
 });
 
+test('images referenced from README.md exist', () => {
+  const imgs = [...read('README.md').matchAll(/!\[[^\]]*\]\(([^)\s]+)\)/g)].map(m => m[1]).filter(u => !/^https?:/.test(u));
+  expect(imgs.length).toBeGreaterThan(0);
+  for (const u of imgs) expect(fs.existsSync(path.join(root, u)), u).toBe(true);
+});
+
 test('project.json is a complete Wallpaper Engine web project', () => {
   const p = JSON.parse(read('project.json'));
   expect(p.type).toBe('web');
