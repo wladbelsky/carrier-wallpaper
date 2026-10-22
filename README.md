@@ -6,10 +6,14 @@ Isometric carrier strike group: a carrier, two escorting destroyers and a config
 react to the music playing on your PC. Guns, CIWS and aircraft fire to the beat, Ace Combat style radio
 subtitles run at the top of the screen, and the time of day follows your PC clock.
 
-![screenshot](screenshot.jpg)
+![Afternoon dogfight with an intercepted enemy call](screenshots/dogfight.jpg)
 
 - **Live demo** (runs in the browser): https://wladbelsky.github.io/carrier-wallpaper/
 - **Steam Workshop:** https://steamcommunity.com/sharedfiles/filedetails/?id=3811917786
+
+| Night fight at critical threat | Refuelling pass (MQ-25 and F-14s) | Sunset rescue from a burning ship |
+|---|---|---|
+| ![Night fight](screenshots/night.jpg) | ![Refuelling pass](screenshots/refuel.jpg) | ![Rescue mission](screenshots/rescue.jpg) |
 
 ## Install
 
