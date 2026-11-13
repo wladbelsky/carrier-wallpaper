@@ -176,28 +176,18 @@ function retireAircraft() {
   if (gone) buildList();
 }
 
-/* Faceted water. The facet normal is computed in the vertex shader from the three
-   displaced corners of each triangle (passed as attributes) instead of screen-space
-   derivatives — those lose precision on mobile GPUs and caused washed-out water. */
+/* Smooth-shaded water. The vertex normal comes from the analytic gradient of the wave
+   function (waveNormal in core.js) instead of one flat normal per triangle — the old
+   faceted version turned the sea into a patchwork of hard-edged polygons as soon as the
+   wave height was raised above zero. */
 function buildWater() {
-  let geo = new THREE.PlaneGeometry(900, 900, 180, 180); geo.rotateX(-Math.PI / 2); geo = geo.toNonIndexed();
-  const pos = geo.attributes.position, n = pos.count;
-  const tri = [new Float32Array(n * 2), new Float32Array(n * 2), new Float32Array(n * 2)];
-  for (let t = 0; t < n; t += 3) for (let k = 0; k < 3; k++) for (let c = 0; c < 3; c++) {
-    tri[c][(t + k) * 2] = pos.getX(t + c); tri[c][(t + k) * 2 + 1] = pos.getZ(t + c);
-  }
-  geo.setAttribute('triA', new THREE.BufferAttribute(tri[0], 2));
-  geo.setAttribute('triB', new THREE.BufferAttribute(tri[1], 2));
-  geo.setAttribute('triC', new THREE.BufferAttribute(tri[2], 2));
+  const geo = new THREE.PlaneGeometry(900, 900, 180, 180); geo.rotateX(-Math.PI / 2);
   waterUniforms = { uPh: { value: new THREE.Vector4() }, uAmp: { value: 1 } };
   const mat = new THREE.MeshPhongMaterial({ color: 0x1c5a82, specular: 0x506070, shininess: 60 });
   mat.onBeforeCompile = sh => {
     sh.uniforms.uPh = waterUniforms.uPh; sh.uniforms.uAmp = waterUniforms.uAmp;
-    sh.vertexShader = 'attribute vec2 triA;\nattribute vec2 triB;\nattribute vec2 triC;\n' + WAVE_GLSL + sh.vertexShader
-      .replace('#include <beginnormal_vertex>', `
-        vec3 wA = vec3(triA.x, waveH(triA), triA.y), wB = vec3(triB.x, waveH(triB), triB.y), wC = vec3(triC.x, waveH(triC), triC.y);
-        vec3 objectNormal = normalize(cross(wB - wA, wC - wA));
-        if (objectNormal.y < 0.0) objectNormal = -objectNormal;`)
+    sh.vertexShader = WAVE_GLSL + sh.vertexShader
+      .replace('#include <beginnormal_vertex>', 'vec3 objectNormal = waveNormal(position.xz);')
       .replace('#include <begin_vertex>', '#include <begin_vertex>\n transformed.y += waveH(position.xz);');
   };
   water = new THREE.Mesh(geo, mat); water.receiveShadow = true; scene.add(water);

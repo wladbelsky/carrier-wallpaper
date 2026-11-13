@@ -64,9 +64,17 @@ function waveH(x, z) {
 }
 const WAVE_GLSL = (() => {
   const c = WAVE.comps, f = v => v.toFixed(4);
+  const arg = (k, i) => `${f(k[0])}*p.x+${f(k[1])}*p.y+uPh[${i}]`;
+  const join = terms => terms.reduce((a, t) => a + (t[0] === '-' ? ' - ' + t.slice(1) : ' + ' + t));
   let s = 'uniform vec4 uPh; uniform float uAmp;\nfloat waveH(vec2 p){ return uAmp*(';
-  s += c.map((k, i) => `${f(k[3])}*sin(${f(k[0])}*p.x+${f(k[1])}*p.y+uPh[${i}])`).join('+');
+  s += join(c.map((k, i) => `${f(k[3])}*sin(${arg(k, i)})`));
   s += '); }\n';
+  // Analytic gradient of waveH -> smooth vertex normal. Used by the water shader so the
+  // surface shades continuously instead of showing one flat normal per triangle.
+  s += 'vec3 waveNormal(vec2 p){\n';
+  s += '  float dx = uAmp*(' + join(c.map((k, i) => `${f(k[3] * k[0])}*cos(${arg(k, i)})`)) + ');\n';
+  s += '  float dz = uAmp*(' + join(c.map((k, i) => `${f(k[3] * k[1])}*cos(${arg(k, i)})`)) + ');\n';
+  s += '  return normalize(vec3(-dx, 1.0, -dz));\n}\n';
   return s;
 })();
 
