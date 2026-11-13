@@ -226,14 +226,62 @@ function makeMission(kind, extra) {
   return { order: fillLine(order, vars), done: fillLine(done, vars) };
 }
 
-/* ===== Stress: builds up over ~10 minutes of continuous combat music, eases off in silence ===== */
+/* ===== Stress: builds up over ~10 minutes of continuous combat music, eases off in silence.
+   Both directions are scaled by CFG.threatRamp (the Wallpaper Engine "threat escalation speed", %):
+   100 = the stock timing above, 300 = three times as fast, 0 = the level is frozen where it is.
+
+   CFG.threatMode switches between two shapes:
+     'ramp'   — the stock accumulator: one continuous climb for as long as the music plays.
+     'script' — a fixed five-stage cycle (THREAT_SCRIPT below). Each stage pulls the level toward
+                its own target at its own rate, then hands over to the next one after `hold`
+                seconds. threatRamp still scales the whole timeline, so 0 freezes the script and
+                200 plays the entire cycle twice as fast. When the music stops the level decays
+                as usual and the script rewinds to stage 0 once it reaches zero.
+
+   Stage levels are picked to line up with THREAT_TIERS (calm < 0.33, tense < 0.66, panic above),
+   so every stage gets its own radio tone instead of two stages sharing one:
+     calm 0.10 → calm     probe 0.30 → calm (contacts only, nobody shooting yet)
+     engage 0.62 → tense   surge 1.00 → panic   break 0.18 → calm
+   The break stage also drops slowly (rate 0.025), so the way down from panic to calm takes about
+   33 s instead of snapping back — the chatter winds down with it. ===== */
+const THREAT_SCRIPT = [
+  { key: 'calm', label: 'CALM', level: 0.10, rate: 0.020, hold: 45 },   // quiet patrol, few contacts
+  { key: 'probe', label: 'PROBE', level: 0.30, rate: 0.045, hold: 55 },   // first bandits, escorts alert
+  { key: 'engage', label: 'ENGAGE', level: 0.62, rate: 0.060, hold: 70 },  // full combat air patrol
+  { key: 'surge', label: 'SURGE', level: 1.00, rate: 0.100, hold: 65 },   // everything at once
+  { key: 'break', label: 'BREAK', level: 0.18, rate: 0.025, hold: 40 }    // enemy disengages, wind down
+];
+
 const STRESS = {
   level: 0,
-  update(dt) { this.level = clamp(this.level + (AUD.fighting ? dt / 600 : -dt / 180), 0, 1); },
-  bump(v) { this.level = clamp(this.level + v, 0, 1); },
+  stage: 0,       // index into THREAT_SCRIPT (only used in 'script' mode)
+  stageT: 0,      // seconds spent in the current stage
+  get ramp() { return (CFG.threatRamp == null ? 100 : CFG.threatRamp) / 100; },
+  get scripted() { return CFG.threatMode === 'script'; },
+  update(dt) {
+    const k = this.ramp;
+    if (k <= 0) return;                                    // 0 = frozen, whichever mode
+    if (this.scripted) { this.tickScript(dt, k); return; }
+    this.stage = 0; this.stageT = 0;                       // keep the script ready if the user switches back
+    this.level = clamp(this.level + (AUD.fighting ? dt / 600 : -dt / 180) * k, 0, 1);
+  },
+  tickScript(dt, k) {
+    if (!AUD.fighting) {                                   // music stopped: wind down, then rewind the script
+      this.level = clamp(this.level - dt / 180 * k, 0, 1);
+      if (this.level <= 1e-4) { this.stage = 0; this.stageT = 0; }
+      return;
+    }
+    const s = THREAT_SCRIPT[this.stage];
+    const d = s.level - this.level;
+    const step = s.rate * dt * k;
+    this.level = clamp(this.level + Math.sign(d) * Math.min(Math.abs(d), step), 0, 1);   // ease toward the stage target
+    this.stageT += dt * k;
+    if (this.stageT >= s.hold) { this.stageT = 0; this.stage = (this.stage + 1) % THREAT_SCRIPT.length; }
+  },
+  bump(v) { const k = this.ramp; if (k > 0) this.level = clamp(this.level + v * k, 0, 1); },
   get tierIndex() { const i = THREAT_TIERS.findIndex(t => this.level < t.upTo); return i < 0 ? THREAT_TIERS.length - 1 : i; },
   get tier() { return THREAT_TIERS[this.tierIndex].key; },
-  get label() { return ['LOW', 'ELEVATED', 'HIGH', 'CRITICAL'][Math.min(3, Math.floor(this.level * 4))]; }
+  get label() { return this.scripted ? THREAT_SCRIPT[this.stage].label : ['LOW', 'ELEVATED', 'HIGH', 'CRITICAL'][Math.min(3, Math.floor(this.level * 4))]; }
 };
 
 /* ===== Radio line pools and threat tiers =====

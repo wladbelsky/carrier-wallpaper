@@ -31,6 +31,8 @@ const CFG = {
   ddHelis: true,      // one transport helicopter on each destroyer
   numbers: { carrier: '07' },  // carrier hull number
   enemies: true,      // enemy aircraft & anti-ship missiles during combat
+  threatRamp: 100,    // threat escalation speed, % — 100 = stock (about 10 min of combat music from low to critical), 0 = frozen
+  threatMode: 'ramp', // 'ramp' = stock continuous build-up, 'script' = fixed calm→probe→engage→surge→break cycle
   weather: 'off',     // 'off' | 'auto' | 'clear' | 'overcast' | 'rain' | 'fog' | 'storm' (js/weather.js)
   weatherInt: 100,    // weather strength, % — scales every weather parameter away from the stock look
   shake: true,        // subtle camera shake on heavy hits

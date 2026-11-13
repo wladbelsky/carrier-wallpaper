@@ -126,6 +126,30 @@ const WE_PROPERTIES = {
   "type": "bool",
   "value": true
  },
+ "threatramp": {
+  "order": 17,
+  "text": "Threat escalation speed, % (0 = frozen)",
+  "type": "slider",
+  "value": 100,
+  "min": 0,
+  "max": 300
+ },
+ "threatmode": {
+  "order": 18,
+  "text": "Threat progression",
+  "type": "combo",
+  "value": "ramp",
+  "options": [
+   {
+    "label": "Continuous ramp (stock)",
+    "value": "ramp"
+   },
+   {
+    "label": "Scripted five-stage cycle",
+    "value": "script"
+   }
+  ]
+ },
  "fa18count": {
   "order": 40,
   "text": "F/A-18 Hornet — count",

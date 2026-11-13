@@ -39,6 +39,8 @@ window.wallpaperPropertyListener = {
     if (has('missionfrequency')) CFG.missions = p.missionfrequency.value;
     if (has('camerashake')) CFG.shake = p.camerashake.value;
     if (has('enemies')) CFG.enemies = p.enemies.value;
+    if (has('threatramp')) CFG.threatRamp = p.threatramp.value;
+    if (has('threatmode')) CFG.threatMode = p.threatmode.value;
     if (has('weather')) { CFG.weather = p.weather.value; WEATHER.setKind(CFG.weather); }
     if (has('weatherintensity')) { CFG.weatherInt = p.weatherintensity.value; WEATHER.intensity = CFG.weatherInt / 100; }
     if (has('carriernumber')) CFG.numbers.carrier = p.carriernumber.value;
