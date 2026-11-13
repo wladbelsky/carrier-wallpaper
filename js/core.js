@@ -31,6 +31,8 @@ const CFG = {
   ddHelis: true,      // one transport helicopter on each destroyer
   numbers: { carrier: '07' },  // carrier hull number
   enemies: true,      // enemy aircraft & anti-ship missiles during combat
+  weather: 'off',     // 'off' | 'auto' | 'clear' | 'overcast' | 'rain' | 'fog' | 'storm' (js/weather.js)
+  weatherInt: 100,    // weather strength, % — scales every weather parameter away from the stock look
   shake: true,        // subtle camera shake on heavy hits
   missions: 5,        // how often flights leave on missions (0 = never)
   subtitles: true,    // Ace Combat style radio subtitles

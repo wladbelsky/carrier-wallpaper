@@ -244,6 +244,46 @@ const WE_PROPERTIES = {
   "type": "bool",
   "value": true
  },
+ "weather": {
+  "order": 23,
+  "text": "Weather",
+  "type": "combo",
+  "value": "off",
+  "options": [
+   {
+    "label": "Off (stock clear sky)",
+    "value": "off"
+   },
+   {
+    "label": "Auto rotate",
+    "value": "auto"
+   },
+   {
+    "label": "Overcast",
+    "value": "overcast"
+   },
+   {
+    "label": "Rain",
+    "value": "rain"
+   },
+   {
+    "label": "Sea fog",
+    "value": "fog"
+   },
+   {
+    "label": "Storm (with lightning)",
+    "value": "storm"
+   }
+  ]
+ },
+ "weatherintensity": {
+  "order": 24,
+  "text": "Weather intensity, % (0 = off)",
+  "type": "slider",
+  "value": 100,
+  "min": 0,
+  "max": 200
+ },
  "showpanel": {
   "order": 30,
   "text": "Show control panel",

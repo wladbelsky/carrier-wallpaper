@@ -39,6 +39,8 @@ window.wallpaperPropertyListener = {
     if (has('missionfrequency')) CFG.missions = p.missionfrequency.value;
     if (has('camerashake')) CFG.shake = p.camerashake.value;
     if (has('enemies')) CFG.enemies = p.enemies.value;
+    if (has('weather')) { CFG.weather = p.weather.value; WEATHER.setKind(CFG.weather); }
+    if (has('weatherintensity')) { CFG.weatherInt = p.weatherintensity.value; WEATHER.intensity = CFG.weatherInt / 100; }
     if (has('carriernumber')) CFG.numbers.carrier = p.carriernumber.value;
     for (const k of Object.keys(AIRCRAFT_TYPES)) if (has(k + 'count')) { const v = Math.round(p[k + 'count'].value); if (CFG.counts[k] !== v) { CFG.counts[k] = v; airWingDirty = true; } }
     if (has('ddhelis') && CFG.ddHelis !== p.ddhelis.value) { CFG.ddHelis = p.ddhelis.value; airWingDirty = true; }
@@ -96,6 +98,7 @@ function init() {
   FX.splash = new Splashes(scene, 20);
   FX.foam = new Foam(scene, 2800);
   FX.lights = new FlashLights(scene, 4);
+  WEATHER.init(scene); WEATHER.setKind(CFG.weather); WEATHER.intensity = CFG.weatherInt / 100;
   FX.tracers.onSplash = (p, big) => {
     FX.splash.spawn(p, big);
     for (let i = 0; i < 2; i++) FX.smoke.spawn(new V3(p.x, p.y + 0.5, p.z), { s0: big * 1.2, s1: big * 3, life: 1.4, a0: 0.4, color: 0xffffff, v: new V3(-WAVE.flow, 1.2, 0) });
@@ -203,8 +206,14 @@ function updateCamera() {
   camera.left = -viewH * aspect / 2; camera.right = viewH * aspect / 2; camera.top = viewH / 2; camera.bottom = -viewH / 2;
   camera.updateProjectionMatrix();
   ENV.ppu = h / viewH;
-  scene.fog.near = CAM_D - 30; scene.fog.far = CAM_D + 260;
+  applyFogDist();
   updateCameraPose();
+}
+/* Fog range follows the zoom-independent camera distance; weather pulls it in (see WEATHER.fogK). */
+function applyFogDist() {
+  const t = WEATHER.fogK;
+  scene.fog.near = CAM_D - 30 - 55 * t;
+  scene.fog.far = CAM_D + 260 - 260 * t;
 }
 const CAM_D = 160, CAM_TGT = new V3(0, 2.5, 1);
 let camAz = CFG.camAngle * DEG;
@@ -223,6 +232,7 @@ function updateEnvironment() {
   const sp = sunPosition(getNow(), CFG.lat, CFG.lon);
   ENV.elev = sp.elev;
   const k = skyAt(sp.elev);
+  WEATHER.apply(k, sp.elev);          // weather bends the palette before it reaches the lights
   const dirOf = (az, el) => new V3(Math.sin(az * DEG) * Math.cos(el * DEG), Math.sin(el * DEG), -Math.cos(az * DEG) * Math.cos(el * DEG));
   const sunDir = dirOf(sp.az, Math.max(sp.elev, 7)), moonDir = dirOf(sp.az + 160, 42);
   const dir = sunDir.lerp(moonDir, smoothstep(-2, -7, sp.elev)).normalize();
@@ -237,6 +247,7 @@ function updateEnvironment() {
   ENV.night = 1 - smoothstep(-10, 1, sp.elev);
   FX.foam.bright = lerp(0.13, 0.3, smoothstep(-8, 10, sp.elev));
   SHIPS.forEach(s => s.winMat.emissive.setHex(0xffc27a).multiplyScalar(0.75 * ENV.lightsOn));
+  WEATHER.capture(hemi.intensity, sunLight.intensity, scene.fog.color);   // lightning flashes on top of these
 }
 
 /* ---- audio ---- */
@@ -796,7 +807,7 @@ function updateUI() {
   const now = getNow();
   document.getElementById('clock').textContent = now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
   const e = ENV.elev;
-  document.getElementById('daystate').textContent = (e > 6 ? 'DAY' : e > -6 ? 'TWILIGHT' : 'NIGHT');
+  document.getElementById('daystate').textContent = (e > 6 ? 'DAY' : e > -6 ? 'TWILIGHT' : 'NIGHT') + WEATHER.tag;
   const as = document.getElementById('audiostate');
   const arming = AUD.active && !AUD.armed && AUD.soundStart >= 0;
   // fleet status: patrol in silence, unknown contacts while the sound arms, combat once armed
@@ -886,12 +897,12 @@ function step(dt) {
   T += dt;
   if (splash && T > 3.2) { const s = splash; splash = null; s.classList.add('off'); setTimeout(() => s.remove(), 700); }
   updateArming();
-  WAVE.flow = 2.2 * CFG.speed / 100; WAVE.amp = CFG.waves / 100;
+  WAVE.flow = 2.2 * CFG.speed / 100; WAVE.amp = CFG.waves / 100 * WEATHER.waveMul;
   waveAdvance(dt);
   waterUniforms.uPh.value.set(WAVE.phase[0], WAVE.phase[1], WAVE.phase[2], WAVE.phase[3]); waterUniforms.uAmp.value = WAVE.amp;
 
   updateShips(dt);
-  wcAcc += dt * 35 * WAVE.amp; // whitecaps
+  wcAcc += dt * (35 * WAVE.amp + WEATHER.foamRate); // whitecaps (rain stirs up extra)
   while (wcAcc > 1) { wcAcc--; FX.foam.emit(rand(-120, 120), rand(-120, 120), rand(-0.3, 0.3), rand(-0.3, 0.3), rand(1.5, 3.5)); }
   updateMounts(dt);
   updateDeckMachinery(dt);
@@ -920,6 +931,7 @@ function step(dt) {
   updateLights();
 
   envTimer -= dt; if (envTimer <= 0) { envTimer = 2; updateEnvironment(); }
+  WEATHER.update(dt);
   uiTimer -= dt; if (uiTimer <= 0) { uiTimer = 0.25; updateUI(); }
   meterTimer -= dt; if (meterTimer <= 0) { meterTimer = 0.05; updateMeter(); }
 }
