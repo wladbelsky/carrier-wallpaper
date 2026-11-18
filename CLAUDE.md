@@ -5,8 +5,10 @@ Runs 24/7 inside Wallpaper Engine (CEF/Chromium); also previewable in a normal b
 User-facing docs: `README.md` (keep it in sync when behaviour or properties change).
 
 ## Stack & layout
-- Plain JS, no build step, no npm. `'use strict'` classic scripts sharing **global** scope
-  (no modules). three.js **r149** is vendored as `js/three.min.js` — never edit it.
+- Plain JS, no build step for the wallpaper code (npm only for the tests and for building three.js). `'use strict'`
+  classic scripts sharing **global** scope (no modules). three.js **r187** is vendored as `js/three.min.js` — one IIFE
+  defining the global `THREE`, built from the `three` devDependency by `tools/build_three.sh` (three ships ES modules
+  only since r161) — never edit it; see "three.js".
 - `index.html` loads scripts in dependency order (later files use globals of earlier ones):
   `core → flightpath → models → airframes → effects → weather → radio → aircraft → missions → persist → combat → airwar → tanker → main → properties → settings`,
   then an inline script registers the WE audio listener (or starts the browser demo beat).
@@ -31,12 +33,13 @@ User-facing docs: `README.md` (keep it in sync when behaviour or properties chan
 | `js/properties.js` | **generated** from `project.json` — do not edit by hand |
 | `js/settings.js` | browser-only settings drawer, demo beat, audio-file player (returns early inside WE) |
 | `tools/gen_properties.py` | regenerates `js/properties.js` |
+| `tools/build_three.sh` / `.ps1` | rebuilds `js/three.min.js` from `node_modules/three` with esbuild (`tools/three-entry.js`); `.ps1` runs it in Docker |
 | `tools/preview.spec.js` | renders image candidates (`powershell -ExecutionPolicy Bypass -File tools/test.ps1 -c tools/preview.config.js [-g gif]` → `test-results/gif-<seed>.gif` animated 256², scene only, + `-sheet.png` stills: the Workshop preview `preview.gif` from `project.json` — WE takes ≤ 256 px, < 1 MB (aim < 500 KB), encoded with the `gifenc` devDependency; `test-results/<scene>-<seed>.jpg` 1280x720 for each of `SCENES` (dogfight / night / refuel / rescue; `-g "rescue,"` for one), `screenshots/<scene>.jpg` in README.md; copy the best over them) |
 | `tests/`, `playwright.config.js`, `package.json` | automated tests (Playwright Test) — see "Running & testing"; `tools/test.ps1` runs them in Docker, `.github/workflows/tests.yml` in CI |
 
 ## Rules / conventions
 - **After changing any JS/CSS file, bump the cache-buster** `?v=N` on all `<script>`/`<link>` tags in
-  `index.html` (WE's CEF caches aggressively). Current: `v=63`.
+  `index.html` (WE's CEF caches aggressively). Current: `v=64`.
 - **New WE property**: add it to `project.json`, read it in `applyUserProperties` (`main.js`) into `CFG`,
   then run `python tools/gen_properties.py`. Property `order` decides the browser-drawer group
   (0–9 camera/time, 10–19 audio/combat, 20–29 sea, 30–39 panel, 40–49 air wing, 50–59 hull number).
@@ -178,6 +181,24 @@ Missions fly beyond the screen edge while there is no music. `dispatchFlight` (`
   Among combat lines a role (`pilot`, `ship`, `enemy`, …) silent for `VARIETY_T` s gets +0.5 when the next line is
   picked (`RADIO.onAir`), so no side drowns out the others; enemy event lines are prio 2, their chatter prio 1.
 
+## three.js (`js/three.min.js`, r187 with the r149 look)
+- The look is kept exactly as under r149 (top of `core.js` + `init()`): `THREE.ColorManagement.enabled = false` (hex
+  colours used as they are — set before any `THREE.Color` exists), `renderer.outputColorSpace = LinearSRGBColorSpace`,
+  `getDistanceAttenuation` in `THREE.ShaderChunk.lights_pars_begin` replaced by r149's legacy fall-off
+  `(1 − d / distance)^decay` (a console error if the chunk no longer matches after an update), and **every light
+  intensity is set × `LIGHT_K`** (π; legacy lights were scaled by π inside three) — sun, hemisphere, searchlights,
+  flash lights. A new light must do the same. Shadows: `PCFShadowMap` (soft since r182; `PCFSoftShadowMap` is deprecated).
+- `renderer.info.render.calls` counts the main **and** the shadow pass since r185 (r149: main pass only).
+- **Shader warm-up** (`warmShaders`, `main.js`): `renderer.compileAsync` compiles every program before the frame loop
+  starts (`shadersReady`), hidden objects shown during the synchronous part; programs depend on the number of visible
+  spot lights, so it warms 0 (day) and every night count (the ships' searchlights + 0–4 helicopters', `HELI_LIGHTS`),
+  the current count first, the rest in the background (`shadersAll`). Materials or lights created later (lazily built
+  enemy / vessel templates with a new material setup) compile on first use: create them at build time where possible.
+- **Updating three.js**: bump `three` in `package.json`, `npm install`, `bash tools/build_three.sh` (or the `.ps1`),
+  bump the cache-buster (three.min.js carries it too), run the tests (`repo.spec.js` checks the bundle matches
+  `package.json`, `render.spec.js` the r149 look and the warm-up), read the three.js migration guide for the versions in
+  between.
+
 ## Performance & memory invariants (the wallpaper never restarts — leaks accumulate for days)
 - **Never create geometry per spawn and drop it.** Enemies are clones of one template (`enemyMesh()`
   in `combat.js`), fly-by jets are pooled (`FLYBY_MODELS`), air-wing rebuilds call `disposeTree`.
@@ -203,7 +224,7 @@ Missions fly beyond the screen edge while there is no music. `dispatchFlight` (`
 - The sun's shadow camera is fitted to the visible sea every frame (`fitShadow`, `main.js`; one 2048² map):
   don't set fixed shadow bounds, they cut off shadows of aircraft far out.
 - Searchlight `SpotLight`s are hidden by day (`updateLights`): every visible light costs every lit
-  fragment even at zero intensity.
+  fragment even at zero intensity. Each count of visible spot lights is its own set of shader programs (warmed up front).
 - Main loop (`frame`): FPS limit keeps cadence via `frameDue`; simulation runs in ≤50 ms sub-steps
   (stalls capped at 0.25 s). `onBeat` does nothing while `paused`.
 
@@ -215,7 +236,7 @@ Missions fly beyond the screen edge while there is no music. `dispatchFlight` (`
 - **Automated tests** (`tests/`, Playwright Test in headless Chromium + SwiftShader WebGL): run them in Docker —
   `powershell -ExecutionPolicy Bypass -File tools/test.ps1 [file / -g pattern]` (no local Node; `$env:SEED = N` for
   another seed); CI runs the same image on every push / PR (`.github/workflows/tests.yml`). Run them after a change.
-  - The harness (`tests/support/harness.js`) boots the page deterministically: seeded `Math.random` (`SEED`), fixed
+  - The harness (`tests/support/harness.js`) boots the page deterministically (and waits for the shader warm-up): seeded `Math.random` (`SEED`), fixed
     date in UTC, no `requestAnimationFrame` (time only advances through `__t.sim(sec)` = `step(0.05)` per tick),
     `RT()` on simulated time, Wallpaper Engine mode (audio fed by `__t.sim(sec, { audio: true/false })`).
   - `tests/support/inpage.js` (`window.__t`): `sim` runs `checkInvariants()` after every step (deck resources:
@@ -229,9 +250,10 @@ Missions fly beyond the screen edge while there is no music. `dispatchFlight` (`
   - `repo.spec.js` checks the cache-buster (all tags equal, matches "Current: `v=N`" here), the load order line above,
     and that `js/properties.js` is regenerated.
 - Console checks by hand: all globals are reachable; set `paused = true` and drive the sim with `step(0.05)` +
-  `renderer.render(scene, camera)`; check `renderer.info.render.calls` (main-pass draw calls, shadow pass excluded)
+  `renderer.render(scene, camera)`; check `renderer.info.render.calls` (draw calls of the main and the shadow pass)
   and `renderer.info.memory.geometries`. To force a fight: `AUD.combat` alone gives `armed` but not `fighting` (no
   waves / passes / beats); use `Object.defineProperty(AUD, 'active', { get: () => true }); AUD.soundStart = RT() - 10;
   AUD.combat = true;` (what `__t.forceFight()` does), then `onBeat('low', 2)`.
-- Baseline after the 2026-10 optimisation pass: ~400 GL draw calls/frame (was ~950), geometries
-  plateau ≈ 900 under sustained combat.
+- Baseline after the 2026-10 optimisation pass: ~400 GL draw calls/frame (was ~950; main + shadow pass, ~250 of them
+  main pass), geometries plateau ≈ 900 under sustained combat. Under r187 `renderer.info` reports ~450 for a day frame
+  (it now counts the shadow pass too); shader programs ≈ 85 (6 searchlight counts × ~14).

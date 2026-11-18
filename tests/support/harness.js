@@ -38,11 +38,14 @@ class Wallpaper {
     await this.page.goto('/index.html' + query);
     const ok = await this.page.evaluate(() => typeof ready !== 'undefined' && ready && AIRCRAFT.length > 0);
     if (!ok) throw new Error('wallpaper did not initialise');
+    // shader warm-up (warmShaders, main.js) finishes in the background: wait, so program counts are stable
+    await this.page.waitForFunction(() => typeof shadersAll === 'undefined' || shadersAll, null, { timeout: 60000, polling: 50 });
     await this.page.evaluate((splash) => { __t.setup(); if (!splash) document.getElementById('splash').style.display = 'none'; }, splash);
     return this;
   }
   async reload() {
     await this.page.reload();
+    await this.page.waitForFunction(() => typeof shadersAll === 'undefined' || shadersAll, null, { timeout: 60000, polling: 50 });
     await this.page.evaluate(() => __t.setup());
   }
   /* run fn(arg) in the page */

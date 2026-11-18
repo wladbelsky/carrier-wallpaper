@@ -278,6 +278,10 @@ URL parameters still work and override stored values: `?hour=22`, `?zoom=150`, `
 
 If you add a property to `project.json`, run `python tools/gen_properties.py` to refresh `js/properties.js`.
 
+three.js (r187) is vendored as `js/three.min.js`, a single script built from the npm package: to update it, change the
+`three` version in `package.json`, run `npm install` and `bash tools/build_three.sh` (or
+`powershell -ExecutionPolicy Bypass -File tools/build_three.ps1`, in Docker).
+
 ## Tests
 
 Automated tests (Playwright Test, headless Chromium with software WebGL) drive the real page: the simulation is
@@ -297,7 +301,7 @@ seeded and stepped by the tests, so every run is reproducible. They cover:
 - **weather and threat modes**: every weather kind (fog, rain, lightning), off / 0 % = the stock look, no leaks when
   switching, the subtitle backdrop; the scripted threat cycle and the escalation speed;
 - **rendering**: no WebGL errors, draw-call budget, the fleet on screen, day vs night, shadows and their coverage,
-  no geometry leaks;
+  no geometry leaks, the r149 look under three.js r187, shaders compiled up front (nothing compiles at dusk or in a fight);
 - **soak**: two hours of simulated life (music and silence, missions, count changes) with all of the above.
 
 Run them locally with Docker (no Node needed):

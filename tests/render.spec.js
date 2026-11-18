@@ -20,10 +20,10 @@ test('a day frame renders without GL errors, within the draw-call budget, with t
   });
   expect(r.lost).toBe(false);
   expect(r.err, 'gl.getError()').toBe(0);
-  expect(r.calls, 'draw calls (baseline ~400)').toBeLessThan(700);
+  expect(r.calls, 'draw calls, main + shadow pass (baseline ~450)').toBeLessThan(700);
   expect(r.calls).toBeGreaterThan(50);
   expect(r.tris).toBeGreaterThan(10000);
-  expect(r.programs).toBeLessThan(60);
+  expect(r.programs, 'warmed up front: ~14 programs × 6 searchlight counts').toBeLessThan(120);
   // the sea is blue in both corners; the middle (the carrier) is not sea
   for (const c of [r.sea, r.seaB]) expect(c[2], `sea is blue ${c}`).toBeGreaterThan(c[0]);
   const d = Math.max(...r.center.map((v, i) => Math.abs(v - r.sea[i])));
@@ -97,4 +97,40 @@ test('GPU memory plateaus over a long fight with fly-bys, missiles and smoke', a
   expect(late.t, 'textures').toBeLessThanOrEqual(early.t + 2);
   expect(late.p, 'shader programs').toBeLessThanOrEqual(early.p + 2);
   expect(late.reach, `reachable geometries ${mem.map(m => m.reach).join(' ')}`).toBeLessThan(early.reach * 1.1 + 20);
+});
+
+test('three.js r187 keeps the r149 look: no colour management, legacy light fall-off, intensities × π', async ({ wp }) => {
+  await wp.boot();
+  const r = await wp.run(() => {
+    const ch = THREE.ShaderChunk.lights_pars_begin;
+    return { rev: THREE.REVISION, cm: THREE.ColorManagement.enabled, out: renderer.outputColorSpace, legacy: ch.includes('- lightDistance / cutoffDistance + 1.0'),
+      physical: ch.includes('distanceFalloff'), hex: new THREE.Color(0x808080).r, hemi: hemi.intensity / skyAt(ENV.elev).hi, sun: sunLight.intensity / skyAt(ENV.elev).si };
+  });
+  expect(r.rev).toBe('187');
+  expect(r.cm, 'hex colours used as they are').toBe(false);
+  expect(r.out).toBe('srgb-linear');
+  expect(r.legacy && !r.physical, 'point / spot lights fall off like r149').toBe(true);
+  expect(r.hex).toBeCloseTo(128 / 255, 6);
+  expect(r.hemi).toBeCloseTo(Math.PI, 5);
+  expect(r.sun).toBeCloseTo(Math.PI, 5);
+});
+
+test('shaders are compiled up front: nothing compiles at night, in a fight, in a storm or when helicopters come and go', async ({ wp }) => {
+  await wp.boot();
+  const P = () => wp.run(() => { __t.render(); return renderer.info.programs.length; });
+  const p0 = await P();                            // the first frame adds only the shadow-map depth program
+  await wp.run(() => { CFG.timeMode = 'fixed'; CFG.fixedHour = 0; updateEnvironment(); });
+  await wp.sim(3);
+  expect(await wp.run(() => SEARCHLIGHTS.filter(s => s.light && s.light.visible).length), 'searchlights on').toBeGreaterThan(0);
+  expect(await P(), 'night').toBe(p0);
+  let busy = 0;
+  for (let t = 0; t < 60; t += 5) { await wp.sim(5, { audio: true }); await P(); busy = Math.max(busy, await wp.run(() => ENEMIES.length + MISSILES.length + AIRWAR.passes.length)); }
+  expect(busy, 'a fight happened').toBeGreaterThan(0);
+  expect(await P(), 'first fight').toBe(p0);
+  await wp.run(() => { CFG.weather = 'storm'; WEATHER.setKind('storm'); });
+  await wp.sim(5);
+  expect(await P(), 'storm').toBe(p0);
+  await wp.run(() => __t.fightOff());
+  for (let t = 0; t < 120; t += 10) { await wp.sim(10); await P(); }   // helicopters with searchlights launch and land
+  expect(await P(), 'helicopters coming and going').toBe(p0);
 });

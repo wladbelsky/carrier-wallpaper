@@ -118,7 +118,7 @@ class SpriteFX {
       C[i * 4] = it.col.r; C[i * 4 + 1] = it.col.g; C[i * 4 + 2] = it.col.b; C[i * 4 + 3] = it.a;
       S[i * 2] = it.sc; S[i * 2 + 1] = it.rot;
     }
-    if (live.length) for (const a of this.attrs) { a.needsUpdate = true; a.updateRange.count = live.length * a.itemSize; }   // upload only the live part
+    if (live.length) for (const a of this.attrs) { a.needsUpdate = true; a.clearUpdateRanges(); a.addUpdateRange(0, live.length * a.itemSize); }   // upload only the live part
     this.geo.instanceCount = live.length; this.mesh.visible = live.length > 0;
   }
 }
@@ -200,6 +200,6 @@ class FlashLights {
     it.l.position.copy(p); it.t = it.max = dur; it.I = I;
   }
   update(dt, nightBoost) {
-    for (const it of this.items) { it.t = Math.max(0, it.t - dt); it.l.intensity = it.t > 0 ? it.I * (it.t / it.max) * nightBoost : 0; }
+    for (const it of this.items) { it.t = Math.max(0, it.t - dt); it.l.intensity = it.t > 0 ? it.I * (it.t / it.max) * nightBoost * LIGHT_K : 0; }
   }
 }

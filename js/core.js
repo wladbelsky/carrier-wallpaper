@@ -1,5 +1,17 @@
 'use strict';
 /* ===== Shared utils, settings, waves, sun position, textures ===== */
+/* three.js r187 with the r149 look (see CLAUDE.md, "three.js"): hex colours are used as they are (no sRGB → linear
+   conversion; must be set before any THREE.Color exists), point / spot lights fall off like r149's legacy lights,
+   (1 − d / distance)^decay, and every light intensity is × LIGHT_K where it is set (legacy lights were × π inside three). */
+THREE.ColorManagement.enabled = false;
+const LEGACY_FALLOFF = /float getDistanceAttenuation\([^)]*\) \{[\s\S]*?return distanceFalloff;\s*\}/;
+if (!LEGACY_FALLOFF.test(THREE.ShaderChunk.lights_pars_begin)) console.error('three.js: getDistanceAttenuation not found, lights fall off physically');
+THREE.ShaderChunk.lights_pars_begin = THREE.ShaderChunk.lights_pars_begin.replace(LEGACY_FALLOFF,
+  `float getDistanceAttenuation( const in float lightDistance, const in float cutoffDistance, const in float decayExponent ) {
+  if ( cutoffDistance > 0.0 && decayExponent > 0.0 ) return pow( saturate( - lightDistance / cutoffDistance + 1.0 ), decayExponent );
+  return 1.0;
+}`);
+const LIGHT_K = Math.PI;
 const V3 = THREE.Vector3;
 const DEG = Math.PI / 180;
 const rand = (a, b) => a + Math.random() * (b - a);

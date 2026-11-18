@@ -4,7 +4,7 @@ let scene, camera, renderer, sunLight, hemi, water, waterUniforms, CARRIER;
 let SHIPS = [], AIRCRAFT = [], FLYBYS = [], ALL_CIWS = [], ALL_GUNS = [];
 const FX = {};
 let airWingDirty = false;
-let T = 0, paused = false, fpsLimit = 0, lastMs = 0, ready = false;
+let T = 0, paused = false, fpsLimit = 0, lastMs = 0, ready = false, shadersReady = false;
 const ENV = { elev: 30, lightsOn: 0, night: 0, ppu: 10, smokeTint: new THREE.Color(0xbbbbbb), splashTint: new THREE.Color(0xffffff) };
 
 /* ---- URL test parameters (for browser preview) ---- */
@@ -73,7 +73,8 @@ function init() {
   const canvas = document.getElementById('c');
   renderer = new THREE.WebGLRenderer({ canvas, antialias: true, precision: 'highp', powerPreference: 'high-performance' });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
-  renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.outputColorSpace = THREE.LinearSRGBColorSpace;   // the r149 look (see core.js)
+  renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFShadowMap;            // soft since r182
   scene = new THREE.Scene(); scene.fog = new THREE.Fog(0x9fc0da, 300, 800);
   camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 1, 700);
 
@@ -114,7 +115,34 @@ function init() {
   ready = true;
   window.addEventListener('resize', resize);
   buildUI(); buildAirWing(); applySettings(); resize(); updateEnvironment();
-  requestAnimationFrame(frame);
+  const start = () => { shadersReady = true; requestAnimationFrame(frame); };
+  warmShaders().then(start, start);
+}
+/* Shader warm-up: compileAsync (KHR_parallel_shader_compile) instead of compiling everything on the first render, so
+   nothing compiles later at dusk (searchlights on), in the first fight (pools hidden until then) or when a helicopter
+   with a searchlight leaves the hangar. compile() only walks visible objects: everything hidden is shown during its
+   synchronous part. Programs depend on the number of visible spot lights: none by day, the ships' ones plus 0–4
+   helicopters' at night — one pass per count. The frame loop starts once the current count is ready (T stands still
+   until then, and so does the splash); the other counts follow in the background, under the splash. */
+let shadersAll = false;
+function warmShaders() {
+  const hidden = [], spots = [], air = new Set(AIRCRAFT.map(a => a.mesh));
+  scene.traverse(o => { if (o.isSpotLight) spots.push(o); else if (!o.visible) hidden.push(o); });
+  const onAircraft = l => { for (let q = l.parent; q; q = q.parent) if (air.has(q)) return true; return false; };
+  const shown = l => { for (let q = l; q; q = q.parent) if (!q.visible) return false; return true; };
+  const order = [...spots.filter(l => !onAircraft(l)), ...spots.filter(onAircraft)], vis = spots.map(l => l.visible);
+  const pass = n => {
+    hidden.forEach(o => { o.visible = true; }); order.forEach((l, i) => { l.visible = i < n; });
+    try { return renderer.compileAsync(scene, camera); }
+    finally { hidden.forEach(o => { o.visible = false; }); spots.forEach((l, i) => { l.visible = vis[i]; }); }
+  };
+  const now = spots.filter(shown).length, counts = [0];
+  for (let n = order.filter(l => !onAircraft(l)).length; n <= order.length; n++) if (!counts.includes(n)) counts.push(n);
+  const fail = e => { console.warn('shader warm-up failed', e); };
+  let first; try { first = pass(now); } catch (e) { fail(e); first = Promise.resolve(); }
+  return first.then(() => {
+    counts.filter(n => n !== now).reduce((p, n) => p.then(() => pass(n)), Promise.resolve()).catch(fail).then(() => { shadersAll = true; });
+  });
 }
 
 /* ---- air wing from the per-type counts (a fresh build: everything starts on deck / in the hangar) ---- */
@@ -240,8 +268,8 @@ function updateEnvironment() {
   const sunDir = dirOf(sp.az, Math.max(sp.elev, 7)), moonDir = dirOf(sp.az + 160, 42);
   const dir = sunDir.lerp(moonDir, smoothstep(-2, -7, sp.elev)).normalize();
   sunLight.position.copy(dir).multiplyScalar(150); sunLight.target.position.set(0, 0, 0);
-  sunLight.color.copy(k.sun); sunLight.intensity = k.si;
-  hemi.color.copy(k.hs); hemi.groundColor.copy(k.hg); hemi.intensity = k.hi;
+  sunLight.color.copy(k.sun); sunLight.intensity = k.si * LIGHT_K;
+  hemi.color.copy(k.hs); hemi.groundColor.copy(k.hg); hemi.intensity = k.hi * LIGHT_K;
   scene.fog.color.copy(k.fog); renderer.setClearColor(k.fog);
   water.material.color.copy(k.water); water.material.specular.copy(k.spec);
   ENV.smokeTint.copy(k.smoke);
@@ -263,7 +291,7 @@ function updateSubsBackdrop(stock) {
   const d = AIRWAR.groundAt(0, 0.82, 0, _sbP).sub(camera.position).dot(_sbF), fg = scene.fog;
   const fog = (near, far) => clamp((d - near) / (far - near), 0, 1), f0 = fog(CAM_D - 30, CAM_D + 260), f = fog(fg.near, fg.far);
   const L0 = lerp(stock.water * stock.light, stock.fog, f0);
-  const L = lerp(lum(water.material.color) * Math.min(1, hemi.intensity + sunLight.intensity * 0.5), lum(WEATHER.baseFog), f);
+  const L = lerp(lum(water.material.color) * Math.min(1, (hemi.intensity + sunLight.intensity * 0.5) / LIGHT_K), lum(WEATHER.baseFog), f);
   const a = clamp(0.32 + Math.max(0, L - L0) * 2, 0.32, 0.62);
   if (Math.abs(a - subsBg) < 0.02 && !(a === 0.32 && subsBg !== 0.32)) return;
   subsBg = a; const st = document.documentElement.style;
@@ -663,7 +691,7 @@ function updateLights() {
   for (const s of SEARCHLIGHTS) {
     const on = ENV.lightsOn * s.enabled;
     // hidden by day: a visible spot light costs every lit fragment even at zero intensity (toggles only at dusk/dawn)
-    if (s.light) { s.light.intensity = s.o.intensity * on; s.light.visible = ENV.lightsOn > 0; }
+    if (s.light) { s.light.intensity = s.o.intensity * on * LIGHT_K; s.light.visible = ENV.lightsOn > 0; }
     if (s.cone) s.cone.material.uniforms.uOpacity.value = s.o.coneOpacity * on * (0.45 + 0.55 * ENV.night);
   }
   FX.foam.mat.size = 1.05 * ENV.ppu;

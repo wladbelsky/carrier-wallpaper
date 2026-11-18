@@ -7,6 +7,8 @@
   },
   "devDependencies": {
     "@playwright/test": "1.63.0",
-    "gifenc": "1.0.3"
+    "esbuild": "0.28.2",
+    "gifenc": "1.0.3",
+    "three": "0.187.0"
   }
 }
