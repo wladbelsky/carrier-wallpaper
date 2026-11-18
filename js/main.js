@@ -234,6 +234,7 @@ function updateEnvironment() {
   const sp = sunPosition(getNow(), CFG.lat, CFG.lon);
   ENV.elev = sp.elev;
   const k = skyAt(sp.elev);
+  const stock = { water: lum(k.water), light: Math.min(1, k.hi + k.si * 0.5), fog: lum(k.fog) };   // before the weather: subtitle backdrop
   WEATHER.apply(k, sp.elev);          // weather bends the palette before it reaches the lights
   const dirOf = (az, el) => new V3(Math.sin(az * DEG) * Math.cos(el * DEG), Math.sin(el * DEG), -Math.cos(az * DEG) * Math.cos(el * DEG));
   const sunDir = dirOf(sp.az, Math.max(sp.elev, 7)), moonDir = dirOf(sp.az + 160, 42);
@@ -250,6 +251,23 @@ function updateEnvironment() {
   FX.foam.bright = lerp(0.13, 0.3, smoothstep(-8, 10, sp.elev));
   SHIPS.forEach(s => s.winMat.emissive.setHex(0xffc27a).multiplyScalar(0.75 * ENV.lightsOn));
   WEATHER.capture(hemi.intensity, sunLight.intensity, scene.fog.color);   // lightning flashes on top of these
+  updateSubsBackdrop(stock);
+}
+/* Subtitle backdrop: the stock one over the stock sky; when the weather makes what lies behind the subtitles (the sea
+   near the top of the screen, faded into the fog) brighter than it would be, darker — so white text stays readable
+   over pale fog / overcast. Lightning is ignored (base fog colour). */
+const _sbP = new V3(), _sbF = new V3(), lum = c => 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b;
+let subsBg = -1;
+function updateSubsBackdrop(stock) {
+  camera.updateMatrixWorld(); camera.getWorldDirection(_sbF);
+  const d = AIRWAR.groundAt(0, 0.82, 0, _sbP).sub(camera.position).dot(_sbF), fg = scene.fog;
+  const fog = (near, far) => clamp((d - near) / (far - near), 0, 1), f0 = fog(CAM_D - 30, CAM_D + 260), f = fog(fg.near, fg.far);
+  const L0 = lerp(stock.water * stock.light, stock.fog, f0);
+  const L = lerp(lum(water.material.color) * Math.min(1, hemi.intensity + sunLight.intensity * 0.5), lum(WEATHER.baseFog), f);
+  const a = clamp(0.32 + Math.max(0, L - L0) * 2, 0.32, 0.62);
+  if (Math.abs(a - subsBg) < 0.02 && !(a === 0.32 && subsBg !== 0.32)) return;
+  subsBg = a; const st = document.documentElement.style;
+  st.setProperty('--subs-bg', a.toFixed(2)); st.setProperty('--subs-glow', Math.min(1, a + 0.38).toFixed(2));
 }
 
 /* ---- audio ---- */
@@ -932,7 +950,7 @@ function step(dt) {
   if (airWingDirty && ready) syncAirWing();
   updateLights();
 
-  envTimer -= dt; if (envTimer <= 0) { envTimer = 2; updateEnvironment(); }
+  envTimer -= dt; if (envTimer <= 0) { envTimer = WEATHER.settling ? 0.25 : 2; updateEnvironment(); }
   WEATHER.update(dt);
   uiTimer -= dt; if (uiTimer <= 0) { uiTimer = 0.25; updateUI(); }
   meterTimer -= dt; if (meterTimer <= 0) { meterTimer = 0.05; updateMeter(); }

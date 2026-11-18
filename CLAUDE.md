@@ -8,17 +8,18 @@ User-facing docs: `README.md` (keep it in sync when behaviour or properties chan
 - Plain JS, no build step, no npm. `'use strict'` classic scripts sharing **global** scope
   (no modules). three.js **r149** is vendored as `js/three.min.js` — never edit it.
 - `index.html` loads scripts in dependency order (later files use globals of earlier ones):
-  `core → flightpath → models → airframes → effects → radio → aircraft → missions → persist → combat → airwar → tanker → main → properties → settings`,
+  `core → flightpath → models → airframes → effects → weather → radio → aircraft → missions → persist → combat → airwar → tanker → main → properties → settings`,
   then an inline script registers the WE audio listener (or starts the browser demo beat).
   `main.js` calls `init()` at its end, so anything `init()` needs must be defined before `main.js`.
 
 | File | Contents |
 |---|---|
-| `js/core.js` | utils (`V3`, `rand`, `clamp`, `lerp`, `smoothstep`, `pick`…), `CFG` defaults, waves (JS + generated GLSL — keep in sync), sun position, sky palette, canvas textures `TEX` |
+| `js/core.js` | utils (`V3`, `rand`, `clamp`, `lerp`, `smoothstep`, `pick`…), `CFG` defaults, waves (JS + generated GLSL `waveH` / `waveNormal` — keep in sync), sun position, sky palette, canvas textures `TEX` |
 | `js/flightpath.js` | `FlightPath`: Dubins CSC curves (turn-radius-limited flight) + lines |
 | `js/models.js` | mesh helpers (`M`, `box`, `cyl`, `taper`, `prism`…), `mergeStatic`, `disposeTree`, nav lights, searchlights, CIWS/gun mounts, `buildCarrier`, `buildDestroyer`, mission ships `buildFeeder` / `buildTrawler` / `buildCorvette` / `buildDestroyerTemplate` |
 | `js/airframes.js` | aircraft model builders → `{ group, setFold(f), tick(dt, st) }` (`buildMQ25`: refuelling hose reads `st.hoseOut`); `buildWreck` (crashed jet template for pilot rescues) |
 | `js/effects.js` | `Tracers` (InstancedMesh), `SpriteFX` (flash/smoke pools), `Splashes`, `Foam` (points), `FlashLights` |
+| `js/weather.js` | `WEATHER` (presets `WEATHER_KINDS`, blend, lightning) + `Rain` (InstancedMesh pool) — see "Weather" |
 | `js/radio.js` | callsigns (+ `ENEMY_NAMES`), `RADIO` subtitle queue, mission orders, `STRESS` + `THREAT_TIERS`, `radioLine()`, line pools `OPS` / `OPS_VOICE` / `OPS_UNARMED` / `COMBAT` / `AIRWAR_LINES` / `ENEMY_LINES` / `TANKER_LINES` / `LINES` (see "Radio lines & threat tiers") |
 | `js/aircraft.js` | `Aircraft` → `FixedWing` / `Helicopter` state machines, deck resources `FD` / `DECK`, types, `Flyby` |
 | `js/persist.js` | `PERSIST`: remembers who is in the air / on a mission (`localStorage`, `CFG.saveState`), restores it after a fresh `buildAirWing()` (orbit / `Mission.resume`), radio `LINES.restore` |
@@ -35,7 +36,7 @@ User-facing docs: `README.md` (keep it in sync when behaviour or properties chan
 
 ## Rules / conventions
 - **After changing any JS/CSS file, bump the cache-buster** `?v=N` on all `<script>`/`<link>` tags in
-  `index.html` (WE's CEF caches aggressively). Current: `v=62`.
+  `index.html` (WE's CEF caches aggressively). Current: `v=63`.
 - **New WE property**: add it to `project.json`, read it in `applyUserProperties` (`main.js`) into `CFG`,
   then run `python tools/gen_properties.py`. Property `order` decides the browser-drawer group
   (0–9 camera/time, 10–19 audio/combat, 20–29 sea, 30–39 panel, 40–49 air wing, 50–59 hull number).
@@ -131,6 +132,18 @@ Missions fly beyond the screen edge while there is no music. `dispatchFlight` (`
   order in `AIRCRAFT` is arbitrary). `followPath` takes `pathOff` (side) and `pathDy` (height).
 - New airborne states are in `AIR_STATES` (persist restores them into orbit; the event is dropped).
 
+## Weather (`js/weather.js`)
+`CFG.weather` (`off` default, `auto`, `clear`, `overcast`, `rain`, `fog`, `storm`) and `CFG.weatherInt` (%, 0–200).
+- Each kind is one flat parameter set in `WEATHER_KINDS` (light multipliers, tint, fog mix / range, water darkening, sea
+  state, rain drops, wind, lightning). `WEATHER.cur` chases `WEATHER.tgt` (time constant 2.5 s), so a change fades;
+  `off` fades to `WEATHER_NEUTRAL`, which is an exact no-op (intensity 0 too). `auto` picks a new kind every 105–195 s.
+- Hooks in `main.js`: `updateEnvironment` → `WEATHER.apply(k, elev)` bends the `skyAt` palette before it reaches the
+  lights, then `WEATHER.capture(...)` stores the result as the base for lightning; `step` → `WEATHER.update(dt)` (blend,
+  lightning on `hemi` / sun / fog, fog range via `applyFogDist()`, rain pool) and `WAVE.amp × WEATHER.waveMul`, extra
+  whitecaps `WEATHER.foamRate`. While `WEATHER.settling`, `updateEnvironment` runs every 0.25 s instead of 2 s.
+- The subtitle backdrop follows the weather (`updateSubsBackdrop`, CSS `--subs-bg` / `--subs-glow`): stock over the
+  stock palette, darker when the weather makes the sea behind the subtitles brighter (pale fog).
+
 ## Radio lines & threat tiers (`js/radio.js`)
 - **Every radio line goes through `radioLine(pool, vars)`** — never `pick()` a line pool directly, never build
   lines with `.replace('{X}', …)`. `opsLine(key, a)` (flight-deck calls, `a` = the aircraft, `{c}` = its callsign) is a thin wrapper returning
@@ -140,6 +153,11 @@ Missions fly beyond the screen edge while there is no music. `dispatchFlight` (`
   `ENEMY_LINES` (intercepted enemy traffic), `LINES` (alerts, mission acknowledgements), `MISSIONS` (order/done pairs). A pool is either
   - an array — the same lines at any time, or
   - an object keyed by threat tier (`calm`, `tense`, `panic`, …) plus optional `peace` (used outside combat).
+- **`STRESS.level`** (0–1) is the only threat value the rest of the code reads. `CFG.threatRamp` (%) scales its speed
+  (0 = frozen). `CFG.threatMode`: `ramp` (stock: +1 per 600 s of fighting, −1 per 180 s of silence) or `script` — the
+  fixed cycle `THREAT_SCRIPT` (calm 0.10 / probe 0.40 / engage 0.62 / surge 1.00 / break 0.18, each eased toward at
+  its own rate for `hold` s; the panel label shows the stage). The stage is not saved: after a restart the cycle starts
+  over at the restored level.
 - **Tiers** are defined once in `THREAT_TIERS` (calmest first, `upTo` = upper bound of `STRESS.level`).
   To add a tier, add an entry there and lines under its key where wanted; nothing else changes.
 - **Resolution:**

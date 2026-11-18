@@ -106,6 +106,7 @@
     if (MISSILES.length > 300) v.push(`MISSILES ${MISSILES.length}`);
     if (PENDING.length > 300) v.push(`PENDING ${PENDING.length}`);
     if (FLYBYS.length > 8) v.push(`FLYBYS ${FLYBYS.length}`);
+    if (WEATHER.rain && WEATHER.rain.mesh.count > WEATHER.rain.n) v.push(`rain drops ${WEATHER.rain.mesh.count}`);
     return v;
   };
 

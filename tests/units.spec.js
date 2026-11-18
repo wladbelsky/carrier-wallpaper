@@ -168,6 +168,28 @@ test('waves: the generated GLSL matches the JS wave function', async ({ wp }) =>
   expect(r.err).toBeLessThan(1e-9);
 });
 
+test('waves: the GLSL water normal (waveNormal) is the gradient of the JS wave function', async ({ wp }) => {
+  const r = await wp.run(() => {
+    WAVE.amp = 1.3; for (let i = 0; i < 37; i++) waveAdvance(0.1);
+    // the terms of `float dx = uAmp*(…)` / `float dz = …`: [sign] coeff*cos(kx*p.x+kz*p.y+uPh[i]) (terms joined by ' + ' / ' - ')
+    const part = name => new RegExp(`float ${name} = uAmp\\*\\((.*)\\);`).exec(WAVE_GLSL)[1];
+    const terms = src => [...src.matchAll(/(^|[+-])\s*(-?[\d.]+)\*cos\((-?[\d.]+)\*p\.x\+(-?[\d.]+)\*p\.y\+uPh\[(\d)\]\)/g)]
+      .map(m => [(m[1] === '-' ? -1 : 1) * Number(m[2]), Number(m[3]), Number(m[4]), Number(m[5])]);
+    const ev = (ts, x, z) => WAVE.amp * ts.reduce((s, [a, kx, kz, i]) => s + a * Math.cos(kx * x + kz * z + WAVE.phase[i]), 0);
+    const tx = terms(part('dx')), tz = terms(part('dz')), h = 1e-4;
+    let err = 0;
+    for (let k = 0; k < 200; k++) {
+      const x = rand(-150, 150), z = rand(-150, 150);
+      const gx = (waveH(x + h, z) - waveH(x - h, z)) / (2 * h), gz = (waveH(x, z + h) - waveH(x, z - h)) / (2 * h);
+      err = Math.max(err, Math.abs(ev(tx, x, z) - gx), Math.abs(ev(tz, x, z) - gz));
+    }
+    return { n: [tx.length, tz.length], err, ret: /return normalize\(vec3\(-dx, 1\.0, -dz\)\)/.test(WAVE_GLSL) };
+  });
+  expect(r.n).toEqual([4, 4]);
+  expect(r.ret).toBe(true);
+  expect(r.err).toBeLessThan(2e-3);     // coefficients are printed with 4 decimals
+});
+
 test('models: every builder runs, mergeStatic keeps dynamic nodes, disposeTree spares shared materials', async ({ wp }) => {
   const r = await wp.run(() => {
     const out = { built: [], fail: [] };

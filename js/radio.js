@@ -240,13 +240,13 @@ function makeMission(kind, extra) {
 
    Stage levels are picked to line up with THREAT_TIERS (calm < 0.33, tense < 0.66, panic above),
    so every stage gets its own radio tone instead of two stages sharing one:
-     calm 0.10 → calm     probe 0.30 → calm (contacts only, nobody shooting yet)
+     calm 0.10 → calm     probe 0.40 → tense (contacts, nobody shooting yet)
      engage 0.62 → tense   surge 1.00 → panic   break 0.18 → calm
    The break stage also drops slowly (rate 0.025), so the way down from panic to calm takes about
    33 s instead of snapping back — the chatter winds down with it. ===== */
 const THREAT_SCRIPT = [
   { key: 'calm', label: 'CALM', level: 0.10, rate: 0.020, hold: 45 },   // quiet patrol, few contacts
-  { key: 'probe', label: 'PROBE', level: 0.30, rate: 0.045, hold: 55 },   // first bandits, escorts alert
+  { key: 'probe', label: 'PROBE', level: 0.40, rate: 0.045, hold: 55 },   // first bandits, escorts alert
   { key: 'engage', label: 'ENGAGE', level: 0.62, rate: 0.060, hold: 70 },  // full combat air patrol
   { key: 'surge', label: 'SURGE', level: 1.00, rate: 0.100, hold: 65 },   // everything at once
   { key: 'break', label: 'BREAK', level: 0.18, rate: 0.025, hold: 40 }    // enemy disengages, wind down

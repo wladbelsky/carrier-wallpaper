@@ -188,10 +188,21 @@ skim in toward the ships.
 
 Stress builds over ~10 minutes of continuous music and falls off in silence. The panel shows it as **THREAT**.
 
+- **Threat escalation speed, %** scales that timing: 300 = three times as fast, 0 = the level stays where it is.
+- **Threat progression** = *Continuous ramp* (the above) or *Scripted five-stage cycle*: calm → probe → engage →
+  surge → break, about 4.5 minutes per cycle while the music plays; the panel shows the stage name.
+
 It changes:
 - the radio tone (calm → tense → panic) — every combat call, from the deck crew to the dogfights and the enemy, has lines for each level;
 - the radio frequency;
 - enemy wave size and spawn rate.
+
+## Weather
+
+The **Weather** property (off by default): overcast, rain, sea fog, storm with lightning, or **Auto rotate** (a new
+kind every 2–3 minutes). Weather dims and tints the light, pulls the fog in, changes the sea state, adds rain and
+whitecaps; changes fade over a few seconds. **Weather intensity, %** scales all of it (0 = the clear look, up to 200).
+The subtitle backdrop darkens over pale fog so the radio text stays readable.
 
 ## Radio priority
 
@@ -275,7 +286,7 @@ seeded and stepped by the tests, so every run is reproducible. They cover:
 - **repository**: one cache-buster on every script, every file referenced, `js/properties.js` generated from
   `project.json`, the project file itself;
 - **units**: flight paths (Dubins curves never turn tighter than the turn radius), radio lines and threat tiers,
-  every line pool and placeholder, mission texts, callsigns, mission picking, sun / sky, the wave shader vs its JS
+  every line pool and placeholder, mission texts, callsigns, mission picking, sun / sky, the wave shader and its normal vs the JS
   twin, every model builder;
 - **flight logic**: launch and recovery of every aircraft type through its deck / elevator sequence, LAUNCH ALL /
   RECOVER ALL, half an hour of automatic flight ops with deck resources (catapults, landing area, parking spots,
@@ -283,6 +294,8 @@ seeded and stepped by the tests, so every run is reproducible. They cover:
 - **combat**: arming from music, hold / resume / stand-down, passes, waves, missiles and boats, clean-up afterwards;
 - **missions** (every type and on-screen variant), **refuelling passes** (peace only, abort, a fight interrupting), **session state**,
   **air wing changes** at runtime, the **control panel** (pages, buttons) and **radio subtitles**;
+- **weather and threat modes**: every weather kind (fog, rain, lightning), off / 0 % = the stock look, no leaks when
+  switching, the subtitle backdrop; the scripted threat cycle and the escalation speed;
 - **rendering**: no WebGL errors, draw-call budget, the fleet on screen, day vs night, shadows and their coverage,
   no geometry leaks;
 - **soak**: two hours of simulated life (music and silence, missions, count changes) with all of the above.

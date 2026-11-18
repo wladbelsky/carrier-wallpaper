@@ -103,11 +103,13 @@ const WEATHER = {
   get foamRate() { return this.cur.rain * 0.02 * clamp(this.intensity, 0, 2); },
   get tag() { return this.kind === 'off' ? '' : ' · ' + WEATHER_NAMES[this.tgtName]; },
   get active() { return this.kind !== 'off'; },
+  /* still blending toward the target: updateEnvironment() runs more often meanwhile, so the palette fades smoothly */
+  get settling() { for (const key in this.cur) if (Math.abs(this.tgt[key] - this.cur[key]) > (key === 'rain' ? 5 : 0.005)) return true; return false; },
 
   /* called from updateEnvironment(): bend the palette before it is pushed to the lights */
   apply(k, elev) {
     const I = clamp(this.intensity, 0, 2), p = this.cur;
-    if (!this.active || I <= 0.001) return;
+    if (I <= 0.001) return;              // 'off' still applies: cur fades to WEATHER_NEUTRAL (an exact no-op) instead of snapping
     const day = smoothstep(-12, 8, elev);                 // fog at night must be dark, not white
     const night = 0.28 + 0.72 * day;
     _wtint.setRGB(p.r * night, p.g * night, p.b * night);

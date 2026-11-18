@@ -91,8 +91,9 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
   position: fixed; top: 5.5vh; left: 50%; transform: translate(-50%, -6px); z-index: 15; max-width: 70vw;
   padding: 7px 18px; text-align: center; pointer-events: none; opacity: 0; transition: opacity .25s, transform .25s;
   font: 600 19px/1.35 'Segoe UI', 'Arial Narrow', Arial, sans-serif; letter-spacing: .02em; color: #f4f7fa;
-  text-shadow: 0 0 3px #000, 0 1px 2px #000, 0 0 10px rgba(0,0,0,.7);
-  background: linear-gradient(90deg, rgba(0,0,0,0), rgba(0,0,0,.32) 15%, rgba(0,0,0,.32) 85%, rgba(0,0,0,0));
+  text-shadow: 0 0 3px #000, 0 1px 2px #000, 0 0 10px rgba(0,0,0,var(--subs-glow, .7));
+  /* --subs-bg: set by updateSubsBackdrop() (main.js) — darker over pale fog / overcast */
+  background: linear-gradient(90deg, rgba(0,0,0,0), rgba(0,0,0,var(--subs-bg, .32)) 15%, rgba(0,0,0,var(--subs-bg, .32)) 85%, rgba(0,0,0,0));
 }
 #subs.on { opacity: 1; transform: translate(-50%, 0); }
 /* speaker on its own line above the line, like Ace Combat */
