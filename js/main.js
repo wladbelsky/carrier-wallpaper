@@ -124,13 +124,22 @@ function init() {
   buildUI(); buildAirWing(); applySettings(); resize(); updateEnvironment();
   // three's own animation loop: it also advances the node frame (shadow maps and other per-frame nodes update once per frame)
   const start = () => { shadersReady = true; renderer.setAnimationLoop(frame); };
-  renderer.init().then(() => { GPU.webgpu = !!renderer.backend.isWebGPUBackend; if (GPU.webgpu && QS.get('glow') !== '0') clusteredLights(); return warmShaders(); }).then(start, e => {
+  renderer.init().then(() => { GPU.webgpu = !!renderer.backend.isWebGPUBackend; if (GPU.webgpu && QS.get('glow') !== '0' && PERF.flags.glow !== false) clusteredLights(); return warmShaders(); }).then(start, e => {
     console.error('renderer could not start', e); const s = document.querySelector('#splash .s'); if (s) s.textContent = 'NO WEBGPU / WEBGL 2 — CANNOT RENDER';
   });
 }
+// perfReport() state and the flags kept in localStorage (see perfReport, below frame())
+const PERF = { rec: null,
+  flags: (() => { try { return JSON.parse(localStorage.getItem('csg-perf') || '{}') || {}; } catch (e) { return {}; } })(),
+  sample(ms, cpu) {
+    const r = this.rec; if (r.last) r.frame.push(ms - r.last); r.last = ms;
+    r.cpu.push(cpu); r.calls.push(renderer.info.render.drawCalls); r.lights.push(GLOW.used);
+    if (GPU.timing) { r.gpu.push(GPU.ms.render); r.comp.push(GPU.ms.compute); }
+  }
+};
 const GPU = { webgpu: false,   // the backend WebGPURenderer ended up with (set once renderer.init() is done)
   // ?gputime=1 (debug): GPU time of the last frame's render / compute passes in ms, measured twice a second (GPU.ms)
-  timing: QS.get('gputime') === '1', ms: { render: 0, compute: 0 }, tsT: 0 };
+  timing: QS.get('gputime') === '1' || PERF.flags.gputime === true, ms: { render: 0, compute: 0 }, tsT: 0 };
 /* WebGPU: clustered lighting (Forward+, tools/three-clustered.js). Point / spot lights without shadows are culled per
    screen tile and depth slice on the GPU and are not part of the shader cache key, so they may come and go: flashes,
    fires, missile motors, afterburners, tracers, beacons and deck lights (GLOW), a searchlight for every helicopter
@@ -1004,14 +1013,42 @@ function frame(ms) {
   // simulate the real elapsed time in sub-steps of at most 50 ms: low FPS limits don't slow the world down
   const el = clamp((ms - lastMs) / 1000, 0, 0.25); lastMs = ms;
   const n = Math.max(1, Math.ceil(el / 0.05)), dt = el / n;
+  const t0 = PERF.rec ? performance.now() : 0;
   for (let i = 0; i < n * TIME_SCALE; i++) step(dt);
   if (CFG.shadows) fitShadow();
   renderFrame();
+  if (PERF.rec) PERF.sample(ms, performance.now() - t0);
   if (GPU.timing && ms - GPU.tsT > 500) {
     GPU.tsT = ms;
     renderer.resolveTimestampsAsync(THREE.TimestampQuery.RENDER).then(v => { GPU.ms.render = v; });
     renderer.resolveTimestampsAsync(THREE.TimestampQuery.COMPUTE).then(v => { GPU.ms.compute = v; });
   }
+}
+/* ---- performance report on a real GPU. In Wallpaper Engine: Settings → General → "CEF devtools port" (e.g. 8080),
+   open http://localhost:8080 in Chrome, pick the wallpaper, then in its console:
+     perfFlags({ gputime: true })   — once: GPU timing (WebGPU timestamp queries), needs a reload (F5 in the devtools)
+     perfReport(60)                 — measures 60 s and logs a summary (frame times, CPU, GPU, draw calls, lights)
+     perfFlags({ glow: false })     — the next load without the dynamic lights (compare), perfFlags({}) — back to normal
+   The flags live in localStorage (WE passes no URL parameters); ?gputime=1 / ?glow=0 do the same in a browser. ---- */
+function perfFlags(f) { try { localStorage.setItem('csg-perf', JSON.stringify(f || {})); } catch (e) { return 'localStorage unavailable'; } return 'saved — reload to apply: ' + JSON.stringify(f || {}); }
+function perfReport(sec = 30) {
+  PERF.rec = { frame: [], cpu: [], gpu: [], comp: [], calls: [], lights: [], last: 0 };
+  console.log(`perfReport: measuring ${sec} s…`);
+  return new Promise(res => setTimeout(() => {
+    const r = PERF.rec; PERF.rec = null;
+    const avg = a => a.length ? +(a.reduce((x, y) => x + y, 0) / a.length).toFixed(2) : null;
+    const p95 = a => a.length ? +[...a].sort((x, y) => x - y)[Math.floor(a.length * 0.95)].toFixed(2) : null;
+    const out = {
+      backend: GPU.webgpu ? 'WebGPU' : 'WebGL 2', dynamicLights: GLOW.cap > 0, volumetric: CFG.volumetric, bloom: CFG.bloom,
+      shadows: CFG.shadows, fpsLimit, size: `${renderer.domElement.width}x${renderer.domElement.height}`, night: +ENV.night.toFixed(2),
+      combat: AUD.armed, weather: CFG.weather, frames: r.cpu.length, fps: r.frame.length ? +(1000 / avg(r.frame)).toFixed(1) : 0,
+      frameMs: avg(r.frame), frameMsP95: p95(r.frame), cpuMs: avg(r.cpu), cpuMsP95: p95(r.cpu),
+      gpuMs: GPU.timing ? avg(r.gpu) : 'perfFlags({ gputime: true }) + reload', gpuComputeMs: GPU.timing ? avg(r.comp) : null,
+      drawCalls: avg(r.calls), lights: avg(r.lights), lightsMax: r.lights.length ? Math.max(...r.lights) : 0,
+      programs: renderer.info.memory.programs, geometries: renderer.info.memory.geometries, textures: renderer.info.memory.textures
+    };
+    console.log('perfReport ' + JSON.stringify(out)); res(out);
+  }, sec * 1000));
 }
 /* The sun's shadow camera covers just the visible sea: the light-space bounds of the screen corners at sea level.
    Anything casting onto the screen lies above that area along the light, however far out or high (a jet climbing

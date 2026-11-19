@@ -40,7 +40,7 @@ User-facing docs: `README.md` (keep it in sync when behaviour or properties chan
 
 ## Rules / conventions
 - **After changing any JS/CSS file, bump the cache-buster** `?v=N` on all `<script>`/`<link>` tags in
-  `index.html` (WE's CEF caches aggressively). Current: `v=69`.
+  `index.html` (WE's CEF caches aggressively). Current: `v=70`.
 - **New WE property**: add it to `project.json`, read it in `applyUserProperties` (`main.js`) into `CFG`,
   then run `python tools/gen_properties.py`. Property `order` decides the browser-drawer group
   (0–9 camera/time, 10–19 audio/combat, 20–29 sea, 30–39 panel, 40–49 air wing, 50–59 hull number).
@@ -288,6 +288,11 @@ Missions fly beyond the screen edge while there is no music. `dispatchFlight` (`
   The ⚙ SETTINGS drawer mirrors all WE properties (stored in `localStorage`); URL params `?hour=22`,
   `?zoom=150`, `?demo=1`, `?ts=N` (time scale), `?gl=webgl2`, `?glow=0` (no clustered / dynamic lights), `?gputime=1` (WebGPU: `GPU.ms` = GPU time of the last frame,
   render / compute passes, sampled twice a second).
+- **Performance on a real GPU** (also inside Wallpaper Engine: Settings → General → "CEF devtools port", then
+  `http://localhost:<port>` in Chrome → the wallpaper's console): `perfReport(60)` logs and returns frame / CPU / GPU
+  times, draw calls, dynamic lights, memory; `perfFlags({ gputime: true })` / `perfFlags({ glow: false })` /
+  `perfFlags({})` store debug switches in `localStorage` (`csg-perf`, read at load: `PERF.flags`) since WE passes no URL
+  parameters.
 - **Automated tests** (`tests/`, Playwright Test in headless Chromium + SwiftShader): run them in Docker —
   `powershell -ExecutionPolicy Bypass -File tools/test.ps1 [file / -g pattern]` (no local Node; `$env:SEED = N` for
   another seed); CI runs the same image on every push / PR (`.github/workflows/tests.yml`). Run them after a change.
@@ -307,6 +312,8 @@ Missions fly beyond the screen edge while there is no music. `dispatchFlight` (`
     states come from `STATUS` (so `registerLeg` / `Object.assign(STATUS, …)` is enough), but mission / tanker / lift /
     runway / catapult state sets, `STATE_LIMITS`, the placeholder list in `radio-pools.spec.js` and `GEO_CACHES` are
     listed by hand.
+  - `$env:GL = 'webgpu'` runs a spec on the WebGPU backend (`tools/test.ps1` passes it on); `soak.spec.js` passes
+    there too (it renders through `sampleRT`; `__t.geometries()` renders to the canvas only on WebGL 2).
   - `repo.spec.js` checks the cache-buster (all tags equal, matches "Current: `v=N`" here), the load order line above,
     and that `js/properties.js` is regenerated.
 - Console checks by hand: all globals are reachable; set `paused = true` and drive the sim with `step(0.05)` +

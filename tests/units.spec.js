@@ -280,3 +280,14 @@ test('GLOW: the strongest requests on screen get the lights, the rest stay dark,
   expect(r.after, 'no requests, no lights').toBe(0);
   expect(r.made, 'never more lights than the cap').toBe(3);
 });
+
+test('perfReport: averages frames, CPU, draw calls and lights; perfFlags keeps its switches in localStorage', async ({ wp }) => {
+  await wp.boot();
+  const r = await wp.run(async () => { const p = perfReport(0.2); for (let i = 1; i <= 10; i++) frame(i * 16.7); return await p; });
+  expect(r.frames).toBe(10);
+  expect(r.frameMs).toBeCloseTo(16.7, 1);
+  expect(r.drawCalls).toBeGreaterThan(50);
+  expect(r.backend).toBe('WebGL 2');
+  const f = await wp.run(() => { perfFlags({ glow: false }); const a = localStorage.getItem('csg-perf'); perfFlags({}); return [a, localStorage.getItem('csg-perf')]; });
+  expect(f).toEqual(['{"glow":false}', '{}']);
+});

@@ -221,7 +221,7 @@
      reach (the live count) must plateau; gpu = renderer.info's count of geometries uploaded and not disposed. */
   H.geoSeen = new Set();
   H.geometries = () => {
-    H.render();
+    if (!GPU.webgpu) H.render();   // WebGPU: presenting the canvas loses the device headless — render with sampleRT first
     const g = new Set(), roots = [scene, ...Object.values(ENEMY_MODELS), ...Object.values(VESSEL_MODELS)];
     for (const l of Object.values(FLYBY_MODELS)) for (const m of l) roots.push(m.group || m);
     for (const r of roots) r.traverse(x => { if (x.geometry) g.add(x.geometry); });

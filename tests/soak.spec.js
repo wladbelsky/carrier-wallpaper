@@ -4,17 +4,19 @@ const { test, expect, SEED } = require('./support/harness');
 
 test.use({ viewport: { width: 960, height: 540 } });
 test.setTimeout(15 * 60 * 1000);
+const GLOW_CAP_MAX = 96;   // GLOW.enable(scene, 96) in clusteredLights() (WebGPU; 0 on WebGL 2)
 
 test(`two hours of wallpaper life (seed ${SEED})`, async ({ wp }) => {
   await wp.boot();
   await wp.run(() => { CFG.flyby = 8; CFG.missions = 8; });
-  const snap = () => wp.run(() => {
+  const snap = () => wp.run(async () => {
+    if (GPU.webgpu) await __t.sampleRT(0, 0, 8, 8); else __t.render();   // a frame through the render pipeline too
     const geo = __t.geometries();
     return { gpu: geo.gpu, reach: geo.reach, leaked: geo.leaked, leakedTypes: geo.leakedTypes, t: renderer.info.memory.textures, p: __t.programs(),
       scene: scene.children.length, enemies: ENEMIES.length, flybys: FLYBYS.length, missiles: MISSILES.length,
       // nav-light materials must belong to something alive: an object in the scene or a mission-ship template
       navOrphans: (() => { const used = new Set(); const add = r => r.traverse(o => { if (isNav(o)) used.add(o.material); }); add(scene); Object.values(VESSEL_MODELS).forEach(add); return NAV_MATS.filter(m => !used.has(m)).length; })(),
-      spots: SEARCHLIGHTS.length, vessels: VESSELS.list.length, cargo: CARGO.items.length, ropes: ROPES.items.length, aircraft: AIRCRAFT.length };
+      glow: GLOW.pool.length, heliLights: HELI_LIGHTS.pool.length, spots: SEARCHLIGHTS.length, vessels: VESSELS.list.length, cargo: CARGO.items.length, ropes: ROPES.items.length, aircraft: AIRCRAFT.length };
   });
   const snaps = [];
   for (let min = 0; min < 120; min++) {
@@ -37,6 +39,7 @@ test(`two hours of wallpaper life (seed ${SEED})`, async ({ wp }) => {
   expect(z.scene, `scene children ${snaps.map(s => s.scene).join(' ')}`).toBeLessThan(a.scene + 40);
   for (const s of snaps) expect(s.navOrphans, 'nav-light materials of disposed aircraft are released').toBe(0);
   expect(z.spots, 'searchlights of disposed aircraft are released').toBeLessThanOrEqual(a.spots);
+  for (const s of snaps) { expect(s.glow).toBeLessThanOrEqual(GLOW_CAP_MAX); expect(s.heliLights).toBeLessThanOrEqual(24); }
   for (const s of snaps) { expect(s.cargo).toBeLessThan(10); expect(s.ropes).toBeLessThan(10); expect(s.vessels).toBeLessThan(6); }
   // all of it happened
   const seen = await wp.run(() => { const all = new Set([...__t.log.values()].flat()); return ['mission', 'cbt_pass', 'tank_pass', 'trap', 'hangar'].filter(s => all.has(s)); });

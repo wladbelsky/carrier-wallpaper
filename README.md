@@ -216,6 +216,11 @@ The subtitle backdrop darkens over pale fog so the radio text stays readable.
 
 With both switched off, the scene is drawn directly, as before (the cheapest).
 
+To measure performance on your machine: in Wallpaper Engine's settings set a **CEF devtools port** (General tab),
+open `http://localhost:<port>` in Chrome, pick the wallpaper and run `perfReport(60)` in its console — after a minute
+it logs frame rate, CPU and GPU time, draw calls and dynamic lights. `perfFlags({ gputime: true })` and a reload adds
+GPU timing; `perfFlags({ glow: false })` compares without the dynamic lights; `perfFlags({})` resets.
+
 ## Radio priority
 
 During combat, combat calls go first (contacts, kills, vampires, damage). Routine deck calls switch to their
