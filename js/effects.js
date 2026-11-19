@@ -44,43 +44,26 @@ class Tracers {
   }
 }
 
-/* Camera-facing particles (flashes / smoke): the whole pool is one instanced draw call instead of a
-   THREE.Sprite per particle. Same look as SpriteMaterial (quad of `scale` world units rotated in screen
-   space, color × texture, alpha = opacity, scene fog). Normal-blended pools are sorted back to front
-   on the CPU, exactly like three.js sorted the individual sprites.                                   */
-const SPRITE_VS = `attribute vec3 iPos; attribute vec4 iCol; attribute vec2 iSR;
-  varying vec2 vUv; varying vec4 vCol;
-  #include <fog_pars_vertex>
-  void main() {
-    vUv = uv; vCol = iCol;
-    vec4 mvPosition = modelViewMatrix * vec4(iPos, 1.0);
-    vec2 q = position.xy * iSR.x; float c = cos(iSR.y), s = sin(iSR.y);
-    mvPosition.xy += vec2(c * q.x - s * q.y, s * q.x + c * q.y);
-    gl_Position = projectionMatrix * mvPosition;
-    #include <fog_vertex>
-  }`;
-const SPRITE_FS = `uniform sampler2D map; varying vec2 vUv; varying vec4 vCol;
-  #include <fog_pars_fragment>
-  void main() {
-    gl_FragColor = vCol * texture2D(map, vUv);
-    #include <fog_fragment>
-  }`;
+/* Camera-facing particles (flashes / smoke): the whole pool is one instanced sprite (Sprite.count instances) instead of
+   a THREE.Sprite per particle. Same look as SpriteMaterial (quad of `scale` world units rotated in screen space,
+   color × texture, alpha = opacity, scene fog). Normal-blended pools are sorted back to front on the CPU, exactly like
+   three.js sorted the individual sprites.                                                                          */
 const _sfxFwd = new V3(), farFirst = (a, b) => b.depth - a.depth;
 class SpriteFX {
   constructor(scene, tex, blending, n, fog) {
     this.n = n; this.sorted = blending !== THREE.AdditiveBlending;   // additive blending is order independent
     this.items = []; this.live = [];
     for (let i = 0; i < n; i++) this.items.push({ on: false, p: new V3(), v: new V3(), col: new THREE.Color(), rot: 0, life: 0, max: 1, s0: 1, s1: 1, a0: 1, drag: 0, rise: 0, sc: 1, a: 0, depth: 0 });
-    const quad = new THREE.PlaneGeometry(1, 1), geo = new THREE.InstancedBufferGeometry();
-    geo.index = quad.index; geo.setAttribute('position', quad.attributes.position); geo.setAttribute('uv', quad.attributes.uv);
-    const attr = (k, size) => { const a = new THREE.InstancedBufferAttribute(new Float32Array(n * size), size).setUsage(THREE.DynamicDrawUsage); geo.setAttribute(k, a); return a; };
-    this.aPos = attr('iPos', 3); this.aCol = attr('iCol', 4); this.aSR = attr('iSR', 2); this.attrs = [this.aPos, this.aCol, this.aSR];
-    geo.instanceCount = 0;
-    const uniforms = THREE.UniformsUtils.merge([THREE.UniformsLib.fog]); uniforms.map = { value: tex };
-    const mat = new THREE.ShaderMaterial({ uniforms, vertexShader: SPRITE_VS, fragmentShader: SPRITE_FS, blending, transparent: true, depthWrite: false, fog: !!fog });
-    this.mesh = new THREE.Mesh(geo, mat); this.mesh.frustumCulled = false; this.mesh.visible = false;
+    const attr = size => new THREE.InstancedBufferAttribute(new Float32Array(n * size), size).setUsage(THREE.DynamicDrawUsage);
+    this.aPos = attr(3); this.aCol = attr(4); this.aSR = attr(2); this.attrs = [this.aPos, this.aCol, this.aSR];
+    const { instancedBufferAttribute, texture } = THREE.TSL, sr = instancedBufferAttribute(this.aSR);
+    const mat = new THREE.SpriteNodeMaterial({ blending, transparent: true, depthWrite: false, fog: !!fog });
+    mat.positionNode = instancedBufferAttribute(this.aPos);
+    mat.colorNode = texture(tex).mul(instancedBufferAttribute(this.aCol));
+    mat.scaleNode = sr.x; mat.rotationNode = sr.y;
+    this.mesh = new THREE.Sprite(mat); this.mesh.count = 1; this.mesh.frustumCulled = false; this.mesh.visible = false;
     this.mesh.renderOrder = blending === THREE.AdditiveBlending ? 7 : 3; scene.add(this.mesh);
-    this.geo = geo; this.next = 0;
+    this.next = 0;
   }
   spawn(p, o) {
     const it = this.items[this.next]; this.next = (this.next + 1) % this.n;
@@ -119,7 +102,7 @@ class SpriteFX {
       S[i * 2] = it.sc; S[i * 2 + 1] = it.rot;
     }
     if (live.length) for (const a of this.attrs) { a.needsUpdate = true; a.clearUpdateRanges(); a.addUpdateRange(0, live.length * a.itemSize); }   // upload only the live part
-    this.geo.instanceCount = live.length; this.mesh.visible = live.length > 0;
+    this.mesh.count = Math.max(1, live.length); this.mesh.visible = live.length > 0;
   }
 }
 
@@ -162,12 +145,11 @@ class Foam {
   constructor(scene, n) {
     this.n = n; this.pos = new Float32Array(n * 3); this.col = new Float32Array(n * 3);
     this.v = new Float32Array(n * 2); this.life = new Float32Array(n); this.max = new Float32Array(n).fill(1);
-    const g = new THREE.BufferGeometry();
-    g.setAttribute('position', new THREE.BufferAttribute(this.pos, 3).setUsage(THREE.DynamicDrawUsage));
-    g.setAttribute('color', new THREE.BufferAttribute(this.col, 3).setUsage(THREE.DynamicDrawUsage));
-    this.mat = new THREE.PointsMaterial({ size: 10, map: TEX.soft, vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, sizeAttenuation: false, fog: false });
-    this.pts = new THREE.Points(g, this.mat); this.pts.frustumCulled = false; this.pts.renderOrder = 2; scene.add(this.pts);
-    this.geo = g; this.next = 0; this.bright = 0.5;
+    this.aPos = new THREE.InstancedBufferAttribute(this.pos, 3).setUsage(THREE.DynamicDrawUsage);
+    this.aCol = new THREE.InstancedBufferAttribute(this.col, 3).setUsage(THREE.DynamicDrawUsage);
+    this.pts = pointSprites(this.aPos, this.aCol, { size: 10, map: TEX.soft }); this.mat = this.pts.material;   // point sprites, models.js
+    this.pts.renderOrder = 2; scene.add(this.pts);
+    this.next = 0; this.bright = 0.5;
   }
   emit(x, z, vx, vz, life) {
     const i = this.next; this.next = (this.next + 1) % this.n;
@@ -185,7 +167,7 @@ class Foam {
       const a = this.bright * Math.min(1, t * 1.4) * Math.min(1, (1 - t) * 8 + 0.3);
       this.col[i * 3] = a; this.col[i * 3 + 1] = a; this.col[i * 3 + 2] = a;
     }
-    this.geo.attributes.position.needsUpdate = true; this.geo.attributes.color.needsUpdate = true;
+    this.aPos.needsUpdate = true; this.aCol.needsUpdate = true;
   }
 }
 

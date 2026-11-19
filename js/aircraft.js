@@ -76,7 +76,7 @@ class Aircraft {
   dispose() {
     scene.remove(this.mesh);
     if (this.spot && this.spot.occ === this) this.spot.occ = null;
-    this.mesh.traverse(o => { if (o.isPoints) { const i = NAV_MATS.indexOf(o.material); if (i >= 0) NAV_MATS.splice(i, 1); } });
+    this.mesh.traverse(o => { if (isNav(o)) NAV_MATS.splice(NAV_MATS.indexOf(o.material), 1); });
     for (const s of this.searchlights) { const i = SEARCHLIGHTS.indexOf(s); if (i >= 0) SEARCHLIGHTS.splice(i, 1); }
     if (this.lift && this.lift.busy === this) this.lift.busy = null;
     disposeTree(this.mesh);

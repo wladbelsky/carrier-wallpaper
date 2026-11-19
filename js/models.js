@@ -123,33 +123,41 @@ function setShipNumbers() { for (const k in NUMBER_DECALS) for (const d of NUMBE
 function hullNumber(g, key, x, y, z, w, psi) { const m = numberDecal(key, w, w / 2, 'hull'); m.position.set(x, y, z); m.rotation.y = psi; g.add(m); return m; }
 function windowMat() { return new THREE.MeshPhongMaterial({ color: 0x14202c, emissive: 0x000000, shininess: 70, specular: 0x7090b0, flatShading: true }); }
 
-/* ===== Navigation lights (point sprites) ===== */
+/* ===== Navigation lights (point sprites) =====
+   WebGPU draws point primitives 1 px wide only, so sized points are instanced sprites: one Sprite per set, `count`
+   instances, a PointsNodeMaterial placing each at its own position (size in pixels, like the old PointsMaterial). */
 const NAV_MATS = [];
+function pointSprites(pos, col, opts) {   // pos / col: InstancedBufferAttribute (xyz / rgb); opts: PointsNodeMaterial params
+  const { instancedBufferAttribute, texture, vec4 } = THREE.TSL;
+  const m = new THREE.PointsNodeMaterial(Object.assign({ transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, sizeAttenuation: false, fog: false }, opts));
+  m.positionNode = instancedBufferAttribute(pos);
+  m.colorNode = texture(opts.map).mul(vec4(instancedBufferAttribute(col), 1));
+  const sp = new THREE.Sprite(m); sp.count = pos.count; sp.frustumCulled = false;
+  return sp;
+}
 function navLights(parent, list, blink, scale) {
   const pos = [], col = [], c = new THREE.Color();
   list.forEach(l => { pos.push(l[0], l[1], l[2]); c.setHex(l[3]); col.push(c.r, c.g, c.b); });
-  const g = new THREE.BufferGeometry();
-  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-  g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
-  const m = new THREE.PointsMaterial({ size: 8, map: TEX.glow, vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, sizeAttenuation: false, fog: false, opacity: 0 });
-  m.userData = { scale: scale || 1.1, blink: blink || null };
-  NAV_MATS.push(m);
-  const pts = new THREE.Points(g, m); pts.frustumCulled = false; pts.renderOrder = 5;
+  const pts = pointSprites(new THREE.InstancedBufferAttribute(new Float32Array(pos), 3), new THREE.InstancedBufferAttribute(new Float32Array(col), 3), { size: 8, map: TEX.glow, opacity: 0 });
+  pts.material.userData = { scale: scale || 1.1, blink: blink || null };
+  NAV_MATS.push(pts.material);
+  pts.renderOrder = 5;
   parent.add(pts); return pts;
 }
+const isNav = o => !!(o.material && NAV_MATS.includes(o.material));
 
 /* ===== Searchlights with visible beam ===== */
 const SEARCHLIGHTS = [];
+/* the beam: additive, brightest at the lamp and towards the cone's edges as seen (rim), fading along its length */
 function coneMaterial(color, len) {
-  return new THREE.ShaderMaterial({
-    uniforms: { uColor: { value: new THREE.Color(color) }, uOpacity: { value: 0 }, uLen: { value: len } },
-    vertexShader: `uniform float uLen; varying float vD; varying float vRim;
-      void main(){ vD = position.z/uLen; vec3 n = normalize(normalMatrix*normal); vRim = abs(n.z);
-      gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.0); }`,
-    fragmentShader: `uniform vec3 uColor; uniform float uOpacity; varying float vD; varying float vRim;
-      void main(){ float d = clamp(vD,0.0,1.0); float a = uOpacity*pow(1.0-d,1.7)*(0.25+0.75*pow(vRim,1.3)); gl_FragColor = vec4(uColor*a,1.0); }`,
-    transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide
-  });
+  const { uniform, positionLocal, normalView, clamp, pow, abs, vec4 } = THREE.TSL;
+  const m = new THREE.MeshBasicNodeMaterial({ transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false });
+  const uColor = uniform(new THREE.Color(color)), uOpacity = uniform(0);
+  const d = clamp(positionLocal.z.div(len), 0, 1), rim = abs(normalView.z);
+  m.colorNode = vec4(uColor.mul(uOpacity.mul(pow(d.oneMinus(), 1.7)).mul(pow(rim, 1.3).mul(0.75).add(0.25))), 1);
+  m.forceSinglePass = true;                 // additive: both sides in one pass
+  m.userData.uOpacity = uOpacity;
+  return m;
 }
 function makeSearchlight(parent, x, y, z, opts) {
   const o = Object.assign({ color: 0xfff1d6, angle: 0.16, len: 22, intensity: 2.2, cone: true, coneOpacity: 0.35, housing: true }, opts || {});

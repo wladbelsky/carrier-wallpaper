@@ -71,7 +71,8 @@ function applySettings() {
 /* ---- init ---- */
 function init() {
   const canvas = document.getElementById('c');
-  renderer = new THREE.WebGLRenderer({ canvas, antialias: true, precision: 'highp', powerPreference: 'high-performance' });
+  // WebGPU where the browser has it, WebGL 2 otherwise (or with ?gl=webgl2): the same node materials either way
+  renderer = new THREE.WebGPURenderer({ canvas, antialias: true, powerPreference: 'high-performance', forceWebGL: QS.get('gl') === 'webgl2' });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
   renderer.outputColorSpace = THREE.LinearSRGBColorSpace;   // the r149 look (see core.js)
   renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFShadowMap;            // soft since r182
@@ -116,8 +117,11 @@ function init() {
   window.addEventListener('resize', resize);
   buildUI(); buildAirWing(); applySettings(); resize(); updateEnvironment();
   const start = () => { shadersReady = true; requestAnimationFrame(frame); };
-  warmShaders().then(start, start);
+  renderer.init().then(() => { GPU.webgpu = !!renderer.backend.isWebGPUBackend; return warmShaders(); }).then(start, e => {
+    console.error('renderer could not start', e); const s = document.querySelector('#splash .s'); if (s) s.textContent = 'NO WEBGPU / WEBGL 2 — CANNOT RENDER';
+  });
 }
+const GPU = { webgpu: false };   // the backend WebGPURenderer ended up with (set once renderer.init() is done)
 /* Shader warm-up: compileAsync (KHR_parallel_shader_compile) instead of compiling everything on the first render, so
    nothing compiles later at dusk (searchlights on), in the first fight (pools hidden until then) or when a helicopter
    with a searchlight leaves the hangar. compile() only walks visible objects: everything hidden is shown during its
@@ -209,20 +213,20 @@ function retireAircraft() {
   if (gone) buildList();
 }
 
-/* Smooth-shaded water. The vertex normal comes from the analytic gradient of the wave
-   function (waveNormal in core.js) instead of one flat normal per triangle — the old
+/* Smooth-shaded water (TSL, waveNodes in core.js). The vertex normal comes from the analytic gradient of the wave
+   function instead of one flat normal per triangle — the old
    faceted version turned the sea into a patchwork of hard-edged polygons as soon as the
    wave height was raised above zero. */
 function buildWater() {
   const geo = new THREE.PlaneGeometry(900, 900, 180, 180); geo.rotateX(-Math.PI / 2);
-  waterUniforms = { uPh: { value: new THREE.Vector4() }, uAmp: { value: 1 } };
-  const mat = new THREE.MeshPhongMaterial({ color: 0x1c5a82, specular: 0x506070, shininess: 60 });
-  mat.onBeforeCompile = sh => {
-    sh.uniforms.uPh = waterUniforms.uPh; sh.uniforms.uAmp = waterUniforms.uAmp;
-    sh.vertexShader = WAVE_GLSL + sh.vertexShader
-      .replace('#include <beginnormal_vertex>', 'vec3 objectNormal = waveNormal(position.xz);')
-      .replace('#include <begin_vertex>', '#include <begin_vertex>\n transformed.y += waveH(position.xz);');
-  };
+  const { uniform, positionLocal, normalLocal, vec3, Fn } = THREE.TSL;
+  waterUniforms = { uPh: uniform(new THREE.Vector4()), uAmp: uniform(1) };
+  const mat = new THREE.MeshPhongNodeMaterial({ color: 0x1c5a82, specular: 0x506070, shininess: 60 });
+  mat.positionNode = Fn(() => {
+    const w = waveNodes(positionLocal.xz, waterUniforms.uPh, waterUniforms.uAmp);
+    normalLocal.assign(w.normal);
+    return positionLocal.add(vec3(0, w.h, 0));
+  })();
   water = new THREE.Mesh(geo, mat); water.receiveShadow = true; scene.add(water);
 }
 
@@ -692,7 +696,7 @@ function updateLights() {
     const on = ENV.lightsOn * s.enabled;
     // hidden by day: a visible spot light costs every lit fragment even at zero intensity (toggles only at dusk/dawn)
     if (s.light) { s.light.intensity = s.o.intensity * on * LIGHT_K; s.light.visible = ENV.lightsOn > 0; }
-    if (s.cone) s.cone.material.uniforms.uOpacity.value = s.o.coneOpacity * on * (0.45 + 0.55 * ENV.night);
+    if (s.cone) s.cone.material.userData.uOpacity.value = s.o.coneOpacity * on * (0.45 + 0.55 * ENV.night);
   }
   FX.foam.mat.size = 1.05 * ENV.ppu;
 }

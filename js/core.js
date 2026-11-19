@@ -1,16 +1,9 @@
 'use strict';
 /* ===== Shared utils, settings, waves, sun position, textures ===== */
-/* three.js r187 with the r149 look (see CLAUDE.md, "three.js"): hex colours are used as they are (no sRGB → linear
-   conversion; must be set before any THREE.Color exists), point / spot lights fall off like r149's legacy lights,
-   (1 − d / distance)^decay, and every light intensity is × LIGHT_K where it is set (legacy lights were × π inside three). */
+/* three.js r187, WebGPURenderer (see CLAUDE.md, "three.js"): hex colours are used as they are (no sRGB → linear
+   conversion; must be set before any THREE.Color exists, the r149 look), and every light intensity is × LIGHT_K where it
+   is set (r149's legacy lights were × π inside three; the node lights are physical). */
 THREE.ColorManagement.enabled = false;
-const LEGACY_FALLOFF = /float getDistanceAttenuation\([^)]*\) \{[\s\S]*?return distanceFalloff;\s*\}/;
-if (!LEGACY_FALLOFF.test(THREE.ShaderChunk.lights_pars_begin)) console.error('three.js: getDistanceAttenuation not found, lights fall off physically');
-THREE.ShaderChunk.lights_pars_begin = THREE.ShaderChunk.lights_pars_begin.replace(LEGACY_FALLOFF,
-  `float getDistanceAttenuation( const in float lightDistance, const in float cutoffDistance, const in float decayExponent ) {
-  if ( cutoffDistance > 0.0 && decayExponent > 0.0 ) return pow( saturate( - lightDistance / cutoffDistance + 1.0 ), decayExponent );
-  return 1.0;
-}`);
 const LIGHT_K = Math.PI;
 const V3 = THREE.Vector3;
 const DEG = Math.PI / 180;
@@ -60,7 +53,7 @@ const CFG = {
   uiColor: '120,220,170'
 };
 
-/* ===== Waves (same formula in JS and GLSL) =====
+/* ===== Waves (same formula in JS and TSL, waveNodes) =====
    component: [kx, kz, omega, amplitude] ; phase = kx*x + kz*z + (kx*flow + omega)*t */
 const WAVE = {
   amp: 1, flow: 2.2,
@@ -78,21 +71,17 @@ function waveH(x, z) {
   for (let i = 0; i < 4; i++) { const c = WAVE.comps[i]; h += c[3] * Math.sin(c[0] * x + c[1] * z + WAVE.phase[i]); }
   return h * WAVE.amp;
 }
-const WAVE_GLSL = (() => {
-  const c = WAVE.comps, f = v => v.toFixed(4);
-  const arg = (k, i) => `${f(k[0])}*p.x+${f(k[1])}*p.y+uPh[${i}]`;
-  const join = terms => terms.reduce((a, t) => a + (t[0] === '-' ? ' - ' + t.slice(1) : ' + ' + t));
-  let s = 'uniform vec4 uPh; uniform float uAmp;\nfloat waveH(vec2 p){ return uAmp*(';
-  s += join(c.map((k, i) => `${f(k[3])}*sin(${arg(k, i)})`));
-  s += '); }\n';
-  // Analytic gradient of waveH -> smooth vertex normal. Used by the water shader so the
-  // surface shades continuously instead of showing one flat normal per triangle.
-  s += 'vec3 waveNormal(vec2 p){\n';
-  s += '  float dx = uAmp*(' + join(c.map((k, i) => `${f(k[3] * k[0])}*cos(${arg(k, i)})`)) + ');\n';
-  s += '  float dz = uAmp*(' + join(c.map((k, i) => `${f(k[3] * k[1])}*cos(${arg(k, i)})`)) + ');\n';
-  s += '  return normalize(vec3(-dx, 1.0, -dz));\n}\n';
-  return s;
-})();
+/* The same waves as TSL nodes for the water shader, from the same table: height and its analytic gradient (smooth
+   normal). p = vec2 (x, z); ph = vec4 uniform (WAVE.phase); amp = float uniform (WAVE.amp). */
+function waveNodes(p, ph, amp) {
+  const { float, vec3, sin, cos } = THREE.TSL, PH = [ph.x, ph.y, ph.z, ph.w];
+  let h = float(0), dx = float(0), dz = float(0);
+  WAVE.comps.forEach((c, i) => {
+    const a = p.x.mul(c[0]).add(p.y.mul(c[1])).add(PH[i]), s = sin(a), k = cos(a);
+    h = h.add(s.mul(c[3])); dx = dx.add(k.mul(c[3] * c[0])); dz = dz.add(k.mul(c[3] * c[1]));
+  });
+  return { h: h.mul(amp), normal: vec3(dx.mul(amp).negate(), 1, dz.mul(amp).negate()).normalize() };
+}
 
 /* ===== Sun position (simplified algorithm, ~0.5 deg accuracy) ===== */
 function sunPosition(date, lat, lon) {
