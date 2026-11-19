@@ -40,7 +40,7 @@ User-facing docs: `README.md` (keep it in sync when behaviour or properties chan
 
 ## Rules / conventions
 - **After changing any JS/CSS file, bump the cache-buster** `?v=N` on all `<script>`/`<link>` tags in
-  `index.html` (WE's CEF caches aggressively). Current: `v=67`.
+  `index.html` (WE's CEF caches aggressively). Current: `v=68`.
 - **New WE property**: add it to `project.json`, read it in `applyUserProperties` (`main.js`) into `CFG`,
   then run `python tools/gen_properties.py`. Property `order` decides the browser-drawer group
   (0–9 camera/time, 10–19 audio/combat, 20–29 sea, 30–39 panel, 40–49 air wing, 50–59 hull number).
@@ -203,7 +203,12 @@ Missions fly beyond the screen edge while there is no music. `dispatchFlight` (`
   direction, `BEAM.viewDir`) from the front face to where the ray leaves the cone (analytic) or meets the scene (depth
   of `PIPE.scene`, linear for an orthographic camera); `BEAM.density` follows `WEATHER.fogK` and the rain. The beam
   pass clears to the fog colour, so the composite subtracts it (`PIPE.uClear`). Warm-up: each pass compiles for its own
-  target (`warmShaders`), the beam pass with layer 1 only.
+  target (`warmShaders`), the beam pass with layer 1 only. **Bloom** (`CFG.bloom`, property `bloom`): `THREE.bloom`
+  (the add-on) on the composite, threshold 1.0 by day → 0.7 at night (`bloomThreshold`, set in `updateEnvironment`),
+  then `rolloff()` — Khronos PBR Neutral **without its toe** (the toe darkened the night sea): identity below 0.76,
+  then a soft shoulder to white. `renderer.toneMapping` stays `NoToneMapping` (the r149 look).
+- **Shadow strength** follows the direct light: `sunLight.shadow.intensity` from `WEATHER.sunMul` and the sun's
+  elevation (`updateEnvironment`; a uniform, nothing recompiles).
 - **The r149 look** (top of `core.js` + `init()`): `THREE.ColorManagement.enabled = false` (hex colours used as they
   are — set before any `THREE.Color` exists), `renderer.outputColorSpace = LinearSRGBColorSpace`, and **every light
   intensity is set × `LIGHT_K`** (π; legacy lights were scaled by π inside three) — sun, hemisphere, searchlights,

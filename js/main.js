@@ -29,6 +29,7 @@ window.wallpaperPropertyListener = {
     if (has('autoflight')) CFG.auto = p.autoflight.value;
     if (has('shadows')) CFG.shadows = p.shadows.value;
     if (has('volumetriclight')) CFG.volumetric = p.volumetriclight.value;
+    if (has('bloom')) CFG.bloom = p.bloom.value;
     if (has('showpanel')) CFG.showPanel = p.showpanel.value;
     if (has('panelposition')) CFG.panelPos = p.panelposition.value;
     if (has('panelscale')) CFG.panelScale = p.panelscale.value;
@@ -166,8 +167,10 @@ async function warmShaders() {
 }
 
 /* ---- render pipeline (RenderPipeline): the scene pass plus the volumetric searchlight beams (CFG.volumetric, a
-   half-resolution pass of layer 1 that reads the scene's depth, models.js beamMaterial). Off: plain renderer.render. ---- */
-const PIPE = { on: false, key: null, rp: null, scene: null, beams: null, uClear: null };
+   half-resolution pass of layer 1 that reads the scene's depth, models.js beamMaterial) and bloom (CFG.bloom: glow
+   around what is brighter than the threshold — flashes, fires, afterburners, lights at night — and a highlight roll-off
+   (rolloff()), so bright things fade to white instead of clipping). All off: plain renderer.render. ---- */
+const PIPE = { on: false, key: null, rp: null, scene: null, beams: null, uClear: null, bloom: null };
 function initPipeline() {
   const { pass, uniform } = THREE.TSL;
   PIPE.scene = pass(scene, camera);                                    // MSAA like the canvas (renderer.samples)
@@ -178,16 +181,33 @@ function initPipeline() {
   PIPE.rp = new THREE.RenderPipeline(renderer);
 }
 function updatePipeline() {   // after a property change; a new combination compiles its passes on the next frame
-  const key = CFG.volumetric ? 'v' : '';
+  const key = (CFG.volumetric ? 'v' : '') + (CFG.bloom ? 'b' : '');
   if (key === PIPE.key) return;
   PIPE.key = key; PIPE.on = key !== '';
+  if (PIPE.bloom) { PIPE.bloom.dispose(); PIPE.bloom = null; }
   if (!PIPE.on) return;
   const { vec4, max, screenUV } = THREE.TSL;
   let out = PIPE.scene;
   // the beam pass clears to the renderer's clear colour (the fog): take that off again, the rest is the beams
   if (CFG.volumetric) out = vec4(out.rgb.add(max(PIPE.beams.getTextureNode().sample(screenUV).rgb.sub(PIPE.uClear), 0)), 1);
+  if (CFG.bloom) {   // strength, radius, threshold (follows the night: bloomThreshold); a soft knee
+    PIPE.bloom = THREE.bloom(out, 0.55, 0.35, bloomThreshold()); PIPE.bloom.smoothWidth.value = 0.25;
+    out = rolloff(out.add(PIPE.bloom));
+  }
   PIPE.rp.outputNode = out; PIPE.rp.needsUpdate = true;
 }
+/* Khronos PBR Neutral tone mapping without its toe (x − 6.25 x² below 0.08, which darkened the night sea): identity
+   while the brightest channel stays under 0.76 — the r149 look — then a smooth roll-off towards white, desaturating */
+function rolloff(c) {
+  const { Fn, vec3, vec4, float, max, mix } = THREE.TSL;
+  return Fn(() => {
+    const col = c.rgb.toVar(), peak = max(col.r, max(col.g, col.b)).toVar(), s = float(0.76), d = float(0.24);
+    const np = float(1).sub(d.mul(d).div(peak.add(d).sub(s)));
+    const comp = col.mul(np.div(max(peak, 1e-4))), g = float(1).sub(float(1).div(peak.sub(np).mul(0.15).add(1)));
+    return vec4(peak.lessThan(s).select(col, mix(comp, vec3(np), g)), 1);
+  })();
+}
+const bloomThreshold = () => lerp(1.0, 0.7, ENV.night);   // by day only what is brighter than white glows (no hazy decks)
 function renderFrame() {
   if (PIPE.on) { renderer.getClearColor(PIPE.uClear.value); PIPE.rp.render(); } else renderer.render(scene, camera);
 }
@@ -322,6 +342,9 @@ function updateEnvironment() {
   ENV.splashTint.copy(k.smoke).lerp(new THREE.Color(0xffffff), 0.35);
   ENV.lightsOn = 1 - smoothstep(-3, 5, sp.elev);
   ENV.night = 1 - smoothstep(-10, 1, sp.elev);
+  if (PIPE.bloom) PIPE.bloom.threshold.value = bloomThreshold();
+  // shadows fade with the direct light: under cloud, fog and storm, and towards dusk (the moon's are faint)
+  sunLight.shadow.intensity = clamp(lerp(0.3, 1, smoothstep(0.2, 0.75, WEATHER.sunMul)) * lerp(0.55, 1, smoothstep(-4, 12, sp.elev)), 0.15, 1);
   FX.foam.bright = lerp(0.13, 0.3, smoothstep(-8, 10, sp.elev));
   SHIPS.forEach(s => s.winMat.emissive.setHex(0xffc27a).multiplyScalar(0.75 * ENV.lightsOn));
   WEATHER.capture(hemi.intensity, sunLight.intensity, scene.fog.color);   // lightning flashes on top of these

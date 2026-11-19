@@ -82,6 +82,12 @@ const WE_PROPERTIES = {
   "type": "bool",
   "value": true
  },
+ "bloom": {
+  "order": 8,
+  "text": "Bloom",
+  "type": "bool",
+  "value": true
+ },
  "audiosensitivity": {
   "order": 10,
   "text": "Audio sensitivity, %",

@@ -99,6 +99,7 @@ const WEATHER = {
 
   /* effective values for the current blend (intensity applied, neutral when off) */
   get waveMul() { const I = clamp(this.intensity, 0, 2); return clamp(wx(this.cur.wave, I), 0.3, 2.5); },
+  get sunMul() { const I = clamp(this.intensity, 0, 2); return I <= 0.001 ? 1 : clamp(wx(this.cur.sun, I), 0.05, 1.2); },   // direct sun left
   get fogK() { return clamp(this.cur.fogK * clamp(this.intensity, 0, 2), 0, 1); },
   get foamRate() { return this.cur.rain * 0.02 * clamp(this.intensity, 0, 2); },
   get tag() { return this.kind === 'off' ? '' : ' · ' + WEATHER_NAMES[this.tgtName]; },

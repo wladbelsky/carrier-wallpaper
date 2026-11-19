@@ -161,3 +161,34 @@ test('volumetric beams: the beam pass lights the air along a searchlight at nigh
   const off = await wp.run(() => { CFG.volumetric = false; updatePipeline(); step(0.05); const s = SHIPS[1].searchlights[0]; return { pipe: PIPE.on, vol: s.vol.visible, cone: s.cone.visible }; });
   expect(off).toEqual({ pipe: false, vol: false, cone: true });
 });
+
+test('bloom: something brighter than white glows around itself at night; shadows fade under cloud and at dusk', async ({ wp }) => {
+  await wp.boot({ query: '?hour=0' });
+  await wp.sim(3);
+  const r = await wp.run(() => {
+    const p = new THREE.Vector3(-20, 3, 25), s = p.clone().project(camera), x = (s.x + 1) / 2 * innerWidth, y = (1 - s.y) / 2 * innerHeight;
+    const ring = () => { __t.render(); return [__t.sample(x + 12, y - 3, 6, 6), __t.sample(x - 18, y - 3, 6, 6), __t.sample(10, 10, 30, 30)]; };
+    // an HDR object (a flash / fire core is the same: colour > 1)
+    const m = new THREE.Mesh(new THREE.SphereGeometry(1.2, 12, 8), new THREE.MeshBasicMaterial({ color: new THREE.Color(4, 4, 4), fog: false }));
+    m.position.copy(p); scene.add(m);
+    const out = { tm: renderer.toneMapping === THREE.NoToneMapping, pipe: PIPE.on };
+    for (const b of [true, false]) {
+      CFG.bloom = b; updatePipeline();
+      out[b ? 'on' : 'off'] = ring();
+    }
+    CFG.bloom = true; updatePipeline(); scene.remove(m); m.geometry.dispose(); m.material.dispose();
+    return out;
+  });
+  expect(r.pipe).toBe(true);
+  expect(r.tm, 'three.js tone mapping stays off: the roll-off is in the pipeline').toBe(true);
+  for (let i = 0; i < 2; i++) expect(lum(r.on[i]), `glow beside the flash ${r.on[i]} vs ${r.off[i]}`).toBeGreaterThan(lum(r.off[i]) + 20);
+  expect(Math.abs(lum(r.on[2]) - lum(r.off[2])), `the dark sea far away stays as it was (no toe) ${r.on[2]} vs ${r.off[2]}`).toBeLessThan(1.5);
+  const sh = await wp.run(() => {
+    const at = (h, w) => { CFG.timeMode = 'fixed'; CFG.fixedHour = h; WEATHER.setKind(w); WEATHER.cur = Object.assign({}, WEATHER.tgt); updateEnvironment(); return sunLight.shadow.intensity; };
+    return { noon: at(12, 'off'), storm: at(12, 'storm'), fog: at(12, 'fog'), dusk: at(18.9, 'off') };
+  });
+  expect(sh.noon).toBeCloseTo(1, 2);
+  expect(sh.storm, 'storm').toBeLessThan(0.5);
+  expect(sh.fog, 'fog').toBeLessThan(0.5);
+  expect(sh.dusk, 'dusk').toBeLessThan(0.9);
+});

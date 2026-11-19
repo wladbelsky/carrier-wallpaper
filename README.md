@@ -209,6 +209,12 @@ The subtitle backdrop darkens over pale fog so the radio text stays readable.
 - **Volumetric light** (on by default): searchlight beams are light scattered in the air — brighter where the beam is
   thick, fading along its length, cut off where it meets the sea, a ship or an aircraft, and denser in fog and rain.
   Rendered at half resolution in a pass of its own. Off: the simpler see-through cones.
+- **Bloom** (on by default): whatever is brighter than white — explosions, fires, afterburners, tracers, and at night
+  the ship and deck lights — glows softly, and bright highlights roll off towards white instead of clipping. The rest
+  of the picture keeps its colours.
+- Shadows soften under cloud, in fog and storms, and towards dusk.
+
+With both switched off, the scene is drawn directly, as before (the cheapest).
 
 ## Radio priority
 
