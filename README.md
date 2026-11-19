@@ -275,12 +275,15 @@ The **⚙ SETTINGS** button (top-left, browser only) shows:
 Settings are saved in `localStorage`; the audio file itself is not. **Reset all to defaults** clears them.
 
 URL parameters still work and override stored values: `?hour=22`, `?zoom=150`, `?demo=1`; `?gl=webgl2` renders with
-WebGL 2 instead of WebGPU.
+WebGL 2 instead of WebGPU; `?glow=0` turns the dynamic lights off (WebGPU).
 
 If you add a property to `project.json`, run `python tools/gen_properties.py` to refresh `js/properties.js`.
 
 Rendering is three.js's `WebGPURenderer`: WebGPU where available (Wallpaper Engine's Chromium has it), WebGL 2
-otherwise, with the same look. three.js (r187) is vendored as `js/three.min.js`, a single script built from the npm
+otherwise, with the same look. On WebGPU the scene also has dynamic lights (clustered lighting): explosions and gun
+flashes, burning ships and boats, missile motors, afterburners, tracers, beacons and deck lights at night light what is
+around them, and every helicopter's searchlight is a real light — up to 128 lights at once, the strongest on screen
+first. WebGL 2 keeps the fixed set of earlier versions (four flash lights, four helicopter searchlights). three.js (r187) is vendored as `js/three.min.js`, a single script built from the npm
 package (with the node materials and TSL): to update it, change the
 `three` version in `package.json`, run `npm install` and `bash tools/build_three.sh` (or
 `powershell -ExecutionPolicy Bypass -File tools/build_three.ps1`, in Docker).
@@ -305,7 +308,8 @@ seeded and stepped by the tests, so every run is reproducible. They cover:
   switching, the subtitle backdrop; the scripted threat cycle and the escalation speed;
 - **rendering**: no WebGL errors, draw-call budget, the fleet on screen, day vs night, shadows and their coverage,
   no geometry leaks, the r149 look under three.js r187, shaders compiled up front (nothing compiles at dusk, in a fight,
-  in a storm or when helicopters come and go); the WebGPU backend renders day, night and a fight;
+  in a storm or when helicopters come and go); the WebGPU backend renders day, night and a fight, and its dynamic lights
+light the deck where they are, come and go without compiling and stay within their budget;
 - **soak**: two hours of simulated life (music and silence, missions, count changes) with all of the above.
 
 Run them locally with Docker (no Node needed):

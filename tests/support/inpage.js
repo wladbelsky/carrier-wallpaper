@@ -111,6 +111,12 @@
     if (PENDING.length > 300) v.push(`PENDING ${PENDING.length}`);
     if (FLYBYS.length > 8) v.push(`FLYBYS ${FLYBYS.length}`);
     if (WEATHER.rain && WEATHER.rain.mesh.count > WEATHER.rain.n) v.push(`rain drops ${WEATHER.rain.mesh.count}`);
+    // lights: GLOW requests consumed every step, pools within their caps, all of them within the cluster capacity
+    if (GLOW.n) v.push(`GLOW requests left over ${GLOW.n}`);
+    if (GLOW.pool.length > GLOW.cap) v.push(`GLOW lights ${GLOW.pool.length} > ${GLOW.cap}`);
+    if (HELI_LIGHTS.pool.length > Math.max(HELI_LIGHTS.n, HELI_LIGHTS.max)) v.push(`helicopter lights ${HELI_LIGHTS.pool.length}`);
+    const nL = GLOW.pool.length + HELI_LIGHTS.pool.length + SEARCHLIGHTS.filter(s => s.light && !s.pooled).length + FX.lights.items.filter(i => i.l).length;
+    if (nL > LIGHTS_MAX) v.push(`${nL} point / spot lights > ${LIGHTS_MAX}`);
     return v;
   };
 

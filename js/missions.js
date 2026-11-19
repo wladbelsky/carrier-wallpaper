@@ -349,6 +349,7 @@ const VESSELS = {
       const v = this.list[i], K = v.K;
       this.place(v, dt);
       if (v.damaged) {                         // fire and smoke from the burning ship
+        GLOW.add(this.world(v, K.fire[0], K.fire[1] + 0.3, K.fire[2], _vsP), 0xff7a20, 2.4 * (K.smoke || 1) * flicker(i * 1.9), 8);
         v.fxT += dt;
         while (v.fxT > 0.12) {
           v.fxT -= 0.12;

@@ -250,3 +250,25 @@ test('models: every builder runs, mergeStatic keeps dynamic nodes, disposeTree s
   expect(r.merge).toEqual({ rootMeshes: 1, dynKept: true, dynMeshes: 1 });
   expect(r.disposed).toEqual(['geo', 'own']);
 });
+
+test('GLOW: the strongest requests on screen get the lights, the rest stay dark, requests are consumed', async ({ wp }) => {
+  await wp.boot();
+  const r = await wp.run(() => {
+    const save = { cap: GLOW.cap, scene: GLOW.scene, pool: GLOW.pool };
+    GLOW.pool = []; GLOW.enable(new THREE.Scene(), 3);   // a scene of its own: no light enters the real one
+    const at = x => new THREE.Vector3(x, 1, 0), I = [1, 4, 2, 5, 3];
+    I.forEach((v, i) => GLOW.add(at(i * 2 - 4), 0xffffff, v, 2));
+    GLOW.add(at(5000), 0xffffff, 99, 2);                  // off screen: ignored
+    const queued = GLOW.n; GLOW.update();
+    const lit = GLOW.pool.filter(l => l.visible).map(l => Math.round(l.intensity / (2 * LIGHT_K * FLASH_FIT * GLOW.boost))).sort();
+    const left = GLOW.n; GLOW.update();
+    const after = GLOW.pool.filter(l => l.visible).length, made = GLOW.pool.length;
+    Object.assign(GLOW, save);
+    return { queued, lit, left, after, made };
+  });
+  expect(r.queued, 'off-screen request dropped').toBe(5);
+  expect(r.lit, 'the three strongest').toEqual([3, 4, 5]);
+  expect(r.left).toBe(0);
+  expect(r.after, 'no requests, no lights').toBe(0);
+  expect(r.made, 'never more lights than the cap').toBe(3);
+});

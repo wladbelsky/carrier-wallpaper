@@ -258,6 +258,7 @@ class Aircraft {
     this.fold += clamp(ft - this.fold, -dt * this.spec.foldRate, dt * this.spec.foldRate);
     this.model.setFold(this.fold);
     this.model.tick(dt, this);
+    if (GLOW.cap) exhaustGlow(this.model, this.mesh);
   }
 }
 
@@ -422,13 +423,22 @@ class FixedWing extends Aircraft {
 }
 
 /* ======================= Helicopter ======================= */
-/* Real light for the first few helicopters' searchlights (GPU budget): a fixed pool of SpotLights in the scene, each lent
-   to one searchlight and moved onto it in updateLights (main.js). Node materials compile per set of light objects, so
-   lights must not come and go with helicopters (hangar, missions, rebuilds) — that compiled new shaders every time. */
-const HELI_LIGHTS = { n: 4, pool: [],
-  init(scene) { for (let i = 0; i < this.n; i++) { const l = new THREE.SpotLight(0xfff1d6, 0, 14 * 2.2, 0.2, 0.45, 0); scene.add(l, l.target); this.pool.push({ l, s: null }); } },
-  claim(s) { const p = this.pool.find(q => !q.s); if (p) p.s = s; return p ? p.l : null; },
+/* Real light for the helicopters' searchlights: a pool of SpotLights in the scene, each lent to one searchlight and moved
+   onto it in updateLights (main.js). WebGL 2: a fixed pool of 4 for the first helicopters — node materials compile per set
+   of light objects there, so lights must not come and go with helicopters (hangar, missions, rebuilds). WebGPU
+   (clustered lights, grow()): one for every helicopter, made on demand, up to max. */
+const HELI_LIGHTS = { n: 4, max: 4, pool: [], scene: null,
+  init(scene) { this.scene = scene; for (let i = 0; i < this.n; i++) this.make(); },
+  make() { const l = new THREE.SpotLight(0xfff1d6, 0, 14 * 2.2, 0.2, 0.45, 0); this.scene.add(l, l.target); const p = { l, s: null }; this.pool.push(p); return p; },
+  grow(max) { this.max = max; for (const s of SEARCHLIGHTS) if (s.heli && !s.light) { s.light = this.claim(s); s.pooled = !!s.light; } },
+  claim(s) { let p = this.pool.find(q => !q.s); if (!p && this.pool.length < this.max) p = this.make(); if (p) p.s = s; return p ? p.l : null; },
   release(s) { for (const p of this.pool) if (p.s === s) p.s = null; } };
+/* afterburner / engine light at the exhaust glow sprite of a jet model (WebGPU: GLOW), while it burns bright */
+const _gx = new V3();
+function exhaustGlow(model, mesh) {
+  const ex = model.exhaust, o = ex ? ex.material.opacity : 0;
+  if (o > 0.5 && mesh.visible) GLOW.add(mesh.localToWorld(_gx.copy(ex.position)), 0xffa060, (o - 0.5) * 3, 5);
+}
 const _hz = new V3(), _hf = new V3();
 const HELI_FOLDED = new Set(['hangar', 'lift_wait', 'lift_prep', 'roll_out', 'lift_up', 'parked', 'tow_pad', 'tow_lift', 'lift_down', 'roll_in', 'wait_lift', 'fold', 'pad_wait']);
 class Helicopter extends Aircraft {
@@ -437,7 +447,7 @@ class Helicopter extends Aircraft {
     super(o);
     const sp = this.model.searchPos || new V3(0.7, 0.2, 0);
     const sl = makeSearchlight(this.mesh, sp.x, sp.y, sp.z, { angle: 0.2, len: 14, intensity: 2.4, coneOpacity: 0.32, housing: false, noLight: true });
-    sl.light = HELI_LIGHTS.claim(sl); sl.pooled = !!sl.light;
+    sl.heli = true; sl.light = HELI_LIGHTS.claim(sl); sl.pooled = !!sl.light;
     sl.holder.quaternion.setFromUnitVectors(new V3(0, 0, 1), new V3(1, -1.1, 0).normalize());
     sl.fixed = true; sl.enabled = 0; this.searchlights.push(sl);
   }
@@ -625,7 +635,7 @@ class Flyby {
     for (const pl of this.planes) {
       pl.p.addScaledVector(this.dir, this.speed * dt);
       pl.m.position.copy(pl.p); orientFrom(pl.m, this.dir, bank);
-      pl.model.tick(dt, { glow: 0.7, sweepTarget: 68 });
+      pl.model.tick(dt, { glow: 0.7, sweepTarget: 68 }); if (GLOW.cap) exhaustGlow(pl.model, pl.model.group);
       if (pl.gun > 0) {
         pl.gun -= dt; pl.gunAcc += dt;
         while (pl.gunAcc > 0.035) {

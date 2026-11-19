@@ -20,7 +20,7 @@ User-facing docs: `README.md` (keep it in sync when behaviour or properties chan
 | `js/flightpath.js` | `FlightPath`: Dubins CSC curves (turn-radius-limited flight) + lines |
 | `js/models.js` | mesh helpers (`M`, `box`, `cyl`, `taper`, `prism`…), `mergeStatic`, `disposeTree`, nav lights, searchlights, CIWS/gun mounts, `buildCarrier`, `buildDestroyer`, mission ships `buildFeeder` / `buildTrawler` / `buildCorvette` / `buildDestroyerTemplate` |
 | `js/airframes.js` | aircraft model builders → `{ group, setFold(f), tick(dt, st) }` (`buildMQ25`: refuelling hose reads `st.hoseOut`); `buildWreck` (crashed jet template for pilot rescues) |
-| `js/effects.js` | `Tracers` (InstancedMesh), `SpriteFX` (flash/smoke pools), `Splashes`, `Foam` (points), `FlashLights` |
+| `js/effects.js` | `Tracers` (InstancedMesh), `SpriteFX` (flash/smoke pools), `Splashes`, `Foam` (points), `GLOW` (dynamic lights, WebGPU), `FlashLights` |
 | `js/weather.js` | `WEATHER` (presets `WEATHER_KINDS`, blend, lightning) + `Rain` (InstancedMesh pool) — see "Weather" |
 | `js/radio.js` | callsigns (+ `ENEMY_NAMES`), `RADIO` subtitle queue, mission orders, `STRESS` + `THREAT_TIERS`, `radioLine()`, line pools `OPS` / `OPS_VOICE` / `OPS_UNARMED` / `COMBAT` / `AIRWAR_LINES` / `ENEMY_LINES` / `TANKER_LINES` / `LINES` (see "Radio lines & threat tiers") |
 | `js/aircraft.js` | `Aircraft` → `FixedWing` / `Helicopter` state machines, deck resources `FD` / `DECK`, types, `Flyby` |
@@ -34,12 +34,13 @@ User-facing docs: `README.md` (keep it in sync when behaviour or properties chan
 | `js/settings.js` | browser-only settings drawer, demo beat, audio-file player (returns early inside WE) |
 | `tools/gen_properties.py` | regenerates `js/properties.js` |
 | `tools/build_three.sh` / `.ps1` | rebuilds `js/three.min.js` from `node_modules/three` with esbuild (`tools/three-entry.js`); `.ps1` runs it in Docker |
+| `tools/three-clustered.js` | `ClusteredLighting` add-on fixed for orthographic cameras (bundled as `THREE.ClusteredLighting`) |
 | `tools/preview.spec.js` | renders image candidates (`powershell -ExecutionPolicy Bypass -File tools/test.ps1 -c tools/preview.config.js [-g gif]` → `test-results/gif-<seed>.gif` animated 256², scene only, + `-sheet.png` stills: the Workshop preview `preview.gif` from `project.json` — WE takes ≤ 256 px, < 1 MB (aim < 500 KB), encoded with the `gifenc` devDependency; `test-results/<scene>-<seed>.jpg` 1280x720 for each of `SCENES` (dogfight / night / refuel / rescue; `-g "rescue,"` for one), `screenshots/<scene>.jpg` in README.md; copy the best over them) |
 | `tests/`, `playwright.config.js`, `package.json` | automated tests (Playwright Test) — see "Running & testing"; `tools/test.ps1` runs them in Docker, `.github/workflows/tests.yml` in CI |
 
 ## Rules / conventions
 - **After changing any JS/CSS file, bump the cache-buster** `?v=N` on all `<script>`/`<link>` tags in
-  `index.html` (WE's CEF caches aggressively). Current: `v=65`.
+  `index.html` (WE's CEF caches aggressively). Current: `v=66`.
 - **New WE property**: add it to `project.json`, read it in `applyUserProperties` (`main.js`) into `CFG`,
   then run `python tools/gen_properties.py`. Property `order` decides the browser-drawer group
   (0–9 camera/time, 10–19 audio/combat, 20–29 sea, 30–39 panel, 40–49 air wing, 50–59 hull number).
@@ -200,10 +201,25 @@ Missions fly beyond the screen edge while there is no music. `dispatchFlight` (`
   `distance`); r149's linear `(1 − d / D)^decay` is matched by `SPOT_FIT` (searchlights, decay 0) and `FLASH_FIT`
   (flashes, decay 1). Shadows: `PCFShadowMap`.
 - **Shaders compile per set of lights (by object)**, and a render object keeps one pipeline only: when the set of
-  visible lights changes, every lit material recompiles. So the set never changes: searchlight `SpotLight`s stay
-  visible by day at zero intensity, helicopters borrow one of the 4 pooled lights (`HELI_LIGHTS`, `aircraft.js`, moved
-  onto the searchlight in `updateLights`; dark while the helicopter is hidden) instead of owning one, flash lights are
-  a pool of 4. **Never add / remove / show / hide a light at runtime**; a new light goes into the scene at start-up.
+  visible lights changes, every lit material recompiles. Two cases:
+  - **WebGPU: clustered lighting** (`clusteredLights()`, `main.js`; `?glow=0` = off): `renderer.lighting` is
+    `THREE.ClusteredLighting` (Forward+: point / spot lights without shadows are sorted into 32 px tiles × 16 depth
+    slices by a compute pass, ≤ 32 per cluster) and only the sun and the sky stay in the shader cache key — **point /
+    spot lights may come and go**. The add-on as shipped assumes a perspective camera; `tools/three-clustered.js`
+    patches its cluster bounds for our orthographic one (re-check it when updating three.js). The grid is sized for
+    the whole screen up front (a bigger one later would reallocate it, and that recompiles). `LIGHTS_MAX` (128) is the
+    cluster capacity: `GLOW` (96) + `HELI_LIGHTS` (24) + the ships' 4 spots.
+    **`GLOW`** (`effects.js`): emitters ask every step, `GLOW.add(p, color, I, d)` (I as `FlashLights`: × `LIGHT_K` ·
+    `FLASH_FIT` · d, decay 1, × the night boost); `GLOW.update()` at the end of `step` lights the strongest requests
+    (I·d) on screen with pooled `PointLight`s, the rest stay dark. Emitters: flashes (`FlashLights.toGlow`, 32 at a
+    time), ship fires, burning boats / bandits, mission vessels on fire, missile motors, afterburners (`model.exhaust`
+    = the jet's glow sprite, `exhaustGlow`), every 4th tracer, `navLights(…, lit)` (beacons, ship and deck lights).
+    Searchlights get a light per helicopter and are hidden while dark.
+  - **WebGL 2 fallback: the set never changes** (`GLOW.cap` = 0, `add` does nothing): searchlight `SpotLight`s stay
+    visible by day at zero intensity, helicopters borrow one of the 4 pooled lights (`HELI_LIGHTS`, `aircraft.js`,
+    moved onto the searchlight in `updateLights`; dark while the helicopter is hidden), flash lights are a pool of 4.
+    **Never add / remove / show / hide a light at runtime** outside `GLOW` / `HELI_LIGHTS`; a new fixed light goes into
+    the scene at start-up, a dynamic one is a `GLOW` request.
 - **Shader warm-up** (`warmShaders`, `main.js`): `renderer.compileAsync` compiles every pipeline before the frame loop
   starts, hidden objects shown during the synchronous part (`shadersAll` when done). Only the shadow-map pipelines
   compile on the first frame. Materials created later (lazily built enemy / vessel templates with a new material
@@ -213,7 +229,8 @@ Missions fly beyond the screen edge while there is no music. `dispatchFlight` (`
 - **Updating three.js**: bump `three` in `package.json`, `npm install`, `bash tools/build_three.sh` (or the `.ps1`;
   entry `tools/three-entry.js`), bump the cache-buster (three.min.js carries it too), run the tests (`repo.spec.js`
   checks the bundle matches `package.json`, `render.spec.js` the r149 look and the warm-up, `webgpu.spec.js` the WebGPU
-  backend), read the three.js migration guide for the versions in between.
+  backend and the clustered lights), compare `tools/three-clustered.js` with the add-on's `ClusteredLightsNode`, read the
+  three.js migration guide for the versions in between.
 
 ## Performance & memory invariants (the wallpaper never restarts — leaks accumulate for days)
 - **Never create geometry per spawn and drop it.** Enemies are clones of one template (`enemyMesh()`
@@ -239,8 +256,9 @@ Missions fly beyond the screen edge while there is no music. `dispatchFlight` (`
   the whole pool shares one `renderOrder`, so don't rely on interleaving with other transparent objects.
 - The sun's shadow camera is fitted to the visible sea every frame (`fitShadow`, `main.js`; one 2048² map):
   don't set fixed shadow bounds, they cut off shadows of aircraft far out.
-- Lights are a fixed set (see "three.js"): searchlights stay on at zero intensity by day, helicopters share
-  `HELI_LIGHTS` (4), flashes `FlashLights` (4).
+- Lights (see "three.js"): a fixed set on WebGL 2 (searchlights on at zero intensity by day, helicopters share
+  `HELI_LIGHTS` (4), flashes `FlashLights` (4)); on WebGPU the `GLOW` pool (≤ 96, made on demand, never disposed) and
+  ≤ 24 helicopter lights, all within `LIGHTS_MAX`. A new light source is a `GLOW.add` per step, not a light of its own.
 - Main loop (`frame`): FPS limit keeps cadence via `frameDue`; simulation runs in ≤50 ms sub-steps
   (stalls capped at 0.25 s). `onBeat` does nothing while `paused`.
 
@@ -248,7 +266,8 @@ Missions fly beyond the screen edge while there is no music. `dispatchFlight` (`
 - WE: "Open from File" → `project.json` (audio listener + properties come from WE).
 - Browser preview: serve the folder, e.g. `python -m http.server 8765`, open `http://localhost:8765/`.
   The ⚙ SETTINGS drawer mirrors all WE properties (stored in `localStorage`); URL params `?hour=22`,
-  `?zoom=150`, `?demo=1`, `?ts=N` (time scale).
+  `?zoom=150`, `?demo=1`, `?ts=N` (time scale), `?gl=webgl2`, `?glow=0` (no clustered / dynamic lights), `?gputime=1` (WebGPU: `GPU.ms` = GPU time of the last frame,
+  render / compute passes, sampled twice a second).
 - **Automated tests** (`tests/`, Playwright Test in headless Chromium + SwiftShader): run them in Docker —
   `powershell -ExecutionPolicy Bypass -File tools/test.ps1 [file / -g pattern]` (no local Node; `$env:SEED = N` for
   another seed); CI runs the same image on every push / PR (`.github/workflows/tests.yml`). Run them after a change.
@@ -260,7 +279,7 @@ Missions fly beyond the screen edge while there is no music. `dispatchFlight` (`
     `RenderTarget` only and reads it back with `__t.sampleRT` (async).
   - `tests/support/inpage.js` (`window.__t`): `sim` runs `checkInvariants()` after every step (deck resources:
     catapults, landing area, spots, lifts, helo pad; known states; NaN; mission / tanker consistency; bounded
-    pools) and the stuck detector (`STATE_LIMITS`); `forceFight` / `fightOff`; `render` (one frame, as three's animation
+    pools, `GLOW` / helicopter lights within their caps and `LIGHTS_MAX`) and the stuck detector (`STATE_LIMITS`); `forceFight` / `fightOff`; `render` (one frame, as three's animation
     loop would: `renderer.info` reset, node frame); `sample` (pixels, copied from the canvas) / `sampleRT`; `pipelines`
     (render pipelines created = compiles), `programs`, `drawCalls`, `glError`, `lit`; `geometries` (leak check:
     geometries dropped without `dispose`).

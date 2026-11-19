@@ -38,6 +38,7 @@ class Tracers {
       active++;
       this._d.copy(it.v).normalize(); this._q.setFromUnitVectors(this._x, this._d);
       const fw = Math.min(1, it.life / 0.2); this._s.set(it.len, it.w * fw, it.w * fw); this._m.compose(it.p, this._q, this._s); this.mesh.setMatrixAt(i, this._m);
+      if ((i & 3) === 0) GLOW.add(it.p, it.col, 0.5 * fw, 3);   // every 4th tracer lights its surroundings (WebGPU)
     }
     if (changed) this.mesh.instanceMatrix.needsUpdate = true;
     this.mesh.visible = active > 0;
@@ -171,18 +172,57 @@ class Foam {
   }
 }
 
+/* Dynamic lights (WebGPU only). ClusteredLighting (main.js) keeps point / spot lights without shadows out of the shader
+   cache key, so there lights may come and go without recompiling. Emitters ask every step — GLOW.add(p, color, I, d):
+   flashes, fires, missile motors, afterburners, tracers, beacons; I as in FlashLights (× LIGHT_K · FLASH_FIT · d, decay 1,
+   × the night boost). update() (end of step) lights the strongest requests near the screen with a pool of PointLights
+   (made on demand, never more than cap) and hides the rest. In the WebGL 2 fallback cap = 0 and add() does nothing. */
+const _gq = new V3(), byReach = (a, b) => b.w - a.w;
+const flicker = s => 0.78 + 0.22 * Math.sin(T * 17 + s) * Math.sin(T * 6.1 + s * 1.7);   // fire light, s = a seed
+const GLOW = { cap: 0, scene: null, pool: [], req: [], sorted: [], n: 0, used: 0, boost: 1, MAX_REQ: 512,
+  enable(scene, cap) { this.scene = scene; this.cap = cap; },
+  add(p, color, I, d) {
+    if (!this.cap || I <= 0.01 || this.n >= this.MAX_REQ) return;
+    _gq.copy(p).project(camera); if (Math.abs(_gq.x) > 1.25 || Math.abs(_gq.y) > 1.25 || _gq.z > 1) return;   // off screen
+    let r = this.req[this.n]; if (!r) this.req.push(r = { p: new V3(), c: new THREE.Color(), I: 0, d: 0, w: 0 });
+    this.n++; r.p.copy(p); r.c.set(color); r.I = I; r.d = d; r.w = I * d;
+  },
+  update() {
+    if (!this.cap) return;
+    let R = this.req; const n = this.n, k = LIGHT_K * FLASH_FIT * this.boost;
+    if (n > this.cap) { R = this.sorted; R.length = 0; for (let i = 0; i < n; i++) R.push(this.req[i]); R.sort(byReach); }
+    const m = Math.min(n, this.cap);
+    for (let i = 0; i < m; i++) {
+      let l = this.pool[i]; if (!l) { l = new THREE.PointLight(0xffffff, 0, 1, 1); this.scene.add(l); this.pool.push(l); }
+      const r = R[i]; l.visible = true; l.position.copy(r.p); l.color.copy(r.c); l.distance = r.d; l.intensity = r.I * r.d * k;
+    }
+    for (let i = m; i < this.pool.length; i++) this.pool[i].visible = false;
+    this.used = m; this.n = 0;
+  }
+};
+
+/* explosion / gun flashes: a fixed pool of 4 PointLights (WebGL 2: the set of lights must never change), or GLOW
+   requests on WebGPU — toGlow(n): n flashes at a time, nothing of their own in the scene */
 class FlashLights {
   constructor(scene, n) {
-    this.items = [];
-    for (let i = 0; i < n; i++) { const l = new THREE.PointLight(0xffb060, 0, 22, 1); scene.add(l); this.items.push({ l, t: 0, max: 0.1, I: 0 }); }
+    this.scene = scene; this.items = [];
+    for (let i = 0; i < n; i++) { const l = new THREE.PointLight(0xffb060, 0, 22, 1); scene.add(l); this.items.push({ l, p: l.position, t: 0, max: 0.1, I: 0 }); }
     this.k = LIGHT_K * FLASH_FIT * 22;   // decay 1, fitted to r149's (1 − d / 22)² (core.js)
     this.next = 0;
   }
+  toGlow(n) {
+    for (const it of this.items) this.scene.remove(it.l);
+    this.items = []; this.next = 0;
+    for (let i = 0; i < n; i++) this.items.push({ l: null, p: new V3(), t: 0, max: 0.1, I: 0 });
+  }
   flash(p, I, dur) {
     const it = this.items[this.next]; this.next = (this.next + 1) % this.items.length;
-    it.l.position.copy(p); it.t = it.max = dur; it.I = I;
+    it.p.copy(p); it.t = it.max = dur; it.I = I;
   }
   update(dt, nightBoost) {
-    for (const it of this.items) { it.t = Math.max(0, it.t - dt); it.l.intensity = it.t > 0 ? it.I * (it.t / it.max) * nightBoost * this.k : 0; }
+    for (const it of this.items) {
+      it.t = Math.max(0, it.t - dt); const I = it.t > 0 ? it.I * (it.t / it.max) : 0;
+      if (it.l) it.l.intensity = I * nightBoost * this.k; else if (I > 0) GLOW.add(it.p, 0xffb060, I, 22);
+    }
   }
 }

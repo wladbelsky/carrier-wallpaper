@@ -1,0 +1,2 @@
+# shell scripts run in Docker (tools/build_three.ps1): LF even in a Windows checkout
+*.sh text eol=lf

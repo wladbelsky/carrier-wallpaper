@@ -2,5 +2,5 @@
 // node materials as one global THREE, TSL as THREE.TSL, plus the add-ons the wallpaper uses
 export * from 'three/webgpu';
 export * as TSL from 'three/tsl';
-export { ClusteredLighting } from 'three/addons/lighting/ClusteredLighting.js';
+export { ClusteredLighting } from './three-clustered.js';   // the add-on, also for orthographic cameras
 export { bloom } from 'three/addons/tsl/display/BloomNode.js';

@@ -214,6 +214,7 @@ function updateCombat(dt) {
       if (e.falling) {
         e.v.y -= 9 * dt; e.v.multiplyScalar(1 - 0.15 * dt); e.p.addScaledVector(e.v, dt);
         e.mesh.position.copy(e.p); e.mesh.rotateX(e.spin * dt);
+        GLOW.add(e.p, 0xff8a30, 1.6 * flicker(e.age), 6);   // burning on the way down (WebGPU)
         e.smokeT += dt; while (e.smokeT > 0.03) { e.smokeT -= 0.03; FX.smoke.spawn(e.p.clone(), { s0: 0.8, s1: 3, life: 2.5, a0: 0.7, color: 0x1e1e1e, v: new V3(-WAVE.flow, 0.4, 0) }); if (Math.random() < 0.5) FX.flash.spawn(e.p, { s0: 1, s1: 1.4, life: 0.08, a0: 0.9, color: 0xff7a20 }); }
         if (e.p.y < waveH(e.p.x, e.p.z)) { FX.splash.spawn(e.p, 1.8); explosion(e.p, 0.8); e.dead = true; scene.remove(e.mesh); }
         continue;
@@ -235,6 +236,7 @@ function updateCombat(dt) {
     } else if (e.kind === 'boat') {
       if (e.falling) {                         // burning, then down by the stern
         e.sinkT += dt; e.p.y -= dt * 0.12 * (1 + e.sinkT); e.mesh.position.copy(e.p); e.mesh.rotateZ(dt * 0.12);
+        GLOW.add(e.p, 0xff7a20, 2 * (1 - e.sinkT / 4) * flicker(e.age), 6);
         if (Math.random() < dt * 12) FX.smoke.spawn(e.p.clone(), { s0: 0.6, s1: 2.6, life: 2.2, a0: 0.6, color: 0x1e1e1e, v: new V3(-WAVE.flow, 0.6, 0) });
         if (e.sinkT > 4) { FX.splash.spawn(e.p, 0.8); e.dead = true; scene.remove(e.mesh); }
         continue;
@@ -265,6 +267,7 @@ function updateCombat(dt) {
     const f = SHIP_FIRES[i]; f.t -= dt;
     if (f.t <= 0) { SHIP_FIRES.splice(i, 1); continue; }
     const w = f.ship.group.localToWorld(f.local.clone());
+    GLOW.add(w, 0xff7a20, 3 * Math.min(1, f.t / 4) * flicker(i * 2.3), 10);   // the fire lights the ship (WebGPU)
     if (Math.random() < dt * 14) FX.smoke.spawn(w.clone(), { s0: 0.8, s1: 3.6, life: 3, a0: 0.6 * Math.min(1, f.t / 4), color: 0x262626, v: new V3(-WAVE.flow * 1.2, rand(0.8, 1.6), 0) });
     if (Math.random() < dt * 10) FX.flash.spawn(w, { s0: 0.9, s1: 1.4, life: 0.12, a0: 0.9 * Math.min(1, f.t / 4), color: 0xff7a20 });
   }

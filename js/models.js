@@ -135,11 +135,13 @@ function pointSprites(pos, col, opts) {   // pos / col: InstancedBufferAttribute
   const sp = new THREE.Sprite(m); sp.count = pos.count; sp.frustumCulled = false;
   return sp;
 }
-function navLights(parent, list, blink, scale) {
+/* lit = [I, d, every]: on WebGPU these lights also light their surroundings (GLOW, from updateLights), every n-th one */
+function navLights(parent, list, blink, scale, lit) {
   const pos = [], col = [], c = new THREE.Color();
   list.forEach(l => { pos.push(l[0], l[1], l[2]); c.setHex(l[3]); col.push(c.r, c.g, c.b); });
   const pts = pointSprites(new THREE.InstancedBufferAttribute(new Float32Array(pos), 3), new THREE.InstancedBufferAttribute(new Float32Array(col), 3), { size: 8, map: TEX.glow, opacity: 0 });
   pts.material.userData = { scale: scale || 1.1, blink: blink || null };
+  if (lit) pts.material.userData.lit = { obj: pts, I: lit[0], d: lit[1], pts: list.filter((l, i) => i % (lit[2] || 1) === 0).map(l => ({ p: new V3(l[0], l[1], l[2]), c: l[3] })) };
   NAV_MATS.push(pts.material);
   pts.renderOrder = 5;
   parent.add(pts); return pts;
@@ -340,15 +342,15 @@ function buildCarrier() {
 
   // --- navigation lights
   const lights = [];
-  lights.push(navLights(g, [[1.6, Y + 8.05, 3.05, 0xffffff], [2.35, Y + 2.6, 2.35, 0xff2a1a], [2.35, Y + 2.6, 3.75, 0x22ff66], [-16.3, 2.1, 0, 0xffffff], [16.7, 2.4, 0, 0xffffff]], null, 1.5));
-  lights.push(navLights(g, [[1.6, Y + 8.2, 3.05, 0xff2020]], { period: 1.2, duty: 0.25 }, 1.5));
+  lights.push(navLights(g, [[1.6, Y + 8.05, 3.05, 0xffffff], [2.35, Y + 2.6, 2.35, 0xff2a1a], [2.35, Y + 2.6, 3.75, 0x22ff66], [-16.3, 2.1, 0, 0xffffff], [16.7, 2.4, 0, 0xffffff]], null, 1.5, [0.8, 5]));
+  lights.push(navLights(g, [[1.6, Y + 8.2, 3.05, 0xff2020]], { period: 1.2, duty: 0.25 }, 1.5, [1.2, 6]));
   const edge = [];
   for (let s = 0; s <= 17; s += 1.4) for (const off of [-1.35, 1.35]) { const p = A0.clone().addScaledVector(AD, s).addScaledVector(AP, off); edge.push([p.x, Y + 0.05, p.z, 0xffd27a]); }
   for (let s = 0; s <= 17; s += 1.4) { const p = A0.clone().addScaledVector(AD, s); edge.push([p.x, Y + 0.05, p.z, 0xffffff]); }
   for (let x = -15; x <= 15; x += 2.5) if (!(x > -6 && x < -2.5) && !(x > 3.8 && x < 7.2)) edge.push([x, Y + 0.05, 3.5, 0x6aa8ff]);
   for (const cz of [-1.0, 1.2]) for (let x = 4; x <= 15.5; x += 1.6) edge.push([x, Y + 0.05, cz, 0x66ffaa]);
-  lights.push(navLights(g, edge, null, 0.55));
-  lights.push(navLights(g, [[-16.2, 1.2, -1.2, 0xffb040], [-16.2, 1.0, -1.2, 0xffb040], [-16.2, 0.8, -1.2, 0xffb040]], null, 0.9));
+  lights.push(navLights(g, edge, null, 0.55, [0.35, 1.8, 3]));   // deck lights: every 3rd lights the deck (WebGPU)
+  lights.push(navLights(g, [[-16.2, 1.2, -1.2, 0xffb040], [-16.2, 1.0, -1.2, 0xffb040], [-16.2, 0.8, -1.2, 0xffb040]], null, 0.9, [0.8, 4, 3]));
 
   const flood1 = makeSearchlight(g, 0.4, Y + 3.3, 2.4, { angle: 0.45, len: 16, intensity: 1.6, coneOpacity: 0.06, color: 0xffe6c0 });
   const flood2 = makeSearchlight(g, 2.6, Y + 3.3, 2.4, { angle: 0.45, len: 16, intensity: 1.6, coneOpacity: 0.06, color: 0xffe6c0 });
@@ -428,8 +430,8 @@ function buildDestroyer(side) { // side: -1 = port of the carrier, +1 = starboar
   const ciws = [buildCIWS(g, -5.1, 2.15, 0, side < 0 ? 125 : -125, 65)];
 
   const lights = [];
-  lights.push(navLights(g, [[0.8, 5.7, 0, 0xffffff], [2.0, 2.65, -1.3, 0xff2a1a], [2.0, 2.65, 1.3, 0x22ff66], [-7.5, 1.25, 0, 0xffffff]], null, 1.3));
-  lights.push(navLights(g, [[0.8, 6.2, 0, 0xff2020]], { period: 1.5, duty: 0.2, phase: side * 0.4 }, 1.3));
+  lights.push(navLights(g, [[0.8, 5.7, 0, 0xffffff], [2.0, 2.65, -1.3, 0xff2a1a], [2.0, 2.65, 1.3, 0x22ff66], [-7.5, 1.25, 0, 0xffffff]], null, 1.3, [0.8, 5]));
+  lights.push(navLights(g, [[0.8, 6.2, 0, 0xff2020]], { period: 1.5, duty: 0.2, phase: side * 0.4 }, 1.3, [1.2, 6]));
   const sl = makeSearchlight(g, 2.1, 2.72, side * 1.3, { angle: 0.1, len: 26, intensity: 2.6, coneOpacity: 0.4 });
   sl.sweep = { base: -side * 90 * DEG, amp: 55 * DEG, speed: rand(0.12, 0.2), ph: rand(0, 6), dist: 20 };
 

@@ -39,7 +39,7 @@ function buildFA18(color, big) {
   const glow = glowSprite(g, -0.9, 0.2, 0, 0.7);
   mergeStatic(g, [...pivots.map(p => p.pv), gr]);
   return {
-    group: g,
+    group: g, exhaust: glow,
     setFold(f) { for (const p of pivots) p.pv.rotation.x = -p.s * f * 1.7; },
     tick(dt, st) { if (gr) gr.visible = st.gearDown !== false; glow.material.opacity += ((st.glow || 0) - glow.material.opacity) * Math.min(1, dt * 6); const sc = 0.5 + glow.material.opacity * 0.6; glow.scale.set(sc, sc, 1); }
   };
@@ -76,7 +76,7 @@ function buildF14(color, big) {
   mergeStatic(g, [...pivots.map(p => p.pv), gr]);
   let sweep = 20, fold = 0;
   return {
-    group: g,
+    group: g, exhaust: glow,
     setFold(f) { fold = f; },
     tick(dt, st) {
       if (gr) gr.visible = st.gearDown !== false;
@@ -116,7 +116,7 @@ function buildF35(color, big) {
   const glow = glowSprite(g, -0.82, 0.21, 0, 0.75);
   mergeStatic(g, [...pivots.map(p => p.pv), gr]);
   return {
-    group: g,
+    group: g, exhaust: glow,
     setFold(f) { for (const p of pivots) p.pv.rotation.x = -p.s * f * 1.75; },
     tick(dt, st) { if (gr) gr.visible = st.gearDown !== false; glow.material.opacity += ((st.glow || 0) - glow.material.opacity) * Math.min(1, dt * 6); const sc = 0.5 + glow.material.opacity * 0.6; glow.scale.set(sc, sc, 1); }
   };
@@ -331,7 +331,7 @@ function buildMQ25(color) {
   mergeStatic(g, [...pivots.map(p => p.pv), gr, hose, drogue]);
   let ext = 0;
   return {
-    group: g,
+    group: g, exhaust: glow,
     setFold(f) { for (const p of pivots) p.pv.rotation.x = -p.s * f * 1.7; },
     tick(dt, st) {
       gr.visible = st.gearDown !== false;
@@ -429,7 +429,7 @@ function buildMH60(color) {
   const th = new THREE.Group(); th.position.set(-0.9, 0.43, 0.04); th.rotation.x = -0.35; g.add(th);   // tail rotor: starboard, canted 20°
   const T = tailRotor(th, 0, 0, 0, 0.167, 0x2d3237);
   navLights(g, [[0.1, 0.2, -0.13, 0xff2a1a], [0.1, 0.2, 0.13, 0x22ff66], [-0.96, 0.3, 0, 0xffffff]], null, 0.8);
-  navLights(g, [[0, 0.03, 0, 0xff2020], [0, 0.33, 0, 0xff3030]], { period: 1.0, duty: 0.18, phase: Math.random() }, 1.0);
+  navLights(g, [[0, 0.03, 0, 0xff2020], [0, 0.33, 0, 0xff3030]], { period: 1.0, duty: 0.18, phase: Math.random() }, 1.0, [0.5, 2.5]);
   return heliModel(g, R, T, new V3(0.5, 0.08, 0));
 }
 
@@ -470,7 +470,7 @@ function buildCH53(color) {
   const th = new THREE.Group(); th.position.set(-1.17, 0.7, -0.13); th.rotation.x = -0.35; g.add(th);   // tail rotor: port side, canted
   const T = tailRotor(th, 0, 0, 0, 0.3, 0x2d3237);
   navLights(g, [[0.4, 0.3, -0.14, 0xff2a1a], [0.4, 0.3, 0.14, 0x22ff66], [-1.24, 0.55, 0, 0xffffff]], null, 0.9);
-  navLights(g, [[0.3, 0.03, 0, 0xff2020], [0.0, 0.46, 0, 0xff3030]], { period: 1.1, duty: 0.18, phase: Math.random() }, 1.1);
+  navLights(g, [[0.3, 0.03, 0, 0xff2020], [0.0, 0.46, 0, 0xff3030]], { period: 1.1, duty: 0.18, phase: Math.random() }, 1.1, [0.5, 2.5]);
   return heliModel(g, R, T, new V3(0.98, 0.1, 0));
 }
 
@@ -520,7 +520,7 @@ function buildAH1(color) {
   const th = new THREE.Group(); th.position.set(-0.76, 0.38, -0.03); g.add(th);
   const T = tailRotor(th, 0, 0, 0, 0.15, 0x2d3237);
   navLights(g, [[-0.02, 0.17, -0.3, 0xff2a1a], [-0.02, 0.17, 0.3, 0x22ff66], [-0.79, 0.3, 0, 0xffffff]], null, 0.8);
-  navLights(g, [[0.03, 0.31, 0, 0xff3030]], { period: 0.9, duty: 0.18, phase: Math.random() }, 1.0);
+  navLights(g, [[0.03, 0.31, 0, 0xff3030]], { period: 0.9, duty: 0.18, phase: Math.random() }, 1.0, [0.5, 2.5]);
   return heliModel(g, R, T, new V3(0.6, 0.06, 0));
 }
 
@@ -577,7 +577,7 @@ function buildCMV22(color) {
     dyn.push(nac, rotor, ...blades.map(b => b.h));
   }
   navLights(g, [[-0.92, 0.32, 0, 0xffffff]], null, 0.8);
-  navLights(g, [[0.2, 0.05, 0, 0xff2020], [-0.3, 0.33, 0, 0xff3030]], { period: 1.05, duty: 0.18, phase: Math.random() }, 1.1);
+  navLights(g, [[0.2, 0.05, 0, 0xff2020], [-0.3, 0.33, 0, 0xff3030]], { period: 1.05, duty: 0.18, phase: Math.random() }, 1.1, [0.5, 2.5]);
   mergeStatic(g, dyn);
   let fold = 1, conv = 0;
   return {

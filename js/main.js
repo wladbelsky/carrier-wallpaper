@@ -73,7 +73,7 @@ function init() {
   const canvas = document.getElementById('c');
   // WebGPU where the browser has it, WebGL 2 otherwise (or with ?gl=webgl2): the same node materials either way
   // (no powerPreference: Chrome ignores it on Windows — Wallpaper Engine's platform — and warns on every start)
-  renderer = new THREE.WebGPURenderer({ canvas, antialias: true, forceWebGL: QS.get('gl') === 'webgl2' });
+  renderer = new THREE.WebGPURenderer({ canvas, antialias: true, forceWebGL: QS.get('gl') === 'webgl2', trackTimestamp: GPU.timing });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
   renderer.outputColorSpace = THREE.LinearSRGBColorSpace;   // the r149 look (see core.js)
   renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFShadowMap;            // soft since r182
@@ -120,11 +120,27 @@ function init() {
   buildUI(); buildAirWing(); applySettings(); resize(); updateEnvironment();
   // three's own animation loop: it also advances the node frame (shadow maps and other per-frame nodes update once per frame)
   const start = () => { shadersReady = true; renderer.setAnimationLoop(frame); };
-  renderer.init().then(() => { GPU.webgpu = !!renderer.backend.isWebGPUBackend; return warmShaders(); }).then(start, e => {
+  renderer.init().then(() => { GPU.webgpu = !!renderer.backend.isWebGPUBackend; if (GPU.webgpu && QS.get('glow') !== '0') clusteredLights(); return warmShaders(); }).then(start, e => {
     console.error('renderer could not start', e); const s = document.querySelector('#splash .s'); if (s) s.textContent = 'NO WEBGPU / WEBGL 2 — CANNOT RENDER';
   });
 }
-const GPU = { webgpu: false };   // the backend WebGPURenderer ended up with (set once renderer.init() is done)
+const GPU = { webgpu: false,   // the backend WebGPURenderer ended up with (set once renderer.init() is done)
+  // ?gputime=1 (debug): GPU time of the last frame's render / compute passes in ms, measured twice a second (GPU.ms)
+  timing: QS.get('gputime') === '1', ms: { render: 0, compute: 0 }, tsT: 0 };
+/* WebGPU: clustered lighting (Forward+, tools/three-clustered.js). Point / spot lights without shadows are culled per
+   screen tile and depth slice on the GPU and are not part of the shader cache key, so they may come and go: flashes,
+   fires, missile motors, afterburners, tracers, beacons and deck lights (GLOW), a searchlight for every helicopter
+   (HELI_LIGHTS). LIGHTS_MAX is the hard ceiling of the cluster data: GLOW 96 + helicopters 24 + the ships' 4 spots.
+   The WebGL 2 fallback keeps the fixed light set (4 flash lights, 4 helicopter searchlights). ?glow=0 turns it off. */
+const LIGHTS_MAX = 128;
+function clusteredLights() {
+  renderer.lighting = new THREE.ClusteredLighting(LIGHTS_MAX, 32, 16, 32);   // 32 px tiles, 16 depth slices, ≤ 32 lights each
+  // the grid sized for the whole screen up front: a bigger canvas later would reallocate it, and that recompiles every
+  // lit material
+  const r = renderer.getPixelRatio();
+  renderer.lighting.getNode(scene).setSize(Math.max(innerWidth, screen.width) * r, Math.max(innerHeight, screen.height) * r);
+  GLOW.enable(scene, 96); FX.lights.toGlow(32); HELI_LIGHTS.grow(24);
+}
 /* Shader warm-up: compileAsync (async pipelines / KHR_parallel_shader_compile) instead of compiling everything on the
    first render, so nothing compiles later in the first fight (pools hidden until then), in a storm or when a helicopter
    leaves the hangar. compile() only walks visible objects: everything hidden is shown during its synchronous part.
@@ -641,6 +657,7 @@ function updateFlybys(dt) {
       } else m.target = null;
     }
     // motor glow at a fixed 30 Hz: per-frame spawns ate the shared flash pool (cutting explosions short) and scaled with FPS
+    if ((m.guided || m.glow) && GLOW.cap) GLOW.add(m.p, 0xffa050, m.big ? 2 : 1.2, m.big ? 9 : 6);   // motor light (WebGPU)
     if ((m.guided || m.glow) && (m.glowT = (m.glowT || 0) - dt) <= 1e-4) { m.glowT += 1 / 30; FX.flash.spawn(m.p, { s0: m.big ? 1.3 : 0.9, s1: m.big ? 1.1 : 0.7, life: 0.075, a0: 1 }); }
     m.p.addScaledVector(m.v, dt);
     const iv = m.small ? 0.06 : m.big ? 0.018 : 0.025;
@@ -681,10 +698,13 @@ function updateLights() {
     let a = ENV.lightsOn; const b = m.userData.blink;
     if (b) { const ph = ((T / b.period) + (b.phase || 0)) % 1; a *= ph < b.duty ? 1 : 0; }
     m.opacity = a; m.size = m.userData.scale * ENV.ppu;
+    const L = m.userData.lit;   // ship / deck lights and beacons that light their surroundings (WebGPU)
+    if (L && GLOW.cap && a > 0.01 && shownInScene(L.obj)) for (const q of L.pts) GLOW.add(L.obj.localToWorld(_w.copy(q.p)), q.c, L.I * a, L.d);
   }
   for (const s of SEARCHLIGHTS) {
     const on = ENV.lightsOn * s.enabled;
-    // always visible (zero intensity by day): a change in the set of lights recompiles every lit material (warmShaders)
+    // WebGL 2: always visible (zero intensity by day) — a change in the set of lights recompiles every lit material
+    // (warmShaders); WebGPU (clustered, GLOW.cap): hidden while dark, so it costs nothing
     if (s.light) {
       let I = s.o.intensity * on * LIGHT_K * SPOT_FIT;
       if (s.pooled) {   // a pooled helicopter light (HELI_LIGHTS) follows its searchlight; dark while the helicopter is hidden
@@ -693,11 +713,11 @@ function updateLights() {
           s.light.target.position.set(0, 0, 10).applyMatrix4(s.holder.matrixWorld);
         } else I = 0;
       }
-      s.light.intensity = I;
+      s.light.intensity = I; if (GLOW.cap) s.light.visible = I > 0;
     }
     if (s.cone) s.cone.material.userData.uOpacity.value = s.o.coneOpacity * on * (0.45 + 0.55 * ENV.night);
   }
-  for (const p of HELI_LIGHTS.pool) if (!p.s) p.l.intensity = 0;   // spare ones stay in the scene, dark
+  for (const p of HELI_LIGHTS.pool) if (!p.s) { p.l.intensity = 0; if (GLOW.cap) p.l.visible = false; }   // spare ones: dark
   FX.foam.mat.size = 1.05 * ENV.ppu;
 }
 const shownInScene = o => { for (; o; o = o.parent) { if (!o.visible) return false; if (o === scene) return true; } return false; };
@@ -923,6 +943,11 @@ function frame(ms) {
   for (let i = 0; i < n * TIME_SCALE; i++) step(dt);
   if (CFG.shadows) fitShadow();
   renderer.render(scene, camera);
+  if (GPU.timing && ms - GPU.tsT > 500) {
+    GPU.tsT = ms;
+    renderer.resolveTimestampsAsync(THREE.TimestampQuery.RENDER).then(v => { GPU.ms.render = v; });
+    renderer.resolveTimestampsAsync(THREE.TimestampQuery.COMPUTE).then(v => { GPU.ms.compute = v; });
+  }
 }
 /* The sun's shadow camera covers just the visible sea: the light-space bounds of the screen corners at sea level.
    Anything casting onto the screen lies above that area along the light, however far out or high (a jet climbing
@@ -972,7 +997,7 @@ function step(dt) {
   FX.smoke.update(dt, ENV.smokeTint, camera);
   FX.splash.update(dt, WAVE.flow, ENV.splashTint);
   FX.foam.update(dt, WAVE.flow);
-  FX.lights.update(dt, 0.6 + ENV.night * 0.8);
+  GLOW.boost = 0.6 + ENV.night * 0.8; FX.lights.update(dt, GLOW.boost);
   STRESS.update(dt);
   updateCombat(dt);
   AIRWAR.update(dt);
@@ -981,6 +1006,7 @@ function step(dt) {
   RADIO.update(dt);
   if (airWingDirty && ready) syncAirWing();
   updateLights();
+  GLOW.update();   // after every emitter of this step
 
   envTimer -= dt; if (envTimer <= 0) { envTimer = WEATHER.settling ? 0.25 : 2; updateEnvironment(); }
   WEATHER.update(dt);
