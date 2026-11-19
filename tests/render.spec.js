@@ -159,7 +159,9 @@ test('volumetric beams: the beam pass lights the air along a searchlight at nigh
   expect(Math.abs(lum(r.hidden) - lum(r.off)), `behind the scene: no beam ${r.hidden} vs ${r.off}`).toBeLessThan(2);
   // switched off: the plain renderer with the old cones
   const off = await wp.run(() => { CFG.volumetric = false; updatePipeline(); step(0.05); const s = SHIPS[1].searchlights[0]; return { pipe: PIPE.on, vol: s.vol.visible, cone: s.cone.visible }; });
-  expect(off).toEqual({ pipe: false, vol: false, cone: true });
+  expect(off, 'the old cones; the pipeline stays for bloom').toEqual({ pipe: true, vol: false, cone: true });
+  const none = await wp.run(() => { CFG.bloom = false; updatePipeline(); __t.render(); return { pipe: PIPE.on, err: __t.glError() }; });
+  expect(none, 'no effects: plain renderer.render').toEqual({ pipe: false, err: 0 });
 });
 
 test('bloom: something brighter than white glows around itself at night; shadows fade under cloud and at dusk', async ({ wp }) => {
