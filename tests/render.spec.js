@@ -21,7 +21,7 @@ test('a day frame renders without GL errors, within the draw-call budget, with t
   expect(r.webgpu, 'the suite runs on the WebGL 2 fallback').toBe(false);
   expect(r.lost).toBe(false);
   expect(r.err, 'gl.getError()').toBe(0);
-  expect(r.calls, 'draw calls, main + shadow pass (baseline ~450)').toBeLessThan(700);
+  expect(r.calls, 'draw calls, main + shadow pass (baseline ~200 since the vertex-colour merge, was ~450)').toBeLessThan(320);
   expect(r.calls).toBeGreaterThan(50);
   expect(r.tris).toBeGreaterThan(10000);
   expect(r.programs, 'warmed up front: ~14 programs × 6 searchlight counts').toBeLessThan(120);

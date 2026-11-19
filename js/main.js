@@ -756,7 +756,7 @@ function updateLights() {
   for (const m of NAV_MATS) {
     let a = ENV.lightsOn; const b = m.userData.blink;
     if (b) { const ph = ((T / b.period) + (b.phase || 0)) % 1; a *= ph < b.duty ? 1 : 0; }
-    m.opacity = a; m.size = m.userData.scale * ENV.ppu;
+    m.opacity = a; m.size = m.userData.scale * ENV.ppu; m.userData.obj.visible = a > 0.005;   // not drawn at all while dark
     const L = m.userData.lit;   // ship / deck lights and beacons that light their surroundings (WebGPU)
     if (L && GLOW.cap && a > 0.01 && shownInScene(L.obj)) for (const q of L.pts) GLOW.add(L.obj.localToWorld(_w.copy(q.p)), q.c, L.I * a, L.d);
   }

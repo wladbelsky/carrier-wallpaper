@@ -41,7 +41,7 @@ function buildFA18(color, big) {
   return {
     group: g, exhaust: glow,
     setFold(f) { for (const p of pivots) p.pv.rotation.x = -p.s * f * 1.7; },
-    tick(dt, st) { if (gr) gr.visible = st.gearDown !== false; glow.material.opacity += ((st.glow || 0) - glow.material.opacity) * Math.min(1, dt * 6); const sc = 0.5 + glow.material.opacity * 0.6; glow.scale.set(sc, sc, 1); }
+    tick(dt, st) { if (gr) gr.visible = st.gearDown !== false; glow.material.opacity += ((st.glow || 0) - glow.material.opacity) * Math.min(1, dt * 6); const sc = 0.5 + glow.material.opacity * 0.6; glow.scale.set(sc, sc, 1); glow.visible = glow.material.opacity > 0.005; }
   };
 }
 
@@ -85,7 +85,7 @@ function buildF14(color, big) {
       sweep += clamp(target - sweep, -25 * dt, 25 * dt);
       for (const p of pivots) p.pv.rotation.y = -p.s * (sweep - 20) * DEG;
       glow.material.opacity += ((st.glow || 0) - glow.material.opacity) * Math.min(1, dt * 6);
-      const sc = 0.55 + glow.material.opacity * 0.7; glow.scale.set(sc, sc, 1);
+      const sc = 0.55 + glow.material.opacity * 0.7; glow.scale.set(sc, sc, 1); glow.visible = glow.material.opacity > 0.005;
     }
   };
 }
@@ -118,7 +118,7 @@ function buildF35(color, big) {
   return {
     group: g, exhaust: glow,
     setFold(f) { for (const p of pivots) p.pv.rotation.x = -p.s * f * 1.75; },
-    tick(dt, st) { if (gr) gr.visible = st.gearDown !== false; glow.material.opacity += ((st.glow || 0) - glow.material.opacity) * Math.min(1, dt * 6); const sc = 0.5 + glow.material.opacity * 0.6; glow.scale.set(sc, sc, 1); }
+    tick(dt, st) { if (gr) gr.visible = st.gearDown !== false; glow.material.opacity += ((st.glow || 0) - glow.material.opacity) * Math.min(1, dt * 6); const sc = 0.5 + glow.material.opacity * 0.6; glow.scale.set(sc, sc, 1); glow.visible = glow.material.opacity > 0.005; }
   };
 }
 
@@ -292,7 +292,7 @@ function buildE2D(color) {
       gr.visible = st.gearDown !== false;
       spin += ((st.engineOn ? 1 : 0) - spin) * Math.min(1, dt * 0.8);
       ang += spin * 40 * dt;
-      for (const p of props) { p.pr.rotation.x = ang; p.pr.children.forEach(c => { if (c.isGroup) c.visible = spin < 0.7 || Math.random() < 0.5; }); p.disc.material.opacity = 0.25 * smoothstep(0.4, 1, spin); }
+      for (const p of props) { p.pr.rotation.x = ang; p.pr.children.forEach(c => { if (c.isGroup) c.visible = spin < 0.7 || Math.random() < 0.5; }); p.disc.material.opacity = 0.25 * smoothstep(0.4, 1, spin); p.disc.visible = p.disc.material.opacity > 0.005; }
       if (st.airborne) dome.rotation.y += dt * 0.6;
     }
   };
@@ -335,7 +335,7 @@ function buildMQ25(color) {
     setFold(f) { for (const p of pivots) p.pv.rotation.x = -p.s * f * 1.7; },
     tick(dt, st) {
       gr.visible = st.gearDown !== false;
-      glow.material.opacity += ((st.glow || 0) - glow.material.opacity) * Math.min(1, dt * 6); const sc = 0.4 + glow.material.opacity * 0.5; glow.scale.set(sc, sc, 1);
+      glow.material.opacity += ((st.glow || 0) - glow.material.opacity) * Math.min(1, dt * 6); const sc = 0.4 + glow.material.opacity * 0.5; glow.scale.set(sc, sc, 1); glow.visible = glow.material.opacity > 0.005;
       ext += ((st.hoseOut || 0) - ext) * Math.min(1, dt * 0.9);
       const L = HL * ext; hose.visible = ext > 0.02; hose.scale.x = Math.max(L, 1e-3);
       drogue.position.set(PX - 0.03 - L * Math.cos(HA), PY - L * Math.sin(HA), PZ);
@@ -380,7 +380,7 @@ function heliModel(g, R, T, searchPos) {
         for (const b of R.blades) { b.h.rotation.y = b.base; b.h.visible = spin < 0.85 || Math.random() < 0.5; }
       }
       if (T) T.rotation.z = (st.rotorAng || 0) * 1.7;
-      R.disc.material.opacity = 0.28 * smoothstep(0.4, 1, spin);
+      R.disc.material.opacity = 0.28 * smoothstep(0.4, 1, spin); R.disc.visible = R.disc.material.opacity > 0.005;
     }
   };
 }
@@ -596,7 +596,7 @@ function buildCMV22(color) {
         S.nac.rotation.z = -tilt;
         S.rotor.rotation.y = fold > 0.001 ? 0 : S.s * (st.rotorAng || 0);   // counter-rotating
         if (fold <= 0.001) for (const b of S.blades) { b.h.rotation.y = b.base; b.h.visible = spin < 0.85 || Math.random() < 0.5; }
-        S.disc.material.opacity = 0.28 * smoothstep(0.4, 1, spin);
+        S.disc.material.opacity = 0.28 * smoothstep(0.4, 1, spin); S.disc.visible = S.disc.material.opacity > 0.005;
       }
     }
   };

@@ -40,7 +40,7 @@ User-facing docs: `README.md` (keep it in sync when behaviour or properties chan
 
 ## Rules / conventions
 - **After changing any JS/CSS file, bump the cache-buster** `?v=N` on all `<script>`/`<link>` tags in
-  `index.html` (WE's CEF caches aggressively). Current: `v=68`.
+  `index.html` (WE's CEF caches aggressively). Current: `v=69`.
 - **New WE property**: add it to `project.json`, read it in `applyUserProperties` (`main.js`) into `CFG`,
   then run `python tools/gen_properties.py`. Property `order` decides the browser-drawer group
   (0–9 camera/time, 10–19 audio/combat, 20–29 sea, 30–39 panel, 40–49 air wing, 50–59 hull number).
@@ -254,11 +254,16 @@ Missions fly beyond the screen edge while there is no music. `dispatchFlight` (`
 - `disposeTree` skips materials with `userData.shared` (everything from `M()` and `DECK_MARK_MATS`)
   and sprite geometry (three.js shares one geometry across all Sprites). New cached materials must set
   `userData.shared = true`.
-- **Static meshes are merged per material** via `mergeStatic(root, dynamicNodes)` at the end of each
-  builder (ships, airframes, enemies). Every node that moves, rotates or toggles `visible` at runtime
-  (mount yaw/pitch groups, radars, lifts, JBDs, wing pivots, gear, rotors, blades, props, searchlight
-  holders) **must be listed as dynamic**, or it gets baked into the static mesh. Code must not keep
+- **Static meshes are merged** via `mergeStatic(root, dynamicNodes)` at the end of each builder (ships, airframes,
+  enemies): meshes with a cached Phong material (`M()`, deck marks — `userData.shared`, colour never changed) **by
+  material kind** (everything but the colour, `vcKind`) into one mesh with a vertex-colour attribute and a cached
+  `VC_MATS` material; other materials per material. So **never change the colour of an `M()` material at runtime** —
+  it is baked into vertices; a part whose colour changes needs a material of its own. Every node that moves, rotates
+  or toggles `visible` at runtime (mount yaw/pitch groups, radars, lifts, JBDs, wing pivots, gear, rotors, blades,
+  props, searchlight holders) **must be listed as dynamic**, or it gets baked into the static mesh. Code must not keep
   references to static meshes after the builder returns.
+- Nothing fully transparent is drawn: nav-light sprites while dark (`updateLights`), exhaust glow sprites and rotor /
+  prop discs at opacity 0 (their `tick`) are hidden, not drawn at zero opacity. Do the same for new fading parts.
 - `shade()` sets `castShadow`/`receiveShadow` per mesh; don't blanket-enable shadows with `traverse`
   (it made invisible rotor discs cast shadows).
 - Shared scratch vectors (`_v`, `_p`, `_d`, `_al`…) must not be passed into a function that also
@@ -313,4 +318,9 @@ Missions fly beyond the screen edge while there is no music. `dispatchFlight` (`
 - Baseline after the 2026-10 optimisation pass: ~400 GL draw calls/frame (was ~950; main + shadow pass, ~250 of them
   main pass), geometries plateau ≈ 900 under sustained combat. Under r187 / `WebGPURenderer` (WebGL 2 backend):
   `info.render.drawCalls` ≈ 395 for a day frame (main + shadow pass), `info.memory.programs` ≈ 30; nothing compiles
-  after the first frame (shadow-map pipelines).
+  after the first frame (shadow-map pipelines). After stage 3.6 (vertex-colour merge, nothing drawn at zero
+  opacity): ≈ 200 for a day frame (render.spec budget 320).
+- **`BatchedMesh` was evaluated and not used** (stage 3.6): r187's WebGPU backend still issues one draw per batch range
+  (no multi-draw in WebGPU), and every model builds its own geometry, so draw calls would not drop — only CPU work per
+  object, for an instance / buffer-compaction lifecycle (deleteGeometry + optimize) in a page that runs for days. Worth
+  revisiting once models share geometry per type (instanced draws) or WebGPU gets multi-draw-indirect in three.

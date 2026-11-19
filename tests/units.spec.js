@@ -236,6 +236,13 @@ test('models: every builder runs, mergeStatic keeps dynamic nodes, disposeTree s
     box(dyn, 1, 1, 1, 0x123456, 0, 2, 0); box(dyn, 1, 1, 1, 0x123456, 0, 4, 0);
     mergeStatic(root, [dyn]);
     out.merge = { rootMeshes: root.children.filter(c => c.isMesh).length, dynKept: dyn.parent === root, dynMeshes: dyn.children.filter(c => c.isMesh).length };
+    // colours of one kind merge into one mesh with vertex colours (the colour as it was, the material shared)
+    const r2 = new THREE.Group(); box(r2, 1, 1, 1, 0xff0000, 0, 0, 0); box(r2, 1, 1, 1, 0x00ff00, 2, 0, 0); box(r2, 1, 1, 1, M(0x0000ff, { shininess: 90 }), 4, 0, 0);
+    box(r2, 1, 1, 1, M(0xffff00, { shininess: 90 }), 6, 0, 0);
+    mergeStatic(r2, []);
+    const ms = r2.children.filter(c => c.isMesh), vc = ms.filter(m => m.material.vertexColors);
+    const cols = new Set(); for (const m of vc) { const a = m.geometry.attributes.color.array; for (let i = 0; i < a.length; i += 3) cols.add(a[i] + ',' + a[i + 1] + ',' + a[i + 2]); }
+    out.vc = { meshes: ms.length, vc: vc.length, shared: vc.every(m => m.material.userData.shared), cols: [...cols].sort(), shininess: vc.map(m => m.material.shininess).sort() };
     // disposeTree: shared (cached) materials survive, own materials and geometries are disposed
     const g2 = new THREE.Group(), shared = M(0x654321), own = new THREE.MeshBasicMaterial(), geo = new THREE.BoxGeometry();
     g2.add(new THREE.Mesh(geo, shared), new THREE.Mesh(new THREE.BoxGeometry(), own));
@@ -248,6 +255,7 @@ test('models: every builder runs, mergeStatic keeps dynamic nodes, disposeTree s
   expect(r.dyn).toBe(true);
   expect(r.carrierMeshes).toBeLessThan(400);
   expect(r.merge).toEqual({ rootMeshes: 1, dynKept: true, dynMeshes: 1 });
+  expect(r.vc, 'one mesh per material kind, colours in the vertices').toEqual({ meshes: 2, vc: 2, shared: true, cols: ['0,0,1', '0,1,0', '1,0,0', '1,1,0'], shininess: [8, 90] });
   expect(r.disposed).toEqual(['geo', 'own']);
 });
 

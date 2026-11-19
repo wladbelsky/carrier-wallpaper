@@ -16,10 +16,23 @@ function disposeTree(root) {
     if (o.material && !o.material.userData.shared) o.material.dispose();
   });
 }
-/* Static meshes that share a material are merged into one mesh per material: far fewer draw calls
-   in both the shadow and the main pass. `dynamic` nodes (moving or toggled parts) stay separate;
-   the static meshes inside each of them are merged the same way.                                  */
+/* Static meshes are merged: far fewer draw calls in both the shadow and the main pass. Meshes with a cached Phong
+   material (M(), deck marks: userData.shared, colour fixed for good) merge by the material's kind — everything but the
+   colour (vcKind) — with the colour baked into a vertex colour attribute and drawn with one cached vertex-colour
+   material (VC_MATS); any other material merges per material, as before. `dynamic` nodes (moving or toggled parts)
+   stay separate; the static meshes inside each of them are merged the same way.                                  */
 const _mInv = new THREE.Matrix4(), _mRel = new THREE.Matrix4();
+const VC_MATS = {}, VC_KEYS = ['shininess', 'flatShading', 'side', 'polygonOffset', 'polygonOffsetFactor', 'polygonOffsetUnits'];
+const vcKind = mt => (mt.userData.shared && mt.isMeshPhongMaterial && !mt.vertexColors && mt.emissive.getHex() === 0 && mt.opacity === 1)
+  ? 'vc|' + VC_KEYS.map(k => mt[k]).join('|') + '|' + mt.specular.getHex() : null;
+function vcMaterial(kind, mt) {
+  if (!VC_MATS[kind]) {
+    const o = { vertexColors: true, color: 0xffffff, specular: mt.specular.getHex() };
+    for (const k of VC_KEYS) o[k] = mt[k];
+    VC_MATS[kind] = new THREE.MeshPhongMaterial(o); VC_MATS[kind].userData.shared = true;
+  }
+  return VC_MATS[kind];
+}
 function concatF32(arrs) { let n = 0; for (const a of arrs) n += a.length; const out = new Float32Array(n); let o = 0; for (const a of arrs) { out.set(a, o); o += a.length; } return out; }
 function mergeStatic(root, dynamic) {
   const skip = new Set(dynamic.filter(Boolean)), nested = [], groups = new Map();
@@ -29,7 +42,7 @@ function mergeStatic(root, dynamic) {
       if (skip.has(c)) { nested.push(c); continue; }
       const mt = c.material;
       if (c.isMesh && !c.children.length && mt && !Array.isArray(mt) && !mt.transparent && !mt.map && c.geometry.attributes.normal) {
-        const key = mt.uuid + '|' + c.castShadow + '|' + c.receiveShadow;
+        const key = (vcKind(mt) || mt.uuid) + '|' + c.castShadow + '|' + c.receiveShadow;
         (groups.get(key) || groups.set(key, []).get(key)).push(c);
       }
       walk(c);
@@ -37,17 +50,19 @@ function mergeStatic(root, dynamic) {
   })(root);
   for (const list of groups.values()) {
     if (list.length < 2) continue;
-    const pos = [], nor = [];
+    const kind = vcKind(list[0].material), pos = [], nor = [], col = [];
     for (const m of list) {
       const g = m.geometry.index ? m.geometry.toNonIndexed() : m.geometry.clone();
       g.applyMatrix4(_mRel.multiplyMatrices(_mInv, m.matrixWorld));
       pos.push(g.attributes.position.array); nor.push(g.attributes.normal.array);
+      if (kind) { const c = m.material.color, n = g.attributes.position.count, a = new Float32Array(n * 3); for (let i = 0; i < n; i++) { a[i * 3] = c.r; a[i * 3 + 1] = c.g; a[i * 3 + 2] = c.b; } col.push(a); }
       g.dispose(); m.geometry.dispose(); m.removeFromParent();
     }
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.BufferAttribute(concatF32(pos), 3));
     geo.setAttribute('normal', new THREE.BufferAttribute(concatF32(nor), 3));
-    const mesh = new THREE.Mesh(geo, list[0].material);
+    if (kind) geo.setAttribute('color', new THREE.BufferAttribute(concatF32(col), 3));
+    const mesh = new THREE.Mesh(geo, kind ? vcMaterial(kind, list[0].material) : list[0].material);
     mesh.castShadow = list[0].castShadow; mesh.receiveShadow = list[0].receiveShadow;
     root.add(mesh);
   }
@@ -140,7 +155,7 @@ function navLights(parent, list, blink, scale, lit) {
   const pos = [], col = [], c = new THREE.Color();
   list.forEach(l => { pos.push(l[0], l[1], l[2]); c.setHex(l[3]); col.push(c.r, c.g, c.b); });
   const pts = pointSprites(new THREE.InstancedBufferAttribute(new Float32Array(pos), 3), new THREE.InstancedBufferAttribute(new Float32Array(col), 3), { size: 8, map: TEX.glow, opacity: 0 });
-  pts.material.userData = { scale: scale || 1.1, blink: blink || null };
+  pts.material.userData = { obj: pts, scale: scale || 1.1, blink: blink || null };   // obj: hidden while dark (updateLights)
   if (lit) pts.material.userData.lit = { obj: pts, I: lit[0], d: lit[1], pts: list.filter((l, i) => i % (lit[2] || 1) === 0).map(l => ({ p: new V3(l[0], l[1], l[2]), c: l[3] })) };
   NAV_MATS.push(pts.material);
   pts.renderOrder = 5;
