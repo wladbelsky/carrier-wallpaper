@@ -7,8 +7,8 @@ User-facing docs: `README.md` (keep it in sync when behaviour or properties chan
 ## Stack & layout
 - Plain JS, no build step for the wallpaper code (npm only for the tests and for building three.js). `'use strict'`
   classic scripts sharing **global** scope (no modules). three.js **r187** is vendored as `js/three.min.js` — one IIFE
-  defining the global `THREE`, built from the `three` devDependency by `tools/build_three.sh` (three ships ES modules
-  only since r161) — never edit it; see "three.js".
+  defining the global `THREE` (`three/webgpu`: `WebGPURenderer` + node materials; TSL as `THREE.TSL`), built from the
+  `three` devDependency by `tools/build_three.sh` (three ships ES modules only since r161) — never edit it; see "three.js".
 - `index.html` loads scripts in dependency order (later files use globals of earlier ones):
   `core → flightpath → models → airframes → effects → weather → radio → aircraft → missions → persist → combat → airwar → tanker → main → properties → settings`,
   then an inline script registers the WE audio listener (or starts the browser demo beat).
@@ -16,7 +16,7 @@ User-facing docs: `README.md` (keep it in sync when behaviour or properties chan
 
 | File | Contents |
 |---|---|
-| `js/core.js` | utils (`V3`, `rand`, `clamp`, `lerp`, `smoothstep`, `pick`…), `CFG` defaults, waves (JS + generated GLSL `waveH` / `waveNormal` — keep in sync), sun position, sky palette, canvas textures `TEX` |
+| `js/core.js` | utils (`V3`, `rand`, `clamp`, `lerp`, `smoothstep`, `pick`…), `CFG` defaults, waves (JS `waveH` + TSL `waveNodes` — height and analytic normal for the water shader, from the same table), sun position, sky palette, canvas textures `TEX` |
 | `js/flightpath.js` | `FlightPath`: Dubins CSC curves (turn-radius-limited flight) + lines |
 | `js/models.js` | mesh helpers (`M`, `box`, `cyl`, `taper`, `prism`…), `mergeStatic`, `disposeTree`, nav lights, searchlights, CIWS/gun mounts, `buildCarrier`, `buildDestroyer`, mission ships `buildFeeder` / `buildTrawler` / `buildCorvette` / `buildDestroyerTemplate` |
 | `js/airframes.js` | aircraft model builders → `{ group, setFold(f), tick(dt, st) }` (`buildMQ25`: refuelling hose reads `st.hoseOut`); `buildWreck` (crashed jet template for pilot rescues) |
@@ -39,7 +39,7 @@ User-facing docs: `README.md` (keep it in sync when behaviour or properties chan
 
 ## Rules / conventions
 - **After changing any JS/CSS file, bump the cache-buster** `?v=N` on all `<script>`/`<link>` tags in
-  `index.html` (WE's CEF caches aggressively). Current: `v=64`.
+  `index.html` (WE's CEF caches aggressively). Current: `v=65`.
 - **New WE property**: add it to `project.json`, read it in `applyUserProperties` (`main.js`) into `CFG`,
   then run `python tools/gen_properties.py`. Property `order` decides the browser-drawer group
   (0–9 camera/time, 10–19 audio/combat, 20–29 sea, 30–39 panel, 40–49 air wing, 50–59 hull number).
@@ -181,23 +181,39 @@ Missions fly beyond the screen edge while there is no music. `dispatchFlight` (`
   Among combat lines a role (`pilot`, `ship`, `enemy`, …) silent for `VARIETY_T` s gets +0.5 when the next line is
   picked (`RADIO.onAir`), so no side drowns out the others; enemy event lines are prio 2, their chatter prio 1.
 
-## three.js (`js/three.min.js`, r187 with the r149 look)
-- The look is kept exactly as under r149 (top of `core.js` + `init()`): `THREE.ColorManagement.enabled = false` (hex
-  colours used as they are — set before any `THREE.Color` exists), `renderer.outputColorSpace = LinearSRGBColorSpace`,
-  `getDistanceAttenuation` in `THREE.ShaderChunk.lights_pars_begin` replaced by r149's legacy fall-off
-  `(1 − d / distance)^decay` (a console error if the chunk no longer matches after an update), and **every light
+## three.js (`js/three.min.js`, r187, `WebGPURenderer` with the r149 look)
+- **Renderer**: `THREE.WebGPURenderer` — WebGPU where the browser has it (Wallpaper Engine's CEF does), its WebGL 2
+  backend otherwise; `?gl=webgl2` forces the fallback. `renderer.init()` is async: `init()` builds the scene
+  synchronously (`ready`), the frame loop (`renderer.setAnimationLoop(frame)`) starts after `init()` + `warmShaders()`
+  (`shadersReady`); `GPU.webgpu` tells which backend it got. The frame loop must stay three's animation loop: it
+  advances the node frame (shadow maps and other per-frame nodes update once per frame) and resets `renderer.info`.
+- **Materials**: built-in ones (`MeshPhong`, `MeshBasic`, `Sprite`, …) are converted to node materials by three; custom
+  shading is TSL node materials (`THREE.TSL`), never `ShaderMaterial` / `onBeforeCompile` / `ShaderChunk` patches (the
+  node renderer ignores them): the water (`MeshPhongNodeMaterial` + `waveNodes`, `buildWater`), `SpriteFX` (instanced
+  `SpriteNodeMaterial`), `Foam` and nav lights (`pointSprites`, models.js — WebGPU draws point primitives 1 px wide
+  only, so sized points are instanced sprites with a `PointsNodeMaterial`), the searchlight beam (`coneMaterial`,
+  `MeshBasicNodeMaterial`, opacity uniform in `material.userData.uOpacity`).
+- **The r149 look** (top of `core.js` + `init()`): `THREE.ColorManagement.enabled = false` (hex colours used as they
+  are — set before any `THREE.Color` exists), `renderer.outputColorSpace = LinearSRGBColorSpace`, and **every light
   intensity is set × `LIGHT_K`** (π; legacy lights were scaled by π inside three) — sun, hemisphere, searchlights,
-  flash lights. A new light must do the same. Shadows: `PCFShadowMap` (soft since r182; `PCFSoftShadowMap` is deprecated).
-- `renderer.info.render.calls` counts the main **and** the shadow pass since r185 (r149: main pass only).
-- **Shader warm-up** (`warmShaders`, `main.js`): `renderer.compileAsync` compiles every program before the frame loop
-  starts (`shadersReady`), hidden objects shown during the synchronous part; programs depend on the number of visible
-  spot lights, so it warms 0 (day) and every night count (the ships' searchlights + 0–4 helicopters', `HELI_LIGHTS`),
-  the current count first, the rest in the background (`shadersAll`). Materials or lights created later (lazily built
-  enemy / vessel templates with a new material setup) compile on first use: create them at build time where possible.
-- **Updating three.js**: bump `three` in `package.json`, `npm install`, `bash tools/build_three.sh` (or the `.ps1`),
-  bump the cache-buster (three.min.js carries it too), run the tests (`repo.spec.js` checks the bundle matches
-  `package.json`, `render.spec.js` the r149 look and the warm-up), read the three.js migration guide for the versions in
-  between.
+  flash lights. A new light must do the same. Point / spot lights fall off physically (`1 / d^decay` × a window to
+  `distance`); r149's linear `(1 − d / D)^decay` is matched by `SPOT_FIT` (searchlights, decay 0) and `FLASH_FIT`
+  (flashes, decay 1). Shadows: `PCFShadowMap`.
+- **Shaders compile per set of lights (by object)**, and a render object keeps one pipeline only: when the set of
+  visible lights changes, every lit material recompiles. So the set never changes: searchlight `SpotLight`s stay
+  visible by day at zero intensity, helicopters borrow one of the 4 pooled lights (`HELI_LIGHTS`, `aircraft.js`, moved
+  onto the searchlight in `updateLights`; dark while the helicopter is hidden) instead of owning one, flash lights are
+  a pool of 4. **Never add / remove / show / hide a light at runtime**; a new light goes into the scene at start-up.
+- **Shader warm-up** (`warmShaders`, `main.js`): `renderer.compileAsync` compiles every pipeline before the frame loop
+  starts, hidden objects shown during the synchronous part (`shadersAll` when done). Only the shadow-map pipelines
+  compile on the first frame. Materials created later (lazily built enemy / vessel templates with a new material
+  setup) compile on first use: create them at build time where possible.
+- **`renderer.info`**: `render.drawCalls` (main **and** shadow pass), `memory.programs` (vertex + fragment modules),
+  `memory.geometries` / `textures`; reset per frame by three's animation loop.
+- **Updating three.js**: bump `three` in `package.json`, `npm install`, `bash tools/build_three.sh` (or the `.ps1`;
+  entry `tools/three-entry.js`), bump the cache-buster (three.min.js carries it too), run the tests (`repo.spec.js`
+  checks the bundle matches `package.json`, `render.spec.js` the r149 look and the warm-up, `webgpu.spec.js` the WebGPU
+  backend), read the three.js migration guide for the versions in between.
 
 ## Performance & memory invariants (the wallpaper never restarts — leaks accumulate for days)
 - **Never create geometry per spawn and drop it.** Enemies are clones of one template (`enemyMesh()`
@@ -217,14 +233,14 @@ Missions fly beyond the screen edge while there is no music. `dispatchFlight` (`
   writes them; give the callee its own scratch.
 - Pools are ring buffers (`SpriteFX`, `Tracers`, `Foam`): spawn rates must not scale with FPS
   (use time accumulators, see missile glow in `updateFlybys`).
-- `SpriteFX` (flash / smoke) is one instanced mesh per pool with its own billboard shader that
-  reproduces `SpriteMaterial` (color × texture, opacity, scene fog). Normal-blended pools sort live
+- `SpriteFX` (flash / smoke) is one instanced sprite per pool (`SpriteNodeMaterial`, per-instance position / colour /
+  size + rotation attributes) that reproduces `SpriteMaterial` (color × texture, opacity, scene fog). Normal-blended pools sort live
   particles back to front on the CPU each update (needs the camera: `FX.smoke.update(dt, tint, camera)`);
   the whole pool shares one `renderOrder`, so don't rely on interleaving with other transparent objects.
 - The sun's shadow camera is fitted to the visible sea every frame (`fitShadow`, `main.js`; one 2048² map):
   don't set fixed shadow bounds, they cut off shadows of aircraft far out.
-- Searchlight `SpotLight`s are hidden by day (`updateLights`): every visible light costs every lit
-  fragment even at zero intensity. Each count of visible spot lights is its own set of shader programs (warmed up front).
+- Lights are a fixed set (see "three.js"): searchlights stay on at zero intensity by day, helicopters share
+  `HELI_LIGHTS` (4), flashes `FlashLights` (4).
 - Main loop (`frame`): FPS limit keeps cadence via `frameDue`; simulation runs in ≤50 ms sub-steps
   (stalls capped at 0.25 s). `onBeat` does nothing while `paused`.
 
@@ -233,16 +249,21 @@ Missions fly beyond the screen edge while there is no music. `dispatchFlight` (`
 - Browser preview: serve the folder, e.g. `python -m http.server 8765`, open `http://localhost:8765/`.
   The ⚙ SETTINGS drawer mirrors all WE properties (stored in `localStorage`); URL params `?hour=22`,
   `?zoom=150`, `?demo=1`, `?ts=N` (time scale).
-- **Automated tests** (`tests/`, Playwright Test in headless Chromium + SwiftShader WebGL): run them in Docker —
+- **Automated tests** (`tests/`, Playwright Test in headless Chromium + SwiftShader): run them in Docker —
   `powershell -ExecutionPolicy Bypass -File tools/test.ps1 [file / -g pattern]` (no local Node; `$env:SEED = N` for
   another seed); CI runs the same image on every push / PR (`.github/workflows/tests.yml`). Run them after a change.
   - The harness (`tests/support/harness.js`) boots the page deterministically (and waits for the shader warm-up): seeded `Math.random` (`SEED`), fixed
     date in UTC, no `requestAnimationFrame` (time only advances through `__t.sim(sec)` = `step(0.05)` per tick),
-    `RT()` on simulated time, Wallpaper Engine mode (audio fed by `__t.sim(sec, { audio: true/false })`).
+    `RT()` on simulated time, Wallpaper Engine mode (audio fed by `__t.sim(sec, { audio: true/false })`), the WebGL 2
+    backend (`?gl=webgl2`; `GL=webgpu` env or `boot({ gl: 'webgpu' })` leaves it out). Headless Chromium loses the
+    WebGPU device as soon as a WebGPU canvas is presented: `webgpu.spec.js` (SwiftShader's WebGPU adapter) renders into a
+    `RenderTarget` only and reads it back with `__t.sampleRT` (async).
   - `tests/support/inpage.js` (`window.__t`): `sim` runs `checkInvariants()` after every step (deck resources:
     catapults, landing area, spots, lifts, helo pad; known states; NaN; mission / tanker consistency; bounded
-    pools) and the stuck detector (`STATE_LIMITS`); `forceFight` / `fightOff`; `sample` (pixels); `geometries`
-    (leak check: geometries dropped without `dispose`).
+    pools) and the stuck detector (`STATE_LIMITS`); `forceFight` / `fightOff`; `render` (one frame, as three's animation
+    loop would: `renderer.info` reset, node frame); `sample` (pixels, copied from the canvas) / `sampleRT`; `pipelines`
+    (render pipelines created = compiles), `programs`, `drawCalls`, `glError`, `lit`; `geometries` (leak check:
+    geometries dropped without `dispose`).
   - **When adding a state, a deck resource, a line pool, a placeholder or a cache**, update the harness: aircraft
     states come from `STATUS` (so `registerLeg` / `Object.assign(STATUS, …)` is enough), but mission / tanker / lift /
     runway / catapult state sets, `STATE_LIMITS`, the placeholder list in `radio-pools.spec.js` and `GEO_CACHES` are
@@ -250,10 +271,12 @@ Missions fly beyond the screen edge while there is no music. `dispatchFlight` (`
   - `repo.spec.js` checks the cache-buster (all tags equal, matches "Current: `v=N`" here), the load order line above,
     and that `js/properties.js` is regenerated.
 - Console checks by hand: all globals are reachable; set `paused = true` and drive the sim with `step(0.05)` +
-  `renderer.render(scene, camera)`; check `renderer.info.render.calls` (draw calls of the main and the shadow pass)
+  `__t.render()`-like frames (`renderer.info.reset()`, `renderer._nodes.nodeFrame.update()`, `renderer.render(scene,
+  camera)`); check `renderer.info.render.drawCalls` (draw calls of the main and the shadow pass)
   and `renderer.info.memory.geometries`. To force a fight: `AUD.combat` alone gives `armed` but not `fighting` (no
   waves / passes / beats); use `Object.defineProperty(AUD, 'active', { get: () => true }); AUD.soundStart = RT() - 10;
   AUD.combat = true;` (what `__t.forceFight()` does), then `onBeat('low', 2)`.
 - Baseline after the 2026-10 optimisation pass: ~400 GL draw calls/frame (was ~950; main + shadow pass, ~250 of them
-  main pass), geometries plateau ≈ 900 under sustained combat. Under r187 `renderer.info` reports ~450 for a day frame
-  (it now counts the shadow pass too); shader programs ≈ 85 (6 searchlight counts × ~14).
+  main pass), geometries plateau ≈ 900 under sustained combat. Under r187 / `WebGPURenderer` (WebGL 2 backend):
+  `info.render.drawCalls` ≈ 395 for a day frame (main + shadow pass), `info.memory.programs` ≈ 30; nothing compiles
+  after the first frame (shadow-map pipelines).

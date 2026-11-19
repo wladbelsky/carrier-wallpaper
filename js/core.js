@@ -5,6 +5,10 @@
    is set (r149's legacy lights were × π inside three; the node lights are physical). */
 THREE.ColorManagement.enabled = false;
 const LIGHT_K = Math.PI;
+/* r149's point / spot lights faded linearly to their `distance` D, (1 − d / D)^decay; the node lights are physical,
+   1 / d^decay times a window that closes at D. Fitted over the range in use (0.3–0.9 D): searchlights decay 0 × SPOT_FIT
+   (was decay 1), explosion flashes decay 1 × FLASH_FIT · D (was decay 2; a little hotter near the blast). */
+const SPOT_FIT = 0.6, FLASH_FIT = 0.142;
 const V3 = THREE.Vector3;
 const DEG = Math.PI / 180;
 const rand = (a, b) => a + Math.random() * (b - a);

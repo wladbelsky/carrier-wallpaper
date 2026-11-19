@@ -72,7 +72,8 @@ function applySettings() {
 function init() {
   const canvas = document.getElementById('c');
   // WebGPU where the browser has it, WebGL 2 otherwise (or with ?gl=webgl2): the same node materials either way
-  renderer = new THREE.WebGPURenderer({ canvas, antialias: true, powerPreference: 'high-performance', forceWebGL: QS.get('gl') === 'webgl2' });
+  // (no powerPreference: Chrome ignores it on Windows — Wallpaper Engine's platform — and warns on every start)
+  renderer = new THREE.WebGPURenderer({ canvas, antialias: true, forceWebGL: QS.get('gl') === 'webgl2' });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
   renderer.outputColorSpace = THREE.LinearSRGBColorSpace;   // the r149 look (see core.js)
   renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFShadowMap;            // soft since r182
@@ -102,6 +103,7 @@ function init() {
   FX.splash = new Splashes(scene, 20);
   FX.foam = new Foam(scene, 2800);
   FX.lights = new FlashLights(scene, 4);
+  HELI_LIGHTS.init(scene);
   WEATHER.init(scene); WEATHER.setKind(CFG.weather); WEATHER.intensity = CFG.weatherInt / 100;
   FX.tracers.onSplash = (p, big) => {
     FX.splash.spawn(p, big);
@@ -116,37 +118,26 @@ function init() {
   ready = true;
   window.addEventListener('resize', resize);
   buildUI(); buildAirWing(); applySettings(); resize(); updateEnvironment();
-  const start = () => { shadersReady = true; requestAnimationFrame(frame); };
+  // three's own animation loop: it also advances the node frame (shadow maps and other per-frame nodes update once per frame)
+  const start = () => { shadersReady = true; renderer.setAnimationLoop(frame); };
   renderer.init().then(() => { GPU.webgpu = !!renderer.backend.isWebGPUBackend; return warmShaders(); }).then(start, e => {
     console.error('renderer could not start', e); const s = document.querySelector('#splash .s'); if (s) s.textContent = 'NO WEBGPU / WEBGL 2 — CANNOT RENDER';
   });
 }
 const GPU = { webgpu: false };   // the backend WebGPURenderer ended up with (set once renderer.init() is done)
-/* Shader warm-up: compileAsync (KHR_parallel_shader_compile) instead of compiling everything on the first render, so
-   nothing compiles later at dusk (searchlights on), in the first fight (pools hidden until then) or when a helicopter
-   with a searchlight leaves the hangar. compile() only walks visible objects: everything hidden is shown during its
-   synchronous part. Programs depend on the number of visible spot lights: none by day, the ships' ones plus 0–4
-   helicopters' at night — one pass per count. The frame loop starts once the current count is ready (T stands still
-   until then, and so does the splash); the other counts follow in the background, under the splash. */
+/* Shader warm-up: compileAsync (async pipelines / KHR_parallel_shader_compile) instead of compiling everything on the
+   first render, so nothing compiles later in the first fight (pools hidden until then), in a storm or when a helicopter
+   leaves the hangar. compile() only walks visible objects: everything hidden is shown during its synchronous part.
+   Node materials compile per set of lights (by object), and a render object keeps one pipeline only: the set never
+   changes (spot lights stay on by day at zero intensity, helicopters borrow pooled lights — HELI_LIGHTS), or dusk and
+   dawn would recompile the whole scene. The frame loop starts once it is done (T stands still until then, and so does
+   the splash). */
 let shadersAll = false;
 function warmShaders() {
-  const hidden = [], spots = [], air = new Set(AIRCRAFT.map(a => a.mesh));
-  scene.traverse(o => { if (o.isSpotLight) spots.push(o); else if (!o.visible) hidden.push(o); });
-  const onAircraft = l => { for (let q = l.parent; q; q = q.parent) if (air.has(q)) return true; return false; };
-  const shown = l => { for (let q = l; q; q = q.parent) if (!q.visible) return false; return true; };
-  const order = [...spots.filter(l => !onAircraft(l)), ...spots.filter(onAircraft)], vis = spots.map(l => l.visible);
-  const pass = n => {
-    hidden.forEach(o => { o.visible = true; }); order.forEach((l, i) => { l.visible = i < n; });
-    try { return renderer.compileAsync(scene, camera); }
-    finally { hidden.forEach(o => { o.visible = false; }); spots.forEach((l, i) => { l.visible = vis[i]; }); }
-  };
-  const now = spots.filter(shown).length, counts = [0];
-  for (let n = order.filter(l => !onAircraft(l)).length; n <= order.length; n++) if (!counts.includes(n)) counts.push(n);
-  const fail = e => { console.warn('shader warm-up failed', e); };
-  let first; try { first = pass(now); } catch (e) { fail(e); first = Promise.resolve(); }
-  return first.then(() => {
-    counts.filter(n => n !== now).reduce((p, n) => p.then(() => pass(n)), Promise.resolve()).catch(fail).then(() => { shadersAll = true; });
-  });
+  const hidden = []; scene.traverse(o => { if (!o.visible) hidden.push(o); });
+  hidden.forEach(o => { o.visible = true; });
+  let p; try { p = renderer.compileAsync(scene, camera); } finally { hidden.forEach(o => { o.visible = false; }); }
+  return p.catch(e => { console.warn('shader warm-up failed', e); }).then(() => { shadersAll = true; });
 }
 
 /* ---- air wing from the per-type counts (a fresh build: everything starts on deck / in the hangar) ---- */
@@ -154,7 +145,6 @@ let airWingBuiltAt = 0;
 function buildAirWing() {
   airWingDirty = false; airWingBuiltAt = T;
   AIRCRAFT.forEach(a => a.dispose()); AIRCRAFT = []; AIRWAR.passes.length = 0; missionWorldReset();
-  HELI_LIGHTS.n = 0;
   resetDeck();
   const fixedSpots = DECK.fixedSpots.slice(0, DECK.INITIAL_DECK), heliSpots = DECK.heliSpots.slice();
   // deck spots go round-robin across types, everything else lives in the hangar
@@ -694,12 +684,23 @@ function updateLights() {
   }
   for (const s of SEARCHLIGHTS) {
     const on = ENV.lightsOn * s.enabled;
-    // hidden by day: a visible spot light costs every lit fragment even at zero intensity (toggles only at dusk/dawn)
-    if (s.light) { s.light.intensity = s.o.intensity * on * LIGHT_K; s.light.visible = ENV.lightsOn > 0; }
+    // always visible (zero intensity by day): a change in the set of lights recompiles every lit material (warmShaders)
+    if (s.light) {
+      let I = s.o.intensity * on * LIGHT_K * SPOT_FIT;
+      if (s.pooled) {   // a pooled helicopter light (HELI_LIGHTS) follows its searchlight; dark while the helicopter is hidden
+        if (shownInScene(s.holder)) {
+          s.holder.updateWorldMatrix(true, false); s.light.position.setFromMatrixPosition(s.holder.matrixWorld);
+          s.light.target.position.set(0, 0, 10).applyMatrix4(s.holder.matrixWorld);
+        } else I = 0;
+      }
+      s.light.intensity = I;
+    }
     if (s.cone) s.cone.material.userData.uOpacity.value = s.o.coneOpacity * on * (0.45 + 0.55 * ENV.night);
   }
+  for (const p of HELI_LIGHTS.pool) if (!p.s) p.l.intensity = 0;   // spare ones stay in the scene, dark
   FX.foam.mat.size = 1.05 * ENV.ppu;
 }
+const shownInScene = o => { for (; o; o = o.parent) { if (!o.visible) return false; if (o === scene) return true; } return false; };
 
 /* ---- missions beyond the screen edge (only while there is no music) ---- */
 let missionTimer = rand(25, 45);
@@ -910,7 +911,6 @@ function updateDeckMachinery(dt) {
 /* ---- main loop ---- */
 let frameDue = 0;
 function frame(ms) {
-  requestAnimationFrame(frame);
   if (paused) { lastMs = ms; return; }
   if (fpsLimit > 0) {
     // due times advance in whole intervals, so the limit holds on any refresh rate (75 / 144 Hz…)

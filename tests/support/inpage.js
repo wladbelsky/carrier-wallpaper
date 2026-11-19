@@ -27,6 +27,10 @@
   /* after boot: real time and the clock run on simulated time */
   H.setup = () => {
     window.RT = () => rt;
+    if (!renderer.backend.__counted) {                          // count render pipelines (shader compiles)
+      const be = renderer.backend, cp = be.createRenderPipeline; be.__counted = true; H._pipes = 0;
+      be.createRenderPipeline = function () { H._pipes++; return cp.apply(this, arguments); };
+    }
     if (!THREE.BufferGeometry.prototype.__patched) {           // mark disposed geometries (leak detection, below)
       const d = THREE.BufferGeometry.prototype.dispose;
       THREE.BufferGeometry.prototype.dispose = function () { this.__disposed = true; return d.call(this); };
@@ -164,16 +168,48 @@
   H.find = (key, n = 0) => AIRCRAFT.filter(a => a.spec.key === key && a.host === CARRIER)[n];
 
   /* ---- rendering ---- */
-  H.render = () => { if (CFG.shadows) fitShadow(); renderer.render(scene, camera); };   // what frame() does after the steps
-  /* average colour [r, g, b] (0..255) of a rectangle in CSS pixels (y from the top), read straight after a render */
+  // a frame: what three's animation loop does (rAF, off here: renderer.info reset, the node frame that updates shadow
+  // maps once per frame) and what frame() does after the steps
+  H.render = () => {
+    const nf = renderer._nodes.nodeFrame; renderer.info.reset(); nf.update(); renderer.info.frame = nf.frameId;
+    if (CFG.shadows) fitShadow(); renderer.render(scene, camera);
+  };
+  /* average colour [r, g, b] (0..255) of a rectangle in CSS pixels (y from the top), read straight after a render: the
+     canvas is copied into a 2D canvas in the same task (its drawing buffer is still there; any backend) */
   H.sample = (x, y, w, h) => {
     H.render();
-    const gl = renderer.getContext(), c = renderer.domElement, sx = c.width / innerWidth, sy = c.height / innerHeight;
-    const px = Math.round(x * sx), py = Math.round(c.height - (y + h) * sy), pw = Math.max(1, Math.round(w * sx)), ph = Math.max(1, Math.round(h * sy));
-    const buf = new Uint8Array(pw * ph * 4); gl.readPixels(px, py, pw, ph, gl.RGBA, gl.UNSIGNED_BYTE, buf);
+    const c = renderer.domElement, sx = c.width / innerWidth, sy = c.height / innerHeight;
+    const px = Math.round(x * sx), py = Math.round(y * sy), pw = Math.max(1, Math.round(w * sx)), ph = Math.max(1, Math.round(h * sy));
+    const cv = H._cv || (H._cv = document.createElement('canvas')); cv.width = pw; cv.height = ph;
+    const g = cv.getContext('2d', { willReadFrequently: true }); g.clearRect(0, 0, pw, ph); g.drawImage(c, px, py, pw, ph, 0, 0, pw, ph);
+    const buf = g.getImageData(0, 0, pw, ph).data;
     const s = [0, 0, 0]; for (let i = 0; i < buf.length; i += 4) { s[0] += buf[i]; s[1] += buf[i + 1]; s[2] += buf[i + 2]; }
     const n = buf.length / 4; return s.map(x => x / n);
   };
+  /* the same, rendered into a RenderTarget and read back asynchronously (WebGPU: presenting the canvas loses the device
+     in headless Chromium); returns a promise */
+  H.sampleRT = async (x, y, w, h) => {
+    const W = innerWidth, Hh = innerHeight;
+    if (!H._rt) {   // WebGPU pipelines depend on the target (format, samples): warm up for it, as init() does for the canvas
+      H._rt = new THREE.RenderTarget(W, Hh, { depthBuffer: true });
+      renderer.setRenderTarget(H._rt); try { await warmShaders(); } finally { renderer.setRenderTarget(null); }
+    }
+    const rt = H._rt;
+    renderer.setRenderTarget(rt); H.render(); renderer.setRenderTarget(null);
+    const pw = Math.max(1, Math.round(w)), ph = Math.max(1, Math.round(h));
+    const buf = await renderer.readRenderTargetPixelsAsync(rt, Math.round(x), Math.round(GPU.webgpu ? y : Hh - y - h), pw, ph);
+    const s = [0, 0, 0]; for (let i = 0; i < buf.length; i += 4) { s[0] += buf[i]; s[1] += buf[i + 1]; s[2] += buf[i + 2]; }
+    const n = buf.length / 4; return s.map(x => x / n);
+  };
+  /* renderer health: the WebGL error flag / a lost context (WebGL 2 backend); WebGPU reports errors to the console */
+  H.glError = () => { const gl = renderer.backend.gl; return gl ? gl.getError() : 0; };
+  H.lost = () => { const gl = renderer.backend.gl; return gl ? gl.isContextLost() : !renderer.backend.device; };
+  H.programs = () => renderer.info.memory.programs;
+  /* render pipelines created so far (counted from H.setup on): a new one = a compile (a new material / light set) */
+  H.pipelines = () => H._pipes;
+  H.lit = () => SEARCHLIGHTS.filter(s => s.light && s.light.intensity > 0).length;   // searchlights casting light
+  H.drawCalls = () => renderer.info.render.drawCalls;
+
   /* Geometry leaks. Every geometry reachable at a check (scene + template / pool caches) is remembered; one that later
      is neither reachable nor disposed was dropped without disposeTree — a leak (the wallpaper never restarts).
      reach (the live count) must plateau; gpu = renderer.info's count of geometries uploaded and not disposed. */

@@ -1,4 +1,4 @@
-// Rendering invariants (WebGL through SwiftShader): GL health, draw-call budget, what is on screen, day / night,
+// Rendering invariants (WebGPURenderer on its WebGL 2 backend through SwiftShader; one WebGPU smoke test): GL health, draw-call budget, what is on screen, day / night,
 // shadows and their coverage, GPU memory that plateaus. No golden screenshots: checks are relative / structural.
 const { test, expect } = require('./support/harness');
 
@@ -11,13 +11,14 @@ test('a day frame renders without GL errors, within the draw-call budget, with t
   await wp.sim(5);
   const r = await wp.run(() => {
     __t.render();
-    const gl = renderer.getContext(), err = gl.getError();
+    const err = __t.glError();
     return {
-      err, calls: renderer.info.render.calls, tris: renderer.info.render.triangles, programs: renderer.info.programs.length,
+      err, calls: __t.drawCalls(), tris: renderer.info.render.triangles, programs: __t.programs(), webgpu: GPU.webgpu,
       center: __t.sample(300, 160, 40, 40), sea: __t.sample(10, 10, 40, 40), seaB: __t.sample(590, 310, 40, 40),
-      lost: gl.isContextLost(), lightsOn: ENV.lightsOn, spots: SEARCHLIGHTS.filter(s => s.light && s.light.visible).length
+      lost: __t.lost(), lightsOn: ENV.lightsOn, spots: __t.lit()
     };
   });
+  expect(r.webgpu, 'the suite runs on the WebGL 2 fallback').toBe(false);
   expect(r.lost).toBe(false);
   expect(r.err, 'gl.getError()').toBe(0);
   expect(r.calls, 'draw calls, main + shadow pass (baseline ~450)').toBeLessThan(700);
@@ -29,7 +30,7 @@ test('a day frame renders without GL errors, within the draw-call budget, with t
   const d = Math.max(...r.center.map((v, i) => Math.abs(v - r.sea[i])));
   expect(d, `carrier in the middle ${r.center} vs sea ${r.sea}`).toBeGreaterThan(15);
   expect(r.lightsOn).toBe(0);
-  expect(r.spots, 'searchlights hidden by day').toBe(0);
+  expect(r.spots, 'searchlights dark by day').toBe(0);
 });
 
 test('night is darker than day, with nav lights and searchlights on', async ({ wp }) => {
@@ -38,7 +39,7 @@ test('night is darker than day, with nav lights and searchlights on', async ({ w
   const day = await wp.run(() => __t.sample(0, 0, 640, 360));
   await wp.boot({ query: '?hour=0' });
   await wp.sim(3);
-  const night = await wp.run(() => ({ c: __t.sample(0, 0, 640, 360), on: ENV.lightsOn, nav: NAV_MATS.some(m => m.opacity > 0.5), spots: SEARCHLIGHTS.filter(s => s.light && s.light.visible).length }));
+  const night = await wp.run(() => ({ c: __t.sample(0, 0, 640, 360), on: ENV.lightsOn, nav: NAV_MATS.some(m => m.opacity > 0.5), spots: __t.lit() }));
   expect(lum(night.c)).toBeLessThan(lum(day) * 0.6);
   expect(night.on).toBeGreaterThan(0.9);
   expect(night.nav).toBe(true);
@@ -87,7 +88,7 @@ test('GPU memory plateaus over a long fight with fly-bys, missiles and smoke', a
   for (let i = 0; i < 20; i++) {
     const r = await wp.sim(30);
     expect(r.violations).toEqual([]);
-    mem.push(await wp.run(() => Object.assign(__t.geometries(), { t: renderer.info.memory.textures, p: renderer.info.programs.length, calls: renderer.info.render.calls, err: renderer.getContext().getError() })));
+    mem.push(await wp.run(() => Object.assign(__t.geometries(), { t: renderer.info.memory.textures, p: __t.programs(), calls: __t.drawCalls(), err: __t.glError() })));
   }
   for (const m of mem) {
     expect(m.err).toBe(0); expect(m.calls).toBeLessThan(900);
@@ -99,17 +100,14 @@ test('GPU memory plateaus over a long fight with fly-bys, missiles and smoke', a
   expect(late.reach, `reachable geometries ${mem.map(m => m.reach).join(' ')}`).toBeLessThan(early.reach * 1.1 + 20);
 });
 
-test('three.js r187 keeps the r149 look: no colour management, legacy light fall-off, intensities × π', async ({ wp }) => {
+test('three.js r187 WebGPURenderer keeps the r149 look: no colour management, intensities × π', async ({ wp }) => {
   await wp.boot();
-  const r = await wp.run(() => {
-    const ch = THREE.ShaderChunk.lights_pars_begin;
-    return { rev: THREE.REVISION, cm: THREE.ColorManagement.enabled, out: renderer.outputColorSpace, legacy: ch.includes('- lightDistance / cutoffDistance + 1.0'),
-      physical: ch.includes('distanceFalloff'), hex: new THREE.Color(0x808080).r, hemi: hemi.intensity / skyAt(ENV.elev).hi, sun: sunLight.intensity / skyAt(ENV.elev).si };
-  });
+  const r = await wp.run(() => ({ rev: THREE.REVISION, gpu: !!renderer.isWebGPURenderer, cm: THREE.ColorManagement.enabled, out: renderer.outputColorSpace,
+    hex: new THREE.Color(0x808080).r, hemi: hemi.intensity / skyAt(ENV.elev).hi, sun: sunLight.intensity / skyAt(ENV.elev).si }));
   expect(r.rev).toBe('187');
+  expect(r.gpu).toBe(true);
   expect(r.cm, 'hex colours used as they are').toBe(false);
   expect(r.out).toBe('srgb-linear');
-  expect(r.legacy && !r.physical, 'point / spot lights fall off like r149').toBe(true);
   expect(r.hex).toBeCloseTo(128 / 255, 6);
   expect(r.hemi).toBeCloseTo(Math.PI, 5);
   expect(r.sun).toBeCloseTo(Math.PI, 5);
@@ -117,11 +115,12 @@ test('three.js r187 keeps the r149 look: no colour management, legacy light fall
 
 test('shaders are compiled up front: nothing compiles at night, in a fight, in a storm or when helicopters come and go', async ({ wp }) => {
   await wp.boot();
-  const P = () => wp.run(() => { __t.render(); return renderer.info.programs.length; });
-  const p0 = await P();                            // the first frame adds only the shadow-map depth program
+  // render pipelines created (each one a compile); the first frame adds only the shadow-map depth pipelines
+  const P = () => wp.run(() => { __t.render(); return __t.pipelines(); });
+  await P(); const p0 = await P();
   await wp.run(() => { CFG.timeMode = 'fixed'; CFG.fixedHour = 0; updateEnvironment(); });
   await wp.sim(3);
-  expect(await wp.run(() => SEARCHLIGHTS.filter(s => s.light && s.light.visible).length), 'searchlights on').toBeGreaterThan(0);
+  expect(await wp.run(() => __t.lit()), 'searchlights on').toBeGreaterThan(0);
   expect(await P(), 'night').toBe(p0);
   let busy = 0;
   for (let t = 0; t < 60; t += 5) { await wp.sim(5, { audio: true }); await P(); busy = Math.max(busy, await wp.run(() => ENEMIES.length + MISSILES.length + AIRWAR.passes.length)); }

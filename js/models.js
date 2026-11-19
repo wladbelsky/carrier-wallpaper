@@ -164,7 +164,7 @@ function makeSearchlight(parent, x, y, z, opts) {
   const holder = new THREE.Object3D(); holder.position.set(x, y, z); parent.add(holder);
   let light = null;
   if (!o.noLight) {   // real light is optional: many spotlights get expensive on the GPU
-    light = new THREE.SpotLight(o.color, 0, o.len * 2.2, o.angle, 0.45, 1.0);
+    light = new THREE.SpotLight(o.color, 0, o.len * 2.2, o.angle, 0.45, 0);   // decay 0: SPOT_FIT (core.js)
     holder.add(light);
     const target = new THREE.Object3D(); target.position.set(0, 0, 10); holder.add(target); light.target = target;
   }

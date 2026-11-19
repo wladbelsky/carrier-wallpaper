@@ -4,7 +4,10 @@
    - requestAnimationFrame never fires: the simulation only advances through __t.sim() (step(0.05) per tick);
    - Wallpaper Engine mode by default (wallpaperRegisterAudioListener is defined: no settings drawer, no demo beat;
      audio is fed by __t.sim({ audio })); { we: false } boots it like a normal browser;
-   - localStorage is cleared on the first load of a page (a reload keeps it — persistence tests).
+   - localStorage is cleared on the first load of a page (a reload keeps it — persistence tests);
+   - the WebGL 2 backend of WebGPURenderer (?gl=webgl2): headless Chromium loses the WebGPU device as soon as a WebGPU
+     canvas is presented, so the suite runs on the fallback; GL=webgpu (env) or boot({ gl: 'webgpu' }) leaves it out
+     (WebGPU tests render into a RenderTarget only, see render.spec.js).
    Every test using `wp` fails if the page logged an error or threw. */
 const base = require('@playwright/test');
 const path = require('path');
@@ -12,6 +15,7 @@ const path = require('path');
 const SEED = Number(process.env.SEED || 1);
 if (!Number.isInteger(SEED)) throw new Error(`SEED must be an integer, got '${process.env.SEED}'`);
 const INPAGE = path.join(__dirname, 'inpage.js');
+const GL = process.env.GL || 'webgl2';
 
 function initScript({ seed, we }) {
   let s = seed >>> 0;                                            // mulberry32
@@ -28,13 +32,14 @@ class Wallpaper {
   constructor(page, errors) { this.page = page; this.errors = errors; this.installed = false; }
   /* load the wallpaper; query e.g. '?hour=0' */
   /* splash: keep the start-up splash (it covers the page until T > 3.2 — or 8 s of real time — and blocks clicks) */
-  async boot({ seed = SEED, we = true, query = '', time = '2026-06-21T12:00:00Z', splash = false } = {}) {
+  async boot({ seed = SEED, we = true, query = '', time = '2026-06-21T12:00:00Z', splash = false, gl = GL } = {}) {
     if (!this.installed) {
       await this.page.clock.setFixedTime(new Date(time));
       await this.page.addInitScript(initScript, { seed, we });
       await this.page.addInitScript({ path: INPAGE });
       this.installed = true;
     }
+    if (gl === 'webgl2' && !/[?&]gl=/.test(query)) query += (query ? '&' : '?') + 'gl=webgl2';
     await this.page.goto('/index.html' + query);
     const ok = await this.page.evaluate(() => typeof ready !== 'undefined' && ready && AIRCRAFT.length > 0);
     if (!ok) throw new Error('wallpaper did not initialise');
@@ -78,4 +83,4 @@ const test = base.test.extend({
   }
 });
 
-module.exports = { test, expect: base.expect, SEED };
+module.exports = { test, expect: base.expect, SEED, GL };

@@ -1,10 +1,10 @@
 // Start-up: the page boots cleanly in Wallpaper Engine mode and in a plain browser, with the default air wing
 const { test, expect } = require('./support/harness');
 
-test('boots in Wallpaper Engine mode with WebGL and the default air wing', async ({ wp }) => {
+test('boots in Wallpaper Engine mode with a renderer backend and the default air wing', async ({ wp }) => {
   await wp.boot();
   const info = await wp.run(() => ({
-    webgl: !!renderer.getContext(),
+    webgl: !!(renderer.backend.gl || renderer.backend.device),
     counts: Object.fromEntries(Object.keys(AIRCRAFT_TYPES).map(k => [k, AIRCRAFT.filter(a => a.spec.key === k && a.host === CARRIER).length])),
     cfg: CFG.counts,
     ddHelis: AIRCRAFT.filter(a => a.host !== CARRIER).map(a => a.callsign),

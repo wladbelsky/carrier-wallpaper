@@ -422,7 +422,13 @@ class FixedWing extends Aircraft {
 }
 
 /* ======================= Helicopter ======================= */
-const HELI_LIGHTS = { n: 0 };   // only the first few helicopters cast real light (GPU budget)
+/* Real light for the first few helicopters' searchlights (GPU budget): a fixed pool of SpotLights in the scene, each lent
+   to one searchlight and moved onto it in updateLights (main.js). Node materials compile per set of light objects, so
+   lights must not come and go with helicopters (hangar, missions, rebuilds) — that compiled new shaders every time. */
+const HELI_LIGHTS = { n: 4, pool: [],
+  init(scene) { for (let i = 0; i < this.n; i++) { const l = new THREE.SpotLight(0xfff1d6, 0, 14 * 2.2, 0.2, 0.45, 0); scene.add(l, l.target); this.pool.push({ l, s: null }); } },
+  claim(s) { const p = this.pool.find(q => !q.s); if (p) p.s = s; return p ? p.l : null; },
+  release(s) { for (const p of this.pool) if (p.s === s) p.s = null; } };
 const _hz = new V3(), _hf = new V3();
 const HELI_FOLDED = new Set(['hangar', 'lift_wait', 'lift_prep', 'roll_out', 'lift_up', 'parked', 'tow_pad', 'tow_lift', 'lift_down', 'roll_in', 'wait_lift', 'fold', 'pad_wait']);
 class Helicopter extends Aircraft {
@@ -430,12 +436,12 @@ class Helicopter extends Aircraft {
   constructor(o) {
     super(o);
     const sp = this.model.searchPos || new V3(0.7, 0.2, 0);
-    this.lit = HELI_LIGHTS.n < 4; if (this.lit) HELI_LIGHTS.n++;
-    const sl = makeSearchlight(this.mesh, sp.x, sp.y, sp.z, { angle: 0.2, len: 14, intensity: 2.4, coneOpacity: 0.32, housing: false, noLight: !this.lit });
+    const sl = makeSearchlight(this.mesh, sp.x, sp.y, sp.z, { angle: 0.2, len: 14, intensity: 2.4, coneOpacity: 0.32, housing: false, noLight: true });
+    sl.light = HELI_LIGHTS.claim(sl); sl.pooled = !!sl.light;
     sl.holder.quaternion.setFromUnitVectors(new V3(0, 0, 1), new V3(1, -1.1, 0).normalize());
     sl.fixed = true; sl.enabled = 0; this.searchlights.push(sl);
   }
-  dispose() { if (this.lit) HELI_LIGHTS.n--; super.dispose(); }      // its real light can go to the next helicopter
+  dispose() { HELI_LIGHTS.release(this.searchlights[0]); super.dispose(); }   // its real light can go to the next helicopter
   get pad() { return this.home === 'hangar' ? DECK.heliPad : null; }
   foldTarget() { return HELI_FOLDED.has(this.state) ? 1 : 0; }
   liftGate() { return !this.pad.busy && (this.pad.busy = this, true); }

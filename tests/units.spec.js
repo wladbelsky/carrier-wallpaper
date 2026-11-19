@@ -156,38 +156,57 @@ test('sun position and sky palette: day above the horizon, night below', async (
   expect(r.si[0]).toBeGreaterThan(r.si[1]);
 });
 
-test('waves: the generated GLSL matches the JS wave function', async ({ wp }) => {
+/* Evaluates the TSL graph of waveNodes() (core.js) on the CPU: constants, uniforms, swizzles, + − × ÷, sin / cos / negate /
+   normalize and vecN() joins are all it uses. p = uniform vec2 (x, z), ph = uniform vec4 (WAVE.phase), amp = uniform. */
+const evalWaves = () => {
+  window.__evalNode = function ev(n) {
+    const v = x => (typeof x === 'number' ? [x] : x.isVector2 ? [x.x, x.y] : x.isVector3 ? [x.x, x.y, x.z] : x.isVector4 ? [x.x, x.y, x.z, x.w] : x.isColor ? [x.r, x.g, x.b] : [Number(x)]);
+    const zip = (a, b, f) => { const k = Math.max(a.length, b.length); return Array.from({ length: k }, (_, i) => f(a[a.length === 1 ? 0 : i], b[b.length === 1 ? 0 : i])); };
+    if (n.isConstNode || n.isUniformNode) return v(n.value);
+    if (n.isSplitNode) { const s = ev(n.node); return [...n.components].map(c => s['xyzw'.indexOf(c)]); }
+    if (n.isOperatorNode) {
+      const f = { '+': (a, b) => a + b, '-': (a, b) => a - b, '*': (a, b) => a * b, '/': (a, b) => a / b }[n.op];
+      if (!f) throw new Error('operator ' + n.op);
+      return zip(ev(n.aNode), ev(n.bNode), f);
+    }
+    if (n.isMathNode) {
+      const a = ev(n.aNode);
+      if (n.method === 'normalize') { const l = Math.hypot(...a); return a.map(x => x / l); }
+      const f = { sin: Math.sin, cos: Math.cos, negate: x => -x }[n.method];
+      if (!f) throw new Error('math ' + n.method);
+      return a.map(f);
+    }
+    if (Array.isArray(n.nodes)) return n.nodes.flatMap(ev);                                        // JoinNode (vecN)
+    if (n.isConvertNode || n.isVarNode || n.isContextNode) return ev(n.node);
+    throw new Error('node type ' + n.type + ' / ' + n.constructor.name);
+  };
+};
+
+test('waves: the TSL height (waveNodes) matches the JS wave function, its normal is the gradient', async ({ wp }) => {
+  await wp.run(evalWaves);
   const r = await wp.run(() => {
     WAVE.amp = 1.3; for (let i = 0; i < 37; i++) waveAdvance(0.1);
-    const terms = [...WAVE_GLSL.matchAll(/(-?[\d.]+)\*sin\((-?[\d.]+)\*p\.x\+(-?[\d.]+)\*p\.y\+uPh\[(\d)\]\)/g)].map(m => m.slice(1).map(Number));
-    const glsl = (x, z) => WAVE.amp * terms.reduce((s, [a, kx, kz, i]) => s + a * Math.sin(kx * x + kz * z + WAVE.phase[i]), 0);
-    let err = 0; for (let k = 0; k < 200; k++) { const x = rand(-150, 150), z = rand(-150, 150); err = Math.max(err, Math.abs(glsl(x, z) - waveH(x, z))); }
-    return { n: terms.length, err };
+    const { uniform } = THREE.TSL, p = uniform(new THREE.Vector2()), ph = uniform(new THREE.Vector4(...WAVE.phase)), amp = uniform(WAVE.amp);
+    const w = waveNodes(p, ph, amp), d = 1e-4;
+    let eh = 0, en = 0;
+    for (let k = 0; k < 200; k++) {
+      const x = rand(-150, 150), z = rand(-150, 150); p.value.set(x, z);
+      eh = Math.max(eh, Math.abs(__evalNode(w.h)[0] - waveH(x, z)));
+      const gx = (waveH(x + d, z) - waveH(x - d, z)) / (2 * d), gz = (waveH(x, z + d) - waveH(x, z - d)) / (2 * d);
+      const l = Math.hypot(gx, 1, gz), want = [-gx / l, 1 / l, -gz / l], got = __evalNode(w.normal);
+      en = Math.max(en, ...got.map((g, i) => Math.abs(g - want[i])));
+    }
+    return { eh, en, len: __evalNode(w.normal).length };
   });
-  expect(r.n).toBe(4);
-  expect(r.err).toBeLessThan(1e-9);
+  expect(r.len).toBe(3);
+  expect(r.eh).toBeLessThan(1e-9);
+  expect(r.en).toBeLessThan(1e-5);
 });
 
-test('waves: the GLSL water normal (waveNormal) is the gradient of the JS wave function', async ({ wp }) => {
-  const r = await wp.run(() => {
-    WAVE.amp = 1.3; for (let i = 0; i < 37; i++) waveAdvance(0.1);
-    // the terms of `float dx = uAmp*(…)` / `float dz = …`: [sign] coeff*cos(kx*p.x+kz*p.y+uPh[i]) (terms joined by ' + ' / ' - ')
-    const part = name => new RegExp(`float ${name} = uAmp\\*\\((.*)\\);`).exec(WAVE_GLSL)[1];
-    const terms = src => [...src.matchAll(/(^|[+-])\s*(-?[\d.]+)\*cos\((-?[\d.]+)\*p\.x\+(-?[\d.]+)\*p\.y\+uPh\[(\d)\]\)/g)]
-      .map(m => [(m[1] === '-' ? -1 : 1) * Number(m[2]), Number(m[3]), Number(m[4]), Number(m[5])]);
-    const ev = (ts, x, z) => WAVE.amp * ts.reduce((s, [a, kx, kz, i]) => s + a * Math.cos(kx * x + kz * z + WAVE.phase[i]), 0);
-    const tx = terms(part('dx')), tz = terms(part('dz')), h = 1e-4;
-    let err = 0;
-    for (let k = 0; k < 200; k++) {
-      const x = rand(-150, 150), z = rand(-150, 150);
-      const gx = (waveH(x + h, z) - waveH(x - h, z)) / (2 * h), gz = (waveH(x, z + h) - waveH(x, z - h)) / (2 * h);
-      err = Math.max(err, Math.abs(ev(tx, x, z) - gx), Math.abs(ev(tz, x, z) - gz));
-    }
-    return { n: [tx.length, tz.length], err, ret: /return normalize\(vec3\(-dx, 1\.0, -dz\)\)/.test(WAVE_GLSL) };
-  });
-  expect(r.n).toEqual([4, 4]);
-  expect(r.ret).toBe(true);
-  expect(r.err).toBeLessThan(2e-3);     // coefficients are printed with 4 decimals
+test('waves: the water material moves its vertices with waveNodes and the shared phase / amplitude uniforms', async ({ wp }) => {
+  const r = await wp.run(() => ({ node: !!water.material.isNodeMaterial, pos: !!water.material.positionNode, ph: waterUniforms.uPh.isUniformNode, amp: waterUniforms.uAmp.isUniformNode,
+    phOk: (() => { step(0.05); return [0, 1, 2, 3].every(i => Math.abs(waterUniforms.uPh.value.getComponent(i) - WAVE.phase[i]) < 1e-9) && waterUniforms.uAmp.value === WAVE.amp; })() }));
+  expect(r).toEqual({ node: true, pos: true, ph: true, amp: true, phOk: true });
 });
 
 test('models: every builder runs, mergeStatic keeps dynamic nodes, disposeTree spares shared materials', async ({ wp }) => {

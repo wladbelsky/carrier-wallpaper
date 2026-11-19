@@ -274,23 +274,26 @@ The **⚙ SETTINGS** button (top-left, browser only) shows:
 
 Settings are saved in `localStorage`; the audio file itself is not. **Reset all to defaults** clears them.
 
-URL parameters still work and override stored values: `?hour=22`, `?zoom=150`, `?demo=1`.
+URL parameters still work and override stored values: `?hour=22`, `?zoom=150`, `?demo=1`; `?gl=webgl2` renders with
+WebGL 2 instead of WebGPU.
 
 If you add a property to `project.json`, run `python tools/gen_properties.py` to refresh `js/properties.js`.
 
-three.js (r187) is vendored as `js/three.min.js`, a single script built from the npm package: to update it, change the
+Rendering is three.js's `WebGPURenderer`: WebGPU where available (Wallpaper Engine's Chromium has it), WebGL 2
+otherwise, with the same look. three.js (r187) is vendored as `js/three.min.js`, a single script built from the npm
+package (with the node materials and TSL): to update it, change the
 `three` version in `package.json`, run `npm install` and `bash tools/build_three.sh` (or
 `powershell -ExecutionPolicy Bypass -File tools/build_three.ps1`, in Docker).
 
 ## Tests
 
-Automated tests (Playwright Test, headless Chromium with software WebGL) drive the real page: the simulation is
+Automated tests (Playwright Test, headless Chromium with software WebGL 2 and WebGPU) drive the real page: the simulation is
 seeded and stepped by the tests, so every run is reproducible. They cover:
 
 - **repository**: one cache-buster on every script, every file referenced, `js/properties.js` generated from
   `project.json`, the project file itself;
 - **units**: flight paths (Dubins curves never turn tighter than the turn radius), radio lines and threat tiers,
-  every line pool and placeholder, mission texts, callsigns, mission picking, sun / sky, the wave shader and its normal vs the JS
+  every line pool and placeholder, mission texts, callsigns, mission picking, sun / sky, the wave shader (TSL) and its normal vs the JS
   twin, every model builder;
 - **flight logic**: launch and recovery of every aircraft type through its deck / elevator sequence, LAUNCH ALL /
   RECOVER ALL, half an hour of automatic flight ops with deck resources (catapults, landing area, parking spots,
@@ -301,7 +304,8 @@ seeded and stepped by the tests, so every run is reproducible. They cover:
 - **weather and threat modes**: every weather kind (fog, rain, lightning), off / 0 % = the stock look, no leaks when
   switching, the subtitle backdrop; the scripted threat cycle and the escalation speed;
 - **rendering**: no WebGL errors, draw-call budget, the fleet on screen, day vs night, shadows and their coverage,
-  no geometry leaks, the r149 look under three.js r187, shaders compiled up front (nothing compiles at dusk or in a fight);
+  no geometry leaks, the r149 look under three.js r187, shaders compiled up front (nothing compiles at dusk, in a fight,
+  in a storm or when helicopters come and go); the WebGPU backend renders day, night and a fight;
 - **soak**: two hours of simulated life (music and silence, missions, count changes) with all of the above.
 
 Run them locally with Docker (no Node needed):

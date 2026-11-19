@@ -174,7 +174,8 @@ class Foam {
 class FlashLights {
   constructor(scene, n) {
     this.items = [];
-    for (let i = 0; i < n; i++) { const l = new THREE.PointLight(0xffb060, 0, 22, 2); scene.add(l); this.items.push({ l, t: 0, max: 0.1, I: 0 }); }
+    for (let i = 0; i < n; i++) { const l = new THREE.PointLight(0xffb060, 0, 22, 1); scene.add(l); this.items.push({ l, t: 0, max: 0.1, I: 0 }); }
+    this.k = LIGHT_K * FLASH_FIT * 22;   // decay 1, fitted to r149's (1 − d / 22)² (core.js)
     this.next = 0;
   }
   flash(p, I, dur) {
@@ -182,6 +183,6 @@ class FlashLights {
     it.l.position.copy(p); it.t = it.max = dur; it.I = I;
   }
   update(dt, nightBoost) {
-    for (const it of this.items) { it.t = Math.max(0, it.t - dt); it.l.intensity = it.t > 0 ? it.I * (it.t / it.max) * nightBoost * LIGHT_K : 0; }
+    for (const it of this.items) { it.t = Math.max(0, it.t - dt); it.l.intensity = it.t > 0 ? it.I * (it.t / it.max) * nightBoost * this.k : 0; }
   }
 }
