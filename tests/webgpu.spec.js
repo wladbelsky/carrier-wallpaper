@@ -44,7 +44,9 @@ test('WebGPU: a fight with smoke, flashes and tracers renders and compiles nothi
 test('WebGPU: clustered lights light the scene where they are (orthographic clusters) and come and go without compiling', async ({ wp }) => {
   await wp.boot({ gl: 'webgpu' });
   const setup = await wp.run(() => ({ clustered: !!renderer.lighting.getNode(scene).isClusteredLightsNode, cap: GLOW.cap,
-    builtin: renderer.lighting.getNode(scene).getBuiltinLights().map(l => l.type).sort() }));
+    // lights left in the shader (the node's own list changes with each pass: the beam pass sees layer 1 only)
+    builtin: (() => { const n = renderer.lighting.getNode(scene), all = []; scene.traverse(o => { if (o.isLight) all.push(o); });
+      return all.filter(l => !n._isClusteredLight(l)).map(l => l.type).sort(); })() }));
   expect(setup.clustered, 'ClusteredLighting on WebGPU').toBe(true);
   expect(setup.cap).toBeGreaterThan(0);
   expect(setup.builtin, 'only the sun and the sky stay in the shader').toEqual(['DirectionalLight', 'HemisphereLight']);

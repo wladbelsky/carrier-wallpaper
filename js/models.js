@@ -161,6 +161,53 @@ function coneMaterial(color, len) {
   m.userData.uOpacity = uOpacity;
   return m;
 }
+/* Volumetric beam (CFG.volumetric, rendered by PIPE.beams in main.js at half resolution, on layer 1): the light scattered
+   along each view ray through the cone, marched in 16 steps from where the ray enters it (front face of a closed proxy
+   cone) to where it leaves, or to the scene behind it (depth of the scene pass). The camera is orthographic, so every
+   ray runs along BEAM.viewDir; s = world distance along the ray, q = q0 + v·s in the cone's space (apex at 0, axis +z).
+   Denser in fog and rain (BEAM.density, from the weather). Shared uniforms: BEAM (set in updateLights / initPipeline). */
+const BEAM = { viewDir: null, near: null, far: null, density: null, depth: null };
+function beamUniforms() {
+  if (BEAM.viewDir) return;
+  const { uniform, texture } = THREE.TSL;
+  BEAM.viewDir = uniform(new THREE.Vector3(0, -1, 0)); BEAM.near = uniform(1); BEAM.far = uniform(700); BEAM.density = uniform(1);
+  BEAM.depth = texture(new THREE.DepthTexture(1, 1));   // initPipeline points it at the scene pass's depth
+}
+function beamMaterial(color, len, angle) {
+  beamUniforms();
+  const { uniform, Fn, Loop, float, vec2, vec4, positionLocal, positionView, modelWorldMatrixInverse, screenUV, screenCoordinate,
+    dot, fract, max, min, clamp, smoothstep, pow, select, length, sqrt } = THREE.TSL;
+  const m = new THREE.MeshBasicNodeMaterial({ transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false, fog: false });
+  const uColor = uniform(new THREE.Color(color)), uOpacity = uniform(0), L = float(len), k = float(Math.tan(angle)), N = 16;
+  m.colorNode = Fn(() => {
+    const q0 = positionLocal.toVar(), v = modelWorldMatrixInverse.mul(vec4(BEAM.viewDir, 0)).xyz.toVar();
+    const big = float(1e4), vz = v.z;
+    // where the ray leaves the cone: its side (x² + y² = k² z² along q0 + v s: a s² + 2 b s + c = 0, the far root; with
+    // a ≤ 0 the ray runs along the axis and leaves through the base) or the slab 0 ≤ z ≤ L
+    const k2 = k.mul(k), a = dot(v.xy, v.xy).sub(k2.mul(vz).mul(vz)), b = dot(q0.xy, v.xy).sub(k2.mul(q0.z).mul(vz));
+    const c = dot(q0.xy, q0.xy).sub(k2.mul(q0.z).mul(q0.z));
+    const sSide = select(a.greaterThan(1e-6), b.negate().add(sqrt(max(b.mul(b).sub(a.mul(c)), 0))).div(a), big);
+    const sSlab = select(vz.greaterThan(1e-5), L.sub(q0.z).div(vz), select(vz.lessThan(-1e-5), q0.z.negate().div(vz), big));
+    const sCross = min(sSide, sSlab);
+    // the scene behind the beam: orthographic depth is linear in view z
+    const d = BEAM.depth.sample(screenUV).x;
+    const sScene = BEAM.near.add(d.mul(BEAM.far.sub(BEAM.near))).add(positionView.z);
+    const sEnd = max(min(min(sSlab, sCross), sScene), 0).toVar();
+    const ds = sEnd.div(N).toVar(), scale = length(v);   // local units per world unit
+    const jit = fract(float(52.9829189).mul(fract(dot(screenCoordinate.xy, vec2(0.06711056, 0.00583715)))));
+    const sum = float(0).toVar();
+    Loop(N, ({ i }) => {
+      const q = q0.add(v.mul(float(i).add(jit).mul(ds)));
+      const z = q.z, rad = k.mul(max(z, 1e-3));
+      const inside = smoothstep(1.05, 0.55, length(q.xy).div(rad)).mul(smoothstep(0, 0.02, z.div(L))).mul(smoothstep(1.0, 0.98, z.div(L)));
+      const axial = pow(clamp(z.div(L).oneMinus(), 0, 1), 1.7);
+      sum.addAssign(inside.mul(axial).mul(ds).div(max(rad.div(scale).mul(2), 0.05)));   // ÷ the beam's width: the centre ≈ 1
+    });
+    return vec4(uColor.mul(uOpacity.mul(BEAM.density).mul(sum).mul(2.6)), 1);
+  })();
+  m.userData.uOpacity = uOpacity;
+  return m;
+}
 function makeSearchlight(parent, x, y, z, opts) {
   const o = Object.assign({ color: 0xfff1d6, angle: 0.16, len: 22, intensity: 2.2, cone: true, coneOpacity: 0.35, housing: true }, opts || {});
   const holder = new THREE.Object3D(); holder.position.set(x, y, z); parent.add(holder);
@@ -171,14 +218,19 @@ function makeSearchlight(parent, x, y, z, opts) {
     const target = new THREE.Object3D(); target.position.set(0, 0, 10); holder.add(target); light.target = target;
   }
   if (o.housing) { const h = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.12, 0.2, 6), M(0x2b2f33)); h.rotation.x = Math.PI / 2; holder.add(h); }
-  let cone = null;
+  let cone = null, vol = null;
   if (o.cone) {
     const g = new THREE.ConeGeometry(Math.tan(o.angle) * o.len, o.len, 20, 1, true);
     g.translate(0, -o.len / 2, 0); g.rotateX(-Math.PI / 2);
     cone = new THREE.Mesh(g, coneMaterial(o.color, o.len)); cone.renderOrder = 4; cone.frustumCulled = false;
     holder.add(cone);
+    // the volumetric twin: a closed cone, front faces only, layer 1 (the beam pass)
+    const gv = new THREE.ConeGeometry(Math.tan(o.angle) * o.len * 1.02, o.len, 16, 1, false);
+    gv.translate(0, -o.len / 2, 0); gv.rotateX(-Math.PI / 2);
+    vol = new THREE.Mesh(gv, beamMaterial(o.color, o.len, o.angle)); vol.layers.set(1); vol.frustumCulled = false; vol.visible = false;
+    holder.add(vol);
   }
-  const s = { holder, light, cone, o, enabled: 1 };
+  const s = { holder, light, cone, vol, o, enabled: 1 };
   SEARCHLIGHTS.push(s);
   return s;
 }

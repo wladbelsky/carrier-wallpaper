@@ -76,6 +76,12 @@ const WE_PROPERTIES = {
   "precision": 1,
   "condition": "timemode.value == 'fixed'"
  },
+ "volumetriclight": {
+  "order": 7,
+  "text": "Volumetric light",
+  "type": "bool",
+  "value": true
+ },
  "audiosensitivity": {
   "order": 10,
   "text": "Audio sensitivity, %",

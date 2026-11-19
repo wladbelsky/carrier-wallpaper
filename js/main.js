@@ -28,6 +28,7 @@ window.wallpaperPropertyListener = {
     if (has('flybyfrequency')) CFG.flyby = p.flybyfrequency.value;
     if (has('autoflight')) CFG.auto = p.autoflight.value;
     if (has('shadows')) CFG.shadows = p.shadows.value;
+    if (has('volumetriclight')) CFG.volumetric = p.volumetriclight.value;
     if (has('showpanel')) CFG.showPanel = p.showpanel.value;
     if (has('panelposition')) CFG.panelPos = p.panelposition.value;
     if (has('panelscale')) CFG.panelScale = p.panelscale.value;
@@ -65,6 +66,7 @@ function applySettings() {
   if (!ready) return;
   setShipNumbers();
   sunLight.castShadow = CFG.shadows;
+  updatePipeline();
   updateCamera(); updateEnvironment();
 }
 
@@ -79,6 +81,7 @@ function init() {
   renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFShadowMap;            // soft since r182
   scene = new THREE.Scene(); scene.fog = new THREE.Fog(0x9fc0da, 300, 800);
   camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 1, 700);
+  initPipeline();   // before the builders: the beam materials read the scene pass's depth
 
   hemi = new THREE.HemisphereLight(0xffffff, 0x333333, 0.6); scene.add(hemi);
   sunLight = new THREE.DirectionalLight(0xffffff, 1);
@@ -147,13 +150,46 @@ function clusteredLights() {
    Node materials compile per set of lights (by object), and a render object keeps one pipeline only: the set never
    changes (spot lights stay on by day at zero intensity, helicopters borrow pooled lights — HELI_LIGHTS), or dusk and
    dawn would recompile the whole scene. The frame loop starts once it is done (T stands still until then, and so does
-   the splash). */
+   the splash). With the render pipeline (PIPE) the passes are warmed for their own targets (MSAA / half-res formats),
+   the beam pass with layer 1 only. The renderer takes its state (target, camera layers) synchronously.        */
 let shadersAll = false;
-function warmShaders() {
-  const hidden = []; scene.traverse(o => { if (!o.visible) hidden.push(o); });
-  hidden.forEach(o => { o.visible = true; });
-  let p; try { p = renderer.compileAsync(scene, camera); } finally { hidden.forEach(o => { o.visible = false; }); }
-  return p.catch(e => { console.warn('shader warm-up failed', e); }).then(() => { shadersAll = true; });
+async function warmShaders() {
+  const jobs = [PIPE.on ? () => PIPE.scene.compileAsync(renderer) : () => renderer.compileAsync(scene, camera)];
+  if (PIPE.on && CFG.volumetric) jobs.push(() => { const m = camera.layers.mask; camera.layers.set(1); try { return PIPE.beams.compileAsync(renderer); } finally { camera.layers.mask = m; } });
+  for (const job of jobs) {
+    const hidden = []; scene.traverse(o => { if (!o.visible) hidden.push(o); });
+    hidden.forEach(o => { o.visible = true; });
+    let p; try { p = job(); } finally { hidden.forEach(o => { o.visible = false; }); }
+    await p.catch(e => { console.warn('shader warm-up failed', e); });
+  }
+  shadersAll = true;
+}
+
+/* ---- render pipeline (RenderPipeline): the scene pass plus the volumetric searchlight beams (CFG.volumetric, a
+   half-resolution pass of layer 1 that reads the scene's depth, models.js beamMaterial). Off: plain renderer.render. ---- */
+const PIPE = { on: false, key: null, rp: null, scene: null, beams: null, uClear: null };
+function initPipeline() {
+  const { pass, uniform } = THREE.TSL;
+  PIPE.scene = pass(scene, camera);                                    // MSAA like the canvas (renderer.samples)
+  const L1 = new THREE.Layers(); L1.set(1);
+  PIPE.beams = pass(scene, camera, { samples: 0 }).setResolutionScale(0.5); PIPE.beams.setLayers(L1);
+  PIPE.uClear = uniform(new THREE.Color());
+  beamUniforms(); BEAM.depth.value = PIPE.scene.getTexture('depth'); BEAM.near.value = camera.near; BEAM.far.value = camera.far;
+  PIPE.rp = new THREE.RenderPipeline(renderer);
+}
+function updatePipeline() {   // after a property change; a new combination compiles its passes on the next frame
+  const key = CFG.volumetric ? 'v' : '';
+  if (key === PIPE.key) return;
+  PIPE.key = key; PIPE.on = key !== '';
+  if (!PIPE.on) return;
+  const { vec4, max, screenUV } = THREE.TSL;
+  let out = PIPE.scene;
+  // the beam pass clears to the renderer's clear colour (the fog): take that off again, the rest is the beams
+  if (CFG.volumetric) out = vec4(out.rgb.add(max(PIPE.beams.getTextureNode().sample(screenUV).rgb.sub(PIPE.uClear), 0)), 1);
+  PIPE.rp.outputNode = out; PIPE.rp.needsUpdate = true;
+}
+function renderFrame() {
+  if (PIPE.on) { renderer.getClearColor(PIPE.uClear.value); PIPE.rp.render(); } else renderer.render(scene, camera);
 }
 
 /* ---- air wing from the per-type counts (a fresh build: everything starts on deck / in the hangar) ---- */
@@ -715,8 +751,13 @@ function updateLights() {
       }
       s.light.intensity = I; if (GLOW.cap) s.light.visible = I > 0;
     }
-    if (s.cone) s.cone.material.userData.uOpacity.value = s.o.coneOpacity * on * (0.45 + 0.55 * ENV.night);
+    const op = s.o.coneOpacity * on * (0.45 + 0.55 * ENV.night);
+    if (s.cone) { s.cone.visible = !CFG.volumetric; s.cone.material.userData.uOpacity.value = op; }
+    if (s.vol) { s.vol.visible = CFG.volumetric && op > 1e-3; s.vol.material.userData.uOpacity.value = op; }
   }
+  // volumetric beams: the view direction (orthographic: one for every ray), denser in fog and rain
+  camera.getWorldDirection(BEAM.viewDir.value);
+  BEAM.density.value = 1 + 1.4 * WEATHER.fogK + 0.6 * clamp(WEATHER.cur.rain * clamp(WEATHER.intensity, 0, 2) / 1200, 0, 1);
   for (const p of HELI_LIGHTS.pool) if (!p.s) { p.l.intensity = 0; if (GLOW.cap) p.l.visible = false; }   // spare ones: dark
   FX.foam.mat.size = 1.05 * ENV.ppu;
 }
@@ -942,7 +983,7 @@ function frame(ms) {
   const n = Math.max(1, Math.ceil(el / 0.05)), dt = el / n;
   for (let i = 0; i < n * TIME_SCALE; i++) step(dt);
   if (CFG.shadows) fitShadow();
-  renderer.render(scene, camera);
+  renderFrame();
   if (GPU.timing && ms - GPU.tsT > 500) {
     GPU.tsT = ms;
     renderer.resolveTimestampsAsync(THREE.TimestampQuery.RENDER).then(v => { GPU.ms.render = v; });

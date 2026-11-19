@@ -133,3 +133,31 @@ test('shaders are compiled up front: nothing compiles at night, in a fight, in a
   for (let t = 0; t < 120; t += 10) { await wp.sim(10); await P(); }   // helicopters with searchlights launch and land
   expect(await P(), 'helicopters coming and going').toBe(p0);
 });
+
+test('volumetric beams: the beam pass lights the air along a searchlight at night, more in fog, and stops at the scene', async ({ wp }) => {
+  await wp.boot({ query: '?hour=0' });
+  await wp.sim(3);
+  const r = await wp.run(() => {
+    const s = SHIPS[1].searchlights[0], at = f => { const w = s.holder.localToWorld(new THREE.Vector3(0, 0, s.o.len * f)).project(camera);
+      return [(w.x + 1) / 2 * innerWidth - 4, (1 - w.y) / 2 * innerHeight - 4]; };
+    const look = (f) => { const [x, y] = at(f); __t.render(); return __t.sample(x, y, 8, 8); };
+    const out = { pipe: PIPE.on, vol: s.vol.visible, cone: s.cone.visible };
+    const d0 = BEAM.density.value;
+    BEAM.density.value = 0; out.off = look(0.25);
+    BEAM.density.value = 1; out.on = look(0.25);
+    BEAM.density.value = 2; out.fog = look(0.25);
+    // the scene's depth closes the ray: with the far plane pulled in front of the beam, the scene is "in front" everywhere
+    const f0 = BEAM.far.value; BEAM.far.value = BEAM.near.value; out.hidden = look(0.25); BEAM.far.value = f0;
+    BEAM.density.value = d0;
+    return out;
+  });
+  expect(r.pipe, 'render pipeline on (Volumetric light is on by default)').toBe(true);
+  expect(r.vol, 'the volumetric twin is shown').toBe(true);
+  expect(r.cone, 'the old cone is not').toBe(false);
+  expect(lum(r.on), `beam ${r.on} over ${r.off}`).toBeGreaterThan(lum(r.off) + 15);
+  expect(lum(r.fog), 'denser in fog').toBeGreaterThan(lum(r.on) + 5);
+  expect(Math.abs(lum(r.hidden) - lum(r.off)), `behind the scene: no beam ${r.hidden} vs ${r.off}`).toBeLessThan(2);
+  // switched off: the plain renderer with the old cones
+  const off = await wp.run(() => { CFG.volumetric = false; updatePipeline(); step(0.05); const s = SHIPS[1].searchlights[0]; return { pipe: PIPE.on, vol: s.vol.visible, cone: s.cone.visible }; });
+  expect(off).toEqual({ pipe: false, vol: false, cone: true });
+});

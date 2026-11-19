@@ -178,7 +178,7 @@
   // maps once per frame) and what frame() does after the steps
   H.render = () => {
     const nf = renderer._nodes.nodeFrame; renderer.info.reset(); nf.update(); renderer.info.frame = nf.frameId;
-    if (CFG.shadows) fitShadow(); renderer.render(scene, camera);
+    if (CFG.shadows) fitShadow(); renderFrame();
   };
   /* average colour [r, g, b] (0..255) of a rectangle in CSS pixels (y from the top), read straight after a render: the
      canvas is copied into a 2D canvas in the same task (its drawing buffer is still there; any backend) */

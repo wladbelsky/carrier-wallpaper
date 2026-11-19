@@ -204,6 +204,12 @@ kind every 2–3 minutes). Weather dims and tints the light, pulls the fog in, c
 whitecaps; changes fade over a few seconds. **Weather intensity, %** scales all of it (0 = the clear look, up to 200).
 The subtitle backdrop darkens over pale fog so the radio text stays readable.
 
+## Graphics
+
+- **Volumetric light** (on by default): searchlight beams are light scattered in the air — brighter where the beam is
+  thick, fading along its length, cut off where it meets the sea, a ship or an aircraft, and denser in fog and rain.
+  Rendered at half resolution in a pass of its own. Off: the simpler see-through cones.
+
 ## Radio priority
 
 During combat, combat calls go first (contacts, kills, vampires, damage). Routine deck calls switch to their
