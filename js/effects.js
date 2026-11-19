@@ -215,14 +215,14 @@ class FlashLights {
     this.items = []; this.next = 0;
     for (let i = 0; i < n; i++) this.items.push({ l: null, p: new V3(), t: 0, max: 0.1, I: 0 });
   }
-  flash(p, I, dur) {
+  flash(p, I, dur, d) {   // d: reach (GLOW only; the fixed WebGL 2 lights keep 22)
     const it = this.items[this.next]; this.next = (this.next + 1) % this.items.length;
-    it.p.copy(p); it.t = it.max = dur; it.I = I;
+    it.p.copy(p); it.t = it.max = dur; it.I = I; it.d = d || 22;
   }
   update(dt, nightBoost) {
     for (const it of this.items) {
       it.t = Math.max(0, it.t - dt); const I = it.t > 0 ? it.I * (it.t / it.max) : 0;
-      if (it.l) it.l.intensity = I * nightBoost * this.k; else if (I > 0) GLOW.add(it.p, 0xffb060, I, 22);
+      if (it.l) it.l.intensity = I * nightBoost * this.k; else if (I > 0) GLOW.add(it.p, 0xffb060, I, it.d);
     }
   }
 }

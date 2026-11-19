@@ -129,12 +129,14 @@ function init() {
   });
 }
 // perfReport() state and the flags kept in localStorage (see perfReport, below frame())
-const PERF = { rec: null,
+const PERF = { recs: [],
   flags: (() => { try { return JSON.parse(localStorage.getItem('csg-perf') || '{}') || {}; } catch (e) { return {}; } })(),
-  sample(ms, cpu) {
-    const r = this.rec; if (r.last) r.frame.push(ms - r.last); r.last = ms;
-    r.cpu.push(cpu); r.calls.push(renderer.info.render.drawCalls); r.lights.push(GLOW.used);
-    if (GPU.timing) { r.gpu.push(GPU.ms.render); r.comp.push(GPU.ms.compute); }
+  sample(ms, cpu) {   // into every report running (each perfReport() call has its own record)
+    for (const r of this.recs) {
+      if (r.last) r.frame.push(ms - r.last); r.last = ms;
+      r.cpu.push(cpu); r.calls.push(renderer.info.render.drawCalls); r.lights.push(GLOW.used);
+      if (GPU.timing) { r.gpu.push(GPU.ms.render); r.comp.push(GPU.ms.compute); }
+    }
   }
 };
 const GPU = { webgpu: false,   // the backend WebGPURenderer ended up with (set once renderer.init() is done)
@@ -467,24 +469,28 @@ function demoAudio() {
 /* ---- gunfire ---- */
 const _p = new V3(), _d = new V3();
 let gunTurn = 0;
+/* the gun's muzzle flash: toned down at night (it lit the whole ship and bloomed hard against the dark) */
+function muzzleFlash(p, d, strength) {
+  const n = ENV.night, a = 1 - 0.45 * n;
+  FX.flash.spawn(p.clone().addScaledVector(d, 0.5), { s0: 2.4 * Math.min(1.5, strength) * (1 - 0.25 * n), s1: 3.6 * (1 - 0.25 * n), life: 0.13, a0: a });
+  FX.lights.flash(p, 4 * (1 - 0.6 * n), 0.16, 22 - 8 * n);
+}
 function fireGun(m, strength) {
   mountMuzzle(m, _p, _d);
   const tgt = m.track && enemyAlive(m.track) && Math.random() < 0.7 ? m.track : null;
   if (tgt) {                                       // AA mode: shell flies straight at the lead point
     const speed = 80, aim = leadPoint(tgt, _p, speed), tt = aim.distanceTo(_p) / speed, dir = aim.sub(_p).normalize();
     FX.tracers.spawn(_p, dir.clone().multiplyScalar(speed), { life: tt, len: 1.6, w: 0.3, color: 0xffb050 });
-    FX.flash.spawn(_p.clone().addScaledVector(dir, 0.5), { s0: 2.4 * Math.min(1.5, strength), s1: 3.6, life: 0.13, a0: 1 });
+    muzzleFlash(_p, dir, strength);
     for (let i = 0; i < 2; i++) FX.smoke.spawn(_p.clone().addScaledVector(dir, 0.4 + i * 0.5), { s0: 0.9, s1: 4, life: 2.2, a0: 0.5, smoke: true, v: dir.clone().multiplyScalar(3).add(new V3(-WAVE.flow * 1.3, 0.5, 0)), drag: 0.9 });
-    FX.lights.flash(_p, 4, 0.16);
     queueHit(tgt, { chance: 0.5, dmg: 1, src: m.ship, delay: tt });
     m.recoil = 1; return;
   }
   const v = _d.clone().multiplyScalar(rand(38, 50));
   FX.tracers.spawn(_p, v, { life: 6, len: 1.5, w: 0.3, color: 0xffb050, grav: 12, splash: 1.1 });
-  FX.flash.spawn(_p.clone().addScaledVector(_d, 0.5), { s0: 2.4 * Math.min(1.5, strength), s1: 3.6, life: 0.13, a0: 1 });
-  FX.flash.spawn(_p.clone().addScaledVector(_d, 1.4), { s0: 1.4, s1: 2.2, life: 0.09, a0: 0.8 });
+  muzzleFlash(_p, _d, strength);
+  FX.flash.spawn(_p.clone().addScaledVector(_d, 1.4), { s0: 1.4, s1: 2.2, life: 0.09, a0: 0.8 * (1 - 0.45 * ENV.night) });
   for (let i = 0; i < 3; i++) FX.smoke.spawn(_p.clone().addScaledVector(_d, 0.4 + i * 0.5), { s0: 0.9, s1: 4.5, life: 2.4, a0: 0.55, smoke: true, v: _d.clone().multiplyScalar(rand(2, 4.5)).add(new V3(-WAVE.flow * 1.3, 0.5, 0)), drag: 0.9 });
-  FX.lights.flash(_p, 4, 0.16);
   m.recoil = 1; mountRetarget(m);
 }
 /* ---- heavy-music weapons: flak airbursts, VLS and RAM missiles ---- */
@@ -500,7 +506,7 @@ function fireFlak() {
   const dist = rand(35, 60), speed = 70, tt = dist / speed;
   const burst = _p.clone().addScaledVector(dir, dist);
   FX.tracers.spawn(_p, dir.clone().multiplyScalar(speed), { life: tt, len: 1.3, w: 0.25, color: 0xffc070 });
-  FX.flash.spawn(_p.clone().addScaledVector(_d, 0.5), { s0: 2.0, s1: 3.0, life: 0.1, a0: 1 });
+  FX.flash.spawn(_p.clone().addScaledVector(_d, 0.5), { s0: 2.0, s1: 3.0, life: 0.1, a0: 1 - 0.45 * ENV.night });
   FX.smoke.spawn(_p.clone(), { s0: 0.8, s1: 3.5, life: 1.8, a0: 0.45, smoke: true, v: new V3(-WAVE.flow * 1.3, 0.6, 0), drag: 0.9 });
   g.recoil = 1;
   FLAK.push({ at: T + tt, p: burst });
@@ -785,7 +791,7 @@ function updateLights() {
     }
     const op = s.o.coneOpacity * on * (0.45 + 0.55 * ENV.night);
     if (s.cone) { s.cone.visible = !CFG.volumetric; s.cone.material.userData.uOpacity.value = op; }
-    if (s.vol) { s.vol.visible = CFG.volumetric && op > 1e-3; s.vol.material.userData.uOpacity.value = op; }
+    if (s.vol) { s.vol.visible = CFG.volumetric && op > 1e-3; s.vol.material.userData.uOpacity.value = op * (s.o.volK || 1); }   // volK: helicopters' beams fainter (steep, through more air)
   }
   // volumetric beams: the view direction (orthographic: one for every ray), denser in fog and rain
   camera.getWorldDirection(BEAM.viewDir.value);
@@ -1013,11 +1019,11 @@ function frame(ms) {
   // simulate the real elapsed time in sub-steps of at most 50 ms: low FPS limits don't slow the world down
   const el = clamp((ms - lastMs) / 1000, 0, 0.25); lastMs = ms;
   const n = Math.max(1, Math.ceil(el / 0.05)), dt = el / n;
-  const t0 = PERF.rec ? performance.now() : 0;
+  const t0 = PERF.recs.length ? performance.now() : 0;
   for (let i = 0; i < n * TIME_SCALE; i++) step(dt);
   if (CFG.shadows) fitShadow();
   renderFrame();
-  if (PERF.rec) PERF.sample(ms, performance.now() - t0);
+  if (PERF.recs.length) PERF.sample(ms, performance.now() - t0);
   if (GPU.timing && ms - GPU.tsT > 500) {
     GPU.tsT = ms;
     renderer.resolveTimestampsAsync(THREE.TimestampQuery.RENDER).then(v => { GPU.ms.render = v; });
@@ -1032,17 +1038,21 @@ function frame(ms) {
    The flags live in localStorage (WE passes no URL parameters); ?gputime=1 / ?glow=0 do the same in a browser. ---- */
 function perfFlags(f) { try { localStorage.setItem('csg-perf', JSON.stringify(f || {})); } catch (e) { return 'localStorage unavailable'; } return 'saved — reload to apply: ' + JSON.stringify(f || {}); }
 function perfReport(sec = 30) {
-  PERF.rec = { frame: [], cpu: [], gpu: [], comp: [], calls: [], lights: [], last: 0 };
+  const r = { frame: [], cpu: [], gpu: [], comp: [], calls: [], lights: [], last: 0, T0: T, t0: performance.now() }; PERF.recs.push(r);
   console.log(`perfReport: measuring ${sec} s…`);
   return new Promise(res => setTimeout(() => {
-    const r = PERF.rec; PERF.rec = null;
+    PERF.recs.splice(PERF.recs.indexOf(r), 1);
     const avg = a => a.length ? +(a.reduce((x, y) => x + y, 0) / a.length).toFixed(2) : null;
     const p95 = a => a.length ? +[...a].sort((x, y) => x - y)[Math.floor(a.length * 0.95)].toFixed(2) : null;
     const out = {
       backend: GPU.webgpu ? 'WebGPU' : 'WebGL 2', dynamicLights: GLOW.cap > 0, volumetric: CFG.volumetric, bloom: CFG.bloom,
       shadows: CFG.shadows, fpsLimit, size: `${renderer.domElement.width}x${renderer.domElement.height}`, night: +ENV.night.toFixed(2),
-      combat: AUD.armed, weather: CFG.weather, frames: r.cpu.length, fps: r.frame.length ? +(1000 / avg(r.frame)).toFixed(1) : 0,
-      frameMs: avg(r.frame), frameMsP95: p95(r.frame), cpuMs: avg(r.cpu), cpuMsP95: p95(r.cpu),
+      combat: AUD.armed, weather: CFG.weather, frames: r.cpu.length,
+      // simulated seconds per real second: 1 at any frame rate (below 1 only when frames take over 0.25 s, or paused)
+      simRate: +((T - r.T0) / Math.max(1e-3, (performance.now() - r.t0) / 1000)).toFixed(3), fps: r.frame.length ? +(1000 / avg(r.frame)).toFixed(1) : 0,
+      frameMs: avg(r.frame), frameMsP95: p95(r.frame), frameMsMax: r.frame.length ? +Math.max(...r.frame).toFixed(1) : null,
+      hitches: r.frame.filter(t => t > 33.4).length,   // frames longer than two vsyncs: visible stutter
+      cpuMs: avg(r.cpu), cpuMsP95: p95(r.cpu), cpuMsMax: r.cpu.length ? +Math.max(...r.cpu).toFixed(1) : null,
       gpuMs: GPU.timing ? avg(r.gpu) : 'perfFlags({ gputime: true }) + reload', gpuComputeMs: GPU.timing ? avg(r.comp) : null,
       drawCalls: avg(r.calls), lights: avg(r.lights), lightsMax: r.lights.length ? Math.max(...r.lights) : 0,
       programs: renderer.info.memory.programs, geometries: renderer.info.memory.geometries, textures: renderer.info.memory.textures

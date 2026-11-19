@@ -283,8 +283,14 @@ test('GLOW: the strongest requests on screen get the lights, the rest stay dark,
 
 test('perfReport: averages frames, CPU, draw calls and lights; perfFlags keeps its switches in localStorage', async ({ wp }) => {
   await wp.boot();
-  const r = await wp.run(async () => { const p = perfReport(0.2); for (let i = 1; i <= 10; i++) frame(i * 16.7); return await p; });
+  // two reports at once (the second one starts later): each keeps its own frames
+  const [r, r2] = await wp.run(async () => {
+    const p = perfReport(0.3); for (let i = 1; i <= 5; i++) frame(i * 16.7);
+    const p2 = perfReport(0.2); for (let i = 6; i <= 10; i++) frame(i * 16.7);
+    return Promise.all([p, p2]);
+  });
   expect(r.frames).toBe(10);
+  expect(r2.frames).toBe(5);
   expect(r.frameMs).toBeCloseTo(16.7, 1);
   expect(r.drawCalls).toBeGreaterThan(50);
   expect(r.backend).toBe('WebGL 2');
